@@ -1,0 +1,34 @@
+# Entornos virtuales y caché de Python
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+
+# Archivos de configuración y credenciales sensibles
+.env
+.env.*
+ACCESOS_EXPERIENCIA.txt
+
+# Carpetas de datos sensibles y descargas
+transcripciones/
+transcripciones/*
+downloads/
+logs/
+*.log
+
+# Scripts SQL temporales o generados
+*.sql
+!sql_calidad/*.sql
+!sql_consumo/*.sql
+!sql_convenios/*.sql
+
+# Archivos de entrada o datos temporales pesados/sensibles
+*.xlsx
+*.csv
+!EV_202607.csv
+
+# VS Code y SO
+.vscode/
+.DS_Store
+Thumbs.db
