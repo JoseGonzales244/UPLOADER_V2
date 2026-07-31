@@ -1,0 +1,18 @@
+2026-07-22 11:03:10,108 [INFO] root: Preparando y limpiando datos...
+2026-07-22 11:03:10,114 [INFO] root: Conectando a Teradata...
+2026-07-22 11:03:19,889 [INFO] root: Limpiando datos existentes en la tabla...
+2026-07-22 11:03:28,932 [INFO] root: Preparando registros para la carga...
+2026-07-22 11:03:28,935 [INFO] root: Iniciando carga de 339 registros...
+2026-07-22 11:03:28,937 [INFO] root: Cargando registros: 1 a 339 de 339 (100%)
+2026-07-22 11:03:29,714 [INFO] root: SUCCESS: [Carga de datos finalizada con éxito.]
+2026-07-22 11:03:29,886 [INFO] root: SUCCESS: [Carga finalizada con éxito en la tabla 'DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS' en 19.80s.]
+2026-07-22 11:17:56,487 [ERROR] asyncio: Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Users\b47756\AppData\Local\Programs\Python\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\b47756\AppData\Local\Programs\Python\Python314\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto

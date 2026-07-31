@@ -1,0 +1,104 @@
+[11:13:00] [INFO] [TeradataService] Consultando Teradata para 7 DNI(s) faltantes...
+[11:13:03] [ERROR] [TeradataService] Error consultando Teradata para DNI 07468339: params unexpected type <class 'str'>
+[11:13:04] [ERROR] [TeradataService] Error consultando Teradata para DNI 46816480: params unexpected type <class 'str'>
+[11:13:07] [ERROR] [TeradataService] Error consultando Teradata para DNI 45181595: params unexpected type <class 'str'>
+[11:13:08] [ERROR] [TeradataService] Error consultando Teradata para DNI 72977007: params unexpected type <class 'str'>
+[11:13:10] [ERROR] [TeradataService] Error consultando Teradata para DNI 41678250: params unexpected type <class 'str'>
+[11:13:11] [ERROR] [TeradataService] Error consultando Teradata para DNI 72563392: params unexpected type <class 'str'>
+[11:13:12] [ERROR] [TeradataService] Error consultando Teradata para DNI 43941952: params unexpected type <class 'str'>
+[11:13:12] [INFO] [TeradataService] Caché de teléfonos actualizado atómicamente con 7 DNI(s).
+[11:13:12] [INFO] [TeradataService] [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+[11:13:12] [INFO] [TeradataService] Solicitudes listas con teléfono: 0 de 7
+[11:21:48] [INFO] [TeradataService] [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+[11:21:48] [INFO] [TeradataService] Solicitudes listas con teléfono: 0 de 7
+[11:37:49] [INFO] [TeradataService] [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+[11:37:49] [INFO] [TeradataService] Solicitudes listas con teléfono: 0 de 7
+[11:43:30] [INFO] [TeradataService] [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+[11:43:30] [INFO] [TeradataService] Solicitudes listas con teléfono: 0 de 7
+[11:53:04] [INFO] [TeradataService] [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+[11:53:04] [INFO] [TeradataService] Solicitudes listas con teléfono: 0 de 7
+[11:54:59] [INFO] [TeradataService] Consultando Teradata para 7 DNI(s) faltantes...
+[11:59:49] [ERROR] [TeradataService] Error consultando Teradata para DNI 07468339: name 'dni_raw' is not defined
+[12:03:32] [INFO] [TeradataService] Consultando Teradata para 7 DNI(s) faltantes...
+[12:28:50] [INFO] [TeradataService] Caché de teléfonos actualizado atómicamente.
+[12:28:50] [INFO] [TeradataService] [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+[12:28:50] [INFO] [TeradataService] Solicitudes listas con teléfono: 6 de 7
+[12:28:50] [INFO] [GenesysBrowser] Iniciando descargas en Genesys Cloud para 6 registro(s)...
+[12:28:51] [INFO] [GenesysBrowser] --- Registro 1/6: Promotor B35381 | DNI 07468339 ---
+[12:28:53] [INFO] [GenesysBrowser] Panel de filtros cerrado (intento 1/3). Abriendo...
+[12:29:00] [INFO] [GenesysBrowser] Filtro usuario 'B35381' aplicado.
+[12:29:12] [INFO] [GenesysBrowser] 2 teléfono(s) ingresados como DNIS.
+[12:29:17] [INFO] [GenesysBrowser] Filas encontradas: 1 (intento 1/3)
+[12:29:17] [WARNING] [GenesysBrowser] No se hallaron filas con 'ACEPTA CAMPAÑA' para DNI 07468339
+[12:29:17] [INFO] [GenesysBrowser] --- Registro 2/6: Promotor B35381 | DNI 46816480 ---
+[12:29:21] [INFO] [GenesysBrowser] Limpiando filtros previos...
+[12:29:36] [INFO] [GenesysBrowser] Filtro usuario 'B35381' aplicado.
+[12:29:50] [INFO] [GenesysBrowser] 3 teléfono(s) ingresados como DNIS.
+[12:29:55] [INFO] [GenesysBrowser] Filas encontradas: 5 (intento 1/3)
+[12:29:55] [INFO] [GenesysBrowser] Procesando interacción ACEPTA 1/1...
+[12:30:26] [INFO] [GenesysBrowser] Descargando audio 1/1...
+[12:30:38] [INFO] [GenesysBrowser] ✓ MP3 guardado exitosamente: C:\Users\b47756\Downloads\PP_B35381_DNI46816480_20260716.mp3
+[12:30:38] [INFO] [GenesysBrowser] ✓ Solicitud Promotor B35381 | DNI 46816480 completada.
+[12:30:38] [INFO] [GenesysBrowser] --- Registro 3/6: Promotor B36759 | DNI 45181595 ---
+[12:30:56] [INFO] [GenesysBrowser] Filtro usuario 'B36759' aplicado.
+[12:31:13] [INFO] [GenesysBrowser] 3 teléfono(s) ingresados como DNIS.
+[12:31:18] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 1/3)
+[12:31:19] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 2/3)
+[12:31:20] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 3/3)
+[12:31:21] [WARNING] [GenesysBrowser] No encontrado en Genesys: B36759 - DNI 45181595
+[12:31:21] [INFO] [GenesysBrowser] --- Registro 4/6: Promotor B47131 | DNI 72977007 ---
+[12:31:25] [INFO] [GenesysBrowser] Limpiando filtros previos...
+[12:31:33] [INFO] [GenesysBrowser] Filtro usuario 'B47131' aplicado.
+[12:31:36] [INFO] [GenesysBrowser] 1 teléfono(s) ingresados como DNIS.
+[12:31:41] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 1/3)
+[12:31:42] [INFO] [GenesysBrowser] Filas encontradas: 5 (intento 2/3)
+[12:31:43] [INFO] [GenesysBrowser] Procesando interacción ACEPTA 1/1...
+[12:32:21] [INFO] [GenesysBrowser] Descargando audio 1/1...
+[12:32:31] [INFO] [GenesysBrowser] ✓ MP3 guardado exitosamente: C:\Users\b47756\Downloads\PP_B47131_DNI72977007_20260707.mp3
+[12:32:31] [INFO] [GenesysBrowser] ✓ Solicitud Promotor B47131 | DNI 72977007 completada.
+[12:32:31] [INFO] [GenesysBrowser] --- Registro 5/6: Promotor B47383 | DNI 41678250 ---
+[12:33:08] [INFO] [GenesysBrowser] Filtro usuario 'B47383' aplicado.
+[12:33:18] [INFO] [GenesysBrowser] 2 teléfono(s) ingresados como DNIS.
+[12:33:23] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 1/3)
+[12:33:24] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 2/3)
+[12:33:25] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 3/3)
+[12:33:26] [WARNING] [GenesysBrowser] No encontrado en Genesys: B47383 - DNI 41678250
+[12:33:26] [INFO] [GenesysBrowser] --- Registro 6/6: Promotor B47385 | DNI 43941952 ---
+[12:33:31] [INFO] [GenesysBrowser] Limpiando filtros previos...
+[12:33:46] [INFO] [GenesysBrowser] Filtro usuario 'B47385' aplicado.
+[12:33:57] [INFO] [GenesysBrowser] 2 teléfono(s) ingresados como DNIS.
+[12:34:02] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 1/3)
+[12:34:03] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 2/3)
+[12:34:04] [INFO] [GenesysBrowser] Filas encontradas: 0 (intento 3/3)
+[12:34:05] [WARNING] [GenesysBrowser] No encontrado en Genesys: B47385 - DNI 43941952
+[12:34:05] [INFO] [GenesysBrowser] Proceso de descargas finalizado correctamente.

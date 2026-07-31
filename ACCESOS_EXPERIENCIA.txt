@@ -1,0 +1,78 @@
+
+=======================================================================
+USUARIO GENERICO - TERADATA
+APP_GEC
+Int3l1g3nc14cl0ud*
+=======================================================================
+INSIGHT IBK - Información de Pure Cloud
+https://s425vp01/Insight
+B44922
+Interbank20261.#
+=======================================================================
+VERINT CLOUD -SPEECH ANALYTICS
+https://wfo.mt5.verintcloudservices.com/wfo/control/signin
+Los accesos se coordinan con Carlos Jurado. Enviando correo con: correo, registro y nombre completo
+=======================================================================
+PURECLOUD
+https://login.mypurecloud.com/?rid=YWYa5OdSKMMq3c1L4J2LjHT0In1dj8Yo7WI_2L7ySs8#/authenticate
+=======================================================================
+Conexión SQL: MARKET
+Servidor: S83VP2\BDT
+Usuario: ibetlmarket
+Password: m@rk3t2o15
+=======================================================================
+Server Name: BTSELECT\SQL2008
+BD SELECT2020
+Login: sa
+Password: S3l3ct2020
+Tabla:  Llamadas_Final
+=======================================================================
+Servidor: btmanagement
+Login: Sa_user
+Pass: Sa_user
+=======================================================================
+FILEZILA - Encuestas IVR
+servidor: sftpe.intercorp.com.pe
+puerto: 22220
+usuario: USR_CCC_INTERCAMBIO
+Y en archivo de claves, ingresan la ruta donde se encontrara el archivo private_key_PRD.ppk
+=======================================================================
+ASSI
+https://assi.prd.interbank.per/#/login
+=======================================================================
+SHAREPOINT - CALIDAD CX/UX
+https://interbankpe.sharepoint.com/sites/InteligenciayExperienciaCanal
+RUTA PARA CARGAR LOS SPEECH EXPLORER CON SUS RESPECTIVOS VB
+https://interbankpe-my.sharepoint.com/:f:/g/personal/cortizo_intercorp_com_pe/ErZ7i9D2ZPFMs9DUweKCWIgB3GfEdFfEBzLzO91GQH-hCw?e=wQHyvP
+=======================================================================
+SDA
+http://intranetib/sda/default.asp
+=======================================================================
+SIEBEL:
+http://siebelprd/fins2_esn/start.swe?SWECmd=Login&SWEPL=1&SRN=&SWETS=1587658940
+=======================================================================
+CALIDAD:
+\\S450VP5\Experiencia_compra\TELEVENTAS\Reportes\Reporte Gerencial
+CALIDAD REPORTES POR PRODUCTO
+\\S450VP5\Experiencia_compra\TELEVENTAS\Reportes
+=======================================================================
+QUALTRICS
+Link: https://interbank.co1.qualtrics.com/login
+Usuario:investigacionmarketing@intercorp.com.pe
+Contraseña:Interbank@2022
+=======================================================================
+Servidor: BTWAREHOUSE
+BD: telesoft_bt
+Tablas: dbo.INGRESADOS, dbo.Ingresados_MesActual, dbo.Ingresados_MesAnterior
+=======================================================================
+Usuario Generico Power bi
+Reportes_Canal_CC@intercorp.com.pe
+Reportes_Canal_TLV@intercorp.com.pe
+Reportes_Canal_GCVE@intercorp.com.pe
+Pass: Interbank01
+La confirmación es con Luis Gavidia
+=======================================================================
+VALLADARES:
+FVALLADARESXP\SERVIDOR_RETAIL2,49740
+USUARIO: usuario_lectura
+pass: usuario_lectura

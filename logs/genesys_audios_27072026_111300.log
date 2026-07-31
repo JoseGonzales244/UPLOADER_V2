@@ -1,0 +1,18 @@
+2026-07-27 11:13:00,649 [INFO] root: Consultando Teradata para enriquecer DNI con números telefónicos...
+2026-07-27 11:13:00,653 [INFO] TeradataService: Consultando Teradata para 7 DNI(s) faltantes...
+2026-07-27 11:13:03,405 [ERROR] TeradataService: Error consultando Teradata para DNI 07468339: params unexpected type <class 'str'>
+2026-07-27 11:13:04,785 [ERROR] TeradataService: Error consultando Teradata para DNI 46816480: params unexpected type <class 'str'>
+2026-07-27 11:13:07,173 [ERROR] TeradataService: Error consultando Teradata para DNI 45181595: params unexpected type <class 'str'>
+2026-07-27 11:13:08,527 [ERROR] TeradataService: Error consultando Teradata para DNI 72977007: params unexpected type <class 'str'>
+2026-07-27 11:13:10,063 [ERROR] TeradataService: Error consultando Teradata para DNI 41678250: params unexpected type <class 'str'>
+2026-07-27 11:13:11,496 [ERROR] TeradataService: Error consultando Teradata para DNI 72563392: params unexpected type <class 'str'>
+2026-07-27 11:13:12,910 [ERROR] TeradataService: Error consultando Teradata para DNI 43941952: params unexpected type <class 'str'>
+2026-07-27 11:13:12,921 [INFO] TeradataService: Caché de teléfonos actualizado atómicamente con 7 DNI(s).
+2026-07-27 11:13:12,922 [INFO] TeradataService: [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,923 [INFO] TeradataService: [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,924 [INFO] TeradataService: [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,924 [INFO] TeradataService: [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,924 [INFO] TeradataService: [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,925 [INFO] TeradataService: [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,925 [INFO] TeradataService: [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+2026-07-27 11:13:12,926 [INFO] TeradataService: Solicitudes listas con teléfono: 0 de 7

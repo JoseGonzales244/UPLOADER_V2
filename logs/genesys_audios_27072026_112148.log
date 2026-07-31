@@ -1,0 +1,9 @@
+2026-07-27 11:21:48,227 [INFO] root: Consultando Teradata para enriquecer DNI con números telefónicos...
+2026-07-27 11:21:48,230 [INFO] TeradataService: [SKIP] B35381 | DNI 07468339 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,231 [INFO] TeradataService: [SKIP] B35381 | DNI 46816480 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,232 [INFO] TeradataService: [SKIP] B36759 | DNI 45181595 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,232 [INFO] TeradataService: [SKIP] B47131 | DNI 72977007 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,233 [INFO] TeradataService: [SKIP] B47383 | DNI 41678250 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,234 [INFO] TeradataService: [SKIP] B47385 | DNI 72563392 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,235 [INFO] TeradataService: [SKIP] B47385 | DNI 43941952 sin teléfonos en caché/Teradata.
+2026-07-27 11:21:48,235 [INFO] TeradataService: Solicitudes listas con teléfono: 0 de 7
