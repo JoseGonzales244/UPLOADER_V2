@@ -1,12 +1,12 @@
 """
-Caso de Uso: Pipeline de Auditoría de Transcripciones con Gemini (Modos Single Agent y Multi Agent).
+Caso de Uso: Pipeline de Auditoría de Transcripciones para Canales Escritos con Gemini.
+Evalúa estrictamente 3 ejes: Gramática, Trato con el cliente y Cumplimiento del protocolo.
 """
 import json
 import logging
 from typing import List, Dict, Any, Optional
 
 from infrastructure.llm.gemini_client import GeminiClient
-from modules.transcripciones.domain.ntd_rules import get_ntd_rules_prompt
 
 logger = logging.getLogger("modules.transcripciones.use_cases.auditor")
 
@@ -23,44 +23,42 @@ class TranscriptAuditorUseCase:
     ) -> Dict[str, Any]:
         """
         MODO SINGLE AGENT (1 sola llamada a la API de Gemini):
-        Evalúa los 3 ejes (Gramática, Protocolo y Trato al cliente / NTD) en una única interacción.
+        Evalúa estrictamente los 3 ejes: Gramática, Trato con el cliente y Cumplimiento del protocolo.
         Ahorra 75% de llamadas y cuota de tokens por minuto (TPM/RPM).
         """
-        metadata = conv_metadata or {}
-        ntd_rules = get_ntd_rules_prompt()
-        
         prompt = f"""
-Eres el Auditor Principal de Calidad de Interbank. Tu rol es auditar la siguiente transcripción para evaluar la atención en 3 ejes principales: Gramática, Protocolo y Trato al cliente.
+Eres el Auditor Principal de Calidad de Canales Escritos de Interbank. Tu rol es auditar la siguiente transcripción escrita para evaluar el desempeño del ejecutivo estrictamente en 3 ejes principales: Gramática, Trato con el cliente y Cumplimiento del protocolo.
 
 <eje_gramatica>
-Busca cualquier error cometido por el ejecutivo:
-1. Ortografía y gramática (ej. concordancia género/número, tildes omitidas).
-2. Puntuación (apertura de signos '¿' o '¡', comas excesivas/ausentes).
-3. Modismos, jerga o informalidades verbales no profesionales.
-Asigna a estos hallazgos el eje "Gramática" y Gravedad "N1" (u "OK").
+Busca cualquier error en los mensajes del ejecutivo:
+1. Ortografía y gramática (ej. tildes omitidas, errores de tipeo, concordancia de género/número).
+2. Puntuación (ausencia de signos de apertura '¿' o '¡', uso excesivo o incorrecto de comas/puntos).
+3. Modismos, jerga, informalidades o muletillas escritas no profesionales.
+Asigna a estos hallazgos el eje "Gramática".
 </eje_gramatica>
 
-<eje_protocolo>
-1. Compara las intervenciones del ejecutivo con la lista de plantillas y frases normativas autorizadas.
-2. Identifica si usó, parafraseó u omitió frases estipuladas por el protocolo, o si usó mensajes personalizados improvisados.
-Asigna el eje "Protocolo" y Gravedad "N1" o "N2" (u "OK").
-</eje_protocolo>
+<eje_trato_cliente>
+Evalúa el comportamiento hacia el cliente:
+1. Cordialidad y amabilidad (saludos, despedidas, cortesía).
+2. Empatía y tono profesional (disposición de ayuda, paciencia, respeto verbal).
+3. Fluidez y claridad en las respuestas escritas.
+Asigna a estos hallazgos el eje "Trato con el cliente".
+</eje_trato_cliente>
 
-<eje_trato_y_ntd>
-1. Cordialidad y amabilidad: Debe ser amable, educado, empático y cooperativo en todo momento.
-2. Faltas éticas / Not To Do: Detecta faltas de respeto, discusiones, inducir bajas, forzar productos o dar información falsa.
-Asigna el eje "Trato" y Gravedad ("N1", "N2" o "N3").
-</eje_trato_y_ntd>
+<eje_protocolo>
+1. Compara las intervenciones del ejecutivo con las plantillas y mensajes normativos autorizados.
+2. Identifica si el ejecutivo usó correctamente las plantillas estipuladas, si las parafraseó, las omitió o si improvisó respuestas personales no autorizadas.
+Asigna a estos hallazgos el eje "Cumplimiento del protocolo".
+</eje_protocolo>
 
 Debes devolver un único objeto JSON con la estructura exacta:
 {{
   "hallazgos": [
     {{
-      "eje": "Gramática | Protocolo | Trato",
-      "nivel_ntd": "N1 | N2 | N3 | OK",
-      "mensaje_ejecutivo": "Texto exacto expresado por el ejecutivo o vacío en omisiones",
-      "hallazgo": "Descripción clara, concisa y profesional de la observación detectada",
-      "sugerencia": "Sugerencia práctica de corrección o frase oficial esperada"
+      "eje": "Gramática | Trato con el cliente | Cumplimiento del protocolo",
+      "mensaje_ejecutivo": "Texto exacto expresado por el ejecutivo en la transcripción",
+      "hallazgo": "Descripción clara y profesional del error o la desviación observada",
+      "sugerencia": "Sugerencia de corrección o texto/frase oficial recomendada"
     }}
   ],
   "plantillas_checklist": [
@@ -72,17 +70,14 @@ Debes devolver un único objeto JSON con la estructura exacta:
   ]
 }}
 
-REGLAS DE NOT TO DO Y CONDUCTA:
-{ntd_rules}
-
 PLANTILLAS Y GUIONES AUTORIZADOS:
-{templates_text if templates_text else "Guion estándar de bienvenida, oferta y cierre normativo."}
+{templates_text if templates_text else "Guion estándar de bienvenida, verificación, oferta de producto y cierre."}
 
-TRANSCRIPCIÓN:
+TRANSCRIPCIÓN ESCRITA A AUDITAR:
 {conversation_text}
 """
         try:
-            logger.info("Iniciando auditoría en MODO SINGLE AGENT (1 sola solicitud LLM)...")
+            logger.info("Iniciando auditoría en MODO SINGLE AGENT (1 llamada LLM)...")
             res_text = self.llm.generate_content_with_retry(prompt, temperature=0.1, response_json=True)
             return json.loads(res_text)
         except Exception as e:
@@ -90,17 +85,18 @@ TRANSCRIPCIÓN:
             return {"hallazgos": [], "plantillas_checklist": []}
 
     def run_agent_grammar(self, conversation_text: str) -> Dict[str, Any]:
-        """Agente 1 (Multi-agent): Ortografía, gramática e informalidades."""
+        """Agente 1 (Multi-agent): Ortografía, gramática y expresión escrita."""
         prompt = f"""
-Eres un auditor de expresión verbal, ortografía y gramática para Interbank.
-Analiza la siguiente transcripción, enfocándote en las intervenciones del ejecutivo.
+Eres un auditor de ortografía, gramática y redacción para Interbank Canales Escritos.
+Analiza la siguiente transcripción enfocándote en los mensajes del ejecutivo.
 
 Devuelve un objeto JSON:
 {{
   "hallazgos": [
     {{
-      "mensaje_ejecutivo": "Texto exacto",
-      "hallazgo": "Descripción del error o informalismo",
+      "eje": "Gramática",
+      "mensaje_ejecutivo": "Texto exacto expresado por el ejecutivo",
+      "hallazgo": "Descripción del error ortográfico, gramatical o informalismo",
       "sugerencia": "Texto corregido formal"
     }}
   ]
@@ -116,11 +112,39 @@ TRANSCRIPCIÓN:
             logger.error(f"Error en Agente 1 (Gramática): {e}")
             return {"hallazgos": []}
 
-    def run_agent_protocol(self, conversation_text: str, sub_equipo: str = "Televentas", templates_text: str = "") -> Dict[str, Any]:
-        """Agente 2 (Multi-agent): Adherencia a guiones y frases de protocolo."""
+    def run_agent_customer_treatment(self, conversation_text: str) -> Dict[str, Any]:
+        """Agente 2 (Multi-agent): Trato al cliente, cordialidad y empatía."""
         prompt = f"""
-Eres un auditor de protocolo normativo para Interbank.
-Analiza la transcripción del ejecutivo.
+Eres un auditor de empatía, cordialidad y trato al cliente para Interbank Canales Escritos.
+Analiza la transcripción enfocándote en el respeto, amabilidad y empatía del ejecutivo.
+
+Devuelve un objeto JSON:
+{{
+  "hallazgos": [
+    {{
+      "eje": "Trato con el cliente",
+      "mensaje_ejecutivo": "Texto expresado por el ejecutivo",
+      "hallazgo": "Descripción de la falta de cortesía, empatía o tono inapropiado",
+      "sugerencia": "Comportamiento o respuesta empatica esperada"
+    }}
+  ]
+}}
+
+TRANSCRIPCIÓN:
+{conversation_text}
+"""
+        try:
+            res_text = self.llm.generate_content_with_retry(prompt, temperature=0.0, response_json=True)
+            return json.loads(res_text)
+        except Exception as e:
+            logger.error(f"Error en Agente 2 (Trato con el Cliente): {e}")
+            return {"hallazgos": []}
+
+    def run_agent_protocol(self, conversation_text: str, sub_equipo: str = "Televentas", templates_text: str = "") -> Dict[str, Any]:
+        """Agente 3 (Multi-agent): Cumplimiento de plantillas y protocolo."""
+        prompt = f"""
+Eres un auditor de adherencia a plantillas y protocolo normativo para Interbank Canales Escritos.
+Analiza si el ejecutivo usó las plantillas estipuladas, las omitió o usó mensajes improvisados.
 
 Devuelve un objeto JSON:
 {{
@@ -128,14 +152,15 @@ Devuelve un objeto JSON:
     {{
       "codigo_plantilla": "Sección del protocolo",
       "estado": "Usada | Parafraseada | No Usada",
-      "comentario": "Detalle"
+      "comentario": "Detalle de cumplimiento"
     }}
   ],
   "hallazgos": [
     {{
+      "eje": "Cumplimiento del protocolo",
       "mensaje_ejecutivo": "Texto expresado",
       "hallazgo": "Desviación del protocolo o mensaje personalizado no autorizado",
-      "sugerencia": "Frase oficial que debió usar"
+      "sugerencia": "Frase/plantilla oficial que debió usar"
     }}
   ]
 }}
@@ -150,66 +175,32 @@ TRANSCRIPCIÓN:
             res_text = self.llm.generate_content_with_retry(prompt, temperature=0.1, response_json=True)
             return json.loads(res_text)
         except Exception as e:
-            logger.error(f"Error en Agente 2 (Protocolo): {e}")
+            logger.error(f"Error en Agente 3 (Protocolo): {e}")
             return {"plantillas_evaluadas": [], "hallazgos": []}
-
-    def run_agent_tone_ntd(self, conversation_text: str) -> Dict[str, Any]:
-        """Agente 3 (Multi-agent): Trato al cliente y reglas Not To Do."""
-        ntd_rules = get_ntd_rules_prompt()
-        prompt = f"""
-Eres un auditor de trato al cliente y ética para Interbank.
-Evalúa amabilidad, cordialidad y violaciones Not To Do.
-
-Devuelve un objeto JSON:
-{{
-  "hallazgos": [
-    {{
-      "mensaje_ejecutivo": "Texto expresado",
-      "codigo_ntd": "Código de la regla",
-      "nivel_ntd": "N1 | N2 | N3",
-      "hallazgo": "Descripción del hallazgo",
-      "sugerencia": "Comportamiento esperado"
-    }}
-  ]
-}}
-
-REGLAS DE NOT TO DO:
-{ntd_rules}
-
-TRANSCRIPCIÓN:
-{conversation_text}
-"""
-        try:
-            res_text = self.llm.generate_content_with_retry(prompt, temperature=0.0, response_json=True)
-            return json.loads(res_text)
-        except Exception as e:
-            logger.error(f"Error en Agente 3 (Trato/NTD): {e}")
-            return {"hallazgos": []}
 
     def consolidate_findings(
         self,
         metadata: Dict[str, Any],
         grammar_data: Dict[str, Any],
-        protocol_data: Dict[str, Any],
-        tone_data: Dict[str, Any]
+        treatment_data: Dict[str, Any],
+        protocol_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Agente 4 (Multi-agent): Consolidador principal."""
         input_data = {
             "metadata": metadata,
             "grammar_findings": grammar_data.get("hallazgos", []),
+            "treatment_findings": treatment_data.get("hallazgos", []),
             "protocol_findings": protocol_data.get("hallazgos", []),
-            "protocol_checklist": protocol_data.get("plantillas_evaluadas", []),
-            "tone_ntd_findings": tone_data.get("hallazgos", [])
+            "protocol_checklist": protocol_data.get("plantillas_evaluadas", [])
         }
         
         prompt = f"""
-Consolida los hallazgos de los 3 evaluadores.
+Consolida los hallazgos de los 3 evaluadores en los 3 ejes: Gramática, Trato con el cliente y Cumplimiento del protocolo.
 Devuelve JSON:
 {{
   "hallazgos": [
     {{
-      "eje": "Gramática | Protocolo | Trato",
-      "nivel_ntd": "N1 | N2 | N3 | OK",
+      "eje": "Gramática | Trato con el cliente | Cumplimiento del protocolo",
       "mensaje_ejecutivo": "Texto exacto",
       "hallazgo": "Descripción",
       "sugerencia": "Sugerencia"
@@ -224,7 +215,7 @@ Devuelve JSON:
   ]
 }}
 
-DATOS:
+DATOS A CONSOLIDAR:
 {json.dumps(input_data, indent=2, ensure_ascii=False)}
 """
         try:
@@ -243,9 +234,9 @@ DATOS:
         mode: str = "single"
     ) -> Dict[str, Any]:
         """
-        Orquesta la auditoría en el modo seleccionado:
-        - mode="single": 1 solicitud a Gemini (Ahorro máximo de tokens/peticiones).
-        - mode="multi": 4 solicitudes especializadas a Gemini + Consolidador.
+        Orquesta la auditoría en los 3 ejes según el modo:
+        - mode="single": 1 llamada LLM a Gemini.
+        - mode="multi": 4 llamadas LLM especializadas.
         """
         if mode.lower() == "single":
             return self.audit_transcript_single(
@@ -255,9 +246,9 @@ DATOS:
                 templates_text=templates_text
             )
         else:
-            logger.info("Iniciando auditoría en MODO MULTI AGENT (4 solicitudes LLM)...")
+            logger.info("Iniciando auditoría en MODO MULTI AGENT (4 llamadas LLM)...")
             metadata = conv_metadata or {}
             grammar_res = self.run_agent_grammar(conversation_text)
+            treatment_res = self.run_agent_customer_treatment(conversation_text)
             protocol_res = self.run_agent_protocol(conversation_text, sub_equipo, templates_text)
-            tone_res = self.run_agent_tone_ntd(conversation_text)
-            return self.consolidate_findings(metadata, grammar_res, protocol_res, tone_res)
+            return self.consolidate_findings(metadata, grammar_res, treatment_res, protocol_res)
