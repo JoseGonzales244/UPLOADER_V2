@@ -12,12 +12,12 @@
     "filter_name": "Filtro_Calidad"
   },
   "quality_execution_sequence": [
-    "sql_calidad/01_evaluacion_manual_pc.sql",
-    "sql_calidad/02_sa_marcacion_ventas_lpdp.sql",
-    "sql_calidad/03_sa_calculo_pesos_unpivot.sql",
-    "sql_calidad/04_sa_ajustes_curva.sql",
-    "sql_calidad/04_b_sa_parche_nota_cero.sql",
-    "sql_calidad/05_consolidacion_nota_final.sql"
+    "modules/calidad/sql/01_evaluacion_manual_pc.sql",
+    "modules/calidad/sql/02_sa_marcacion_ventas_lpdp.sql",
+    "modules/calidad/sql/03_sa_calculo_pesos_unpivot.sql",
+    "modules/calidad/sql/04_sa_ajustes_curva.sql",
+    "modules/calidad/sql/04_b_sa_parche_nota_cero.sql",
+    "modules/calidad/sql/05_consolidacion_nota_final.sql"
   ],
   "quality_validation_settings": {
     "source_tables_to_check": [
