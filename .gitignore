@@ -11,8 +11,7 @@ __pycache__/
 ACCESOS_EXPERIENCIA.txt
 
 # Carpetas de datos sensibles y descargas
-transcripciones/
-transcripciones/*
+!transcripciones/*.txt
 downloads/
 logs/
 *.log
