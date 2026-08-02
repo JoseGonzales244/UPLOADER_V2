@@ -17,11 +17,10 @@ downloads/
 logs/
 *.log
 
-# Scripts SQL temporales o generados
+# Scripts SQL de módulos
 *.sql
-!sql_calidad/*.sql
-!sql_consumo/*.sql
-!sql_convenios/*.sql
+!modules/**/*.sql
+!modules/**/**/*.sql
 
 # Archivos de entrada o datos temporales pesados/sensibles
 *.xlsx
