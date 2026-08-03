@@ -257,7 +257,7 @@ SET TIEMPO2 = TIEMPO * 86400,
     END,
     FLAG_EVALUADO = 'NO';
 
--- [PASO 7.1.1]: Nivelación Dinámica Aleatoria KRI (Ajuste a cuota exacta de 33 sin audio)
+-- [PASO 7.1.1]: Nivelación Dinámica Aleatoria KRI (Cuota variable dinámica < 0.5% del total de ventas)
 UPDATE DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
 FROM (
     SELECT CODDOC, TIP_CLIENTE
