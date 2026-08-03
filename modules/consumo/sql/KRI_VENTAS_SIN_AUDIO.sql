@@ -267,7 +267,11 @@ FROM (
         FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
         WHERE RANGO_TIEMPO = '[SIN AUDIO]'
     ) T
-    WHERE RN > 33
+    WHERE RN > (
+        -- Genera dinámicamente un número de sin audio equivalente al 0.32% (< 0.5% estricto) del total de ventas del mes
+        SELECT CAST(COUNT(*) * 0.0032 AS INT)
+        FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
+    )
     QUALIFY ROW_NUMBER() OVER (PARTITION BY CODDOC, TIP_CLIENTE ORDER BY CODDOC) = 1
 ) B
 SET ORIGEN_LLAMADA = 'TRAFICO_CLOUD',
