@@ -92,8 +92,15 @@ def load_to_teradata(con, table_name, df: pl.DataFrame, selected_columns_config,
     if not columns_in_table:
         raise ValueError("No se pudo obtener ni crear la estructura de la tabla.")
 
-    rename_mapping = {col['name']: col['new_name'] for col in selected_columns_config if col['selected']}
-    df_filtered = df.rename(rename_mapping)
+    rename_mapping = {
+        col['name']: col['new_name'] 
+        for col in selected_columns_config 
+        if col['selected'] and col['name'] in df.columns and col['name'] != col['new_name']
+    }
+    if rename_mapping:
+        df_filtered = df.rename(rename_mapping)
+    else:
+        df_filtered = df
     df_filtered = df_filtered.select([col for col in columns_in_table if col in df_filtered.columns])
     
     records = df_filtered.to_dicts()
