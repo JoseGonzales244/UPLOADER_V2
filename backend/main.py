@@ -259,24 +259,23 @@ def _run_calidad_task(req: CalidadRequest):
     try:
         from dotenv import load_dotenv
         load_dotenv()
-        
-        insight_user = os.getenv("INSIGHT_USER", "")
-        insight_password = os.getenv("INSIGHT_PASSWORD", "")
-        td_user = os.getenv("TERADATA_USER", "")
-        td_password = os.getenv("TERADATA_PASSWORD", "")
+        verint_user = os.getenv("VERINT_USER", "")
+        verint_password = os.getenv("VERINT_PASSWORD", "")
 
         run_quality_process_flow(
             insight_user=insight_user,
             insight_password=insight_password,
+            verint_user=verint_user,
+            verint_password=verint_password,
             td_user=td_user,
             td_password=td_password,
             period_str=req.periodo,
             progress_callback=send_progress_update,
-            run_fase1=req.run_fase1,
-            run_fase2=req.run_fase2,
-            run_fase3=req.run_fase3,
-            run_fase4=req.run_fase4,
-            run_fase5=req.run_fase5,
+            run_phase1=req.run_fase1,
+            run_phase2=req.run_fase2,
+            run_phase3=req.run_fase3,
+            run_phase4=req.run_fase4,
+            run_phase5=req.run_fase5,
             start_from_script=req.start_script
         )
     except Exception as e:
