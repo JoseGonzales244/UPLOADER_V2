@@ -140,7 +140,7 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
             logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {snippet}")
             if progress_callback:
                 pct = int((idx / len(statements)) * 100)
-                msg_str = f"⚙️ [{idx}/{len(statements)}] {friendly_name} ({pct}%) — {snippet}"
+                msg_str = f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Procesando paso {idx} de {len(statements)} ({pct}%)"
                 try:
                     progress_callback(msg_str, "info", progress=float(idx) / len(statements))
                 except TypeError:
@@ -156,7 +156,7 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
                 if is_collect_stats and "3523" in err_str:
                     logger.warning(f"   ⚠️ COLLECT STATISTICS omitido (sin permiso): {snippet}")
                     if progress_callback:
-                        progress_callback(f"⚠️ [{idx}/{len(statements)}] COLLECT STATISTICS omitido (sin permiso): {snippet}", "warning")
+                        progress_callback(f"⚠️ {friendly_name} — Ajuste de estadísticas omitido (Paso {idx}/{len(statements)})", "warning")
                     continue
                 # DROP TABLE / DROP VIEW is non-critical if the object does not exist.
                 # Error 3807 = Object does not exist → skip with warning.
@@ -164,7 +164,7 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
                 if is_drop and "3807" in err_str:
                     logger.warning(f"   ⚠️ DROP omitido (objeto no existe): {snippet}")
                     if progress_callback:
-                        progress_callback(f"⚠️ [{idx}/{len(statements)}] DROP omitido (objeto no existe): {snippet}", "warning")
+                        progress_callback(f"⚠️ {friendly_name} — Limpieza de vista/tabla omitida (Paso {idx}/{len(statements)})", "warning")
                     continue
                 raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_clean, err)
 
