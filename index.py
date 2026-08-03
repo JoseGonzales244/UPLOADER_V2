@@ -981,6 +981,7 @@ with tab_orchestrator:
             handle_execution_error(ex, status_box, "la orquestación")
         finally:
             st.session_state.pbi_running = False
+            st.rerun()
                 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1180,5 +1181,6 @@ with tab_quality_process:
             handle_execution_error(ex, status_box, "el pipeline de calidad")
         finally:
             st.session_state.quality_running = False
+            st.rerun()
                 
     st.markdown("</div>", unsafe_allow_html=True)
