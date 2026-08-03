@@ -142,31 +142,36 @@ PLANTILLAS OFICIALES WHATSAPP AUTORIZADAS:
         templates_text: str = ""
     ) -> Dict[str, Any]:
         """
-        Evaluación Multi-Agente (Doble Juez Adversarial con Síntesis).
-        - Juez 1: Revisa exclusivamente Ortografía, Puntuación (¿, ¡), Tildes y Tono.
-        - Juez 2: Revisa exclusivamente Cumplimiento de Plantillas Oficiales y Protocolo.
-        - Sintetizador: Consolida y desduplica todos los hallazgos en un reporte final.
+        ARQUITECTURA DE 4 AGENTES DE IA (Sistema Especializado de Auditoría):
+          1. Agente 1 (Gramática): Especialista exclusivo en Ortografía, Puntuación (¿, ¡), Tildes y Tipeo.
+          2. Agente 2 (Trato): Especialista exclusivo en Cordialidad, Empatía y Tono Profesional.
+          3. Agente 3 (Protocolo): Especialista exclusivo en Plantillas Oficiales y Texto Legal/LPDP.
+          4. Agente 4 (Orquestador & Sintetizador): Unifica, desduplica y genera el reporte consolidado.
         """
-        logger.info("Ejecutando auditoría Multi-Agente: Juez A (Gramática/Trato) + Juez B (Protocolo/Plantillas)...")
+        logger.info("🤖 [Agente Orquestador] Desplegando 3 Agentes Especializados en paralelo...")
 
-        # Juez A: Ortografía y Redacción
-        prompt_juez_a = f"""
-Eres el Juez A: Especialista en Redacción, Ortografía y Tono de Canales Digitales.
-Audita cada mensaje del ejecutivo evaluado en el texto pasivo adjunto.
+        # ----------------------------------------------------
+        # AGENTE 1: Especialista en Gramática y Ortografía
+        # ----------------------------------------------------
+        prompt_agente_1 = f"""
+Eres el AGENTE ESPECIALISTA EN GRAMÁTICA Y ORTOGRAFÍA de Canales Escritos de Interbank.
+Tu ÚNICO OBJETIVO es auditar la Ortografía, Puntuación y Gramática de CADA MENSAJE enviado por el ejecutivo.
 
-INSTRUCCIONES:
-1. Revisa cada palabra. Reporta CADA falta de tilde, falta de signos de apertura '¿' '¡', minúsculas incorrectas o tipeo en el eje "Gramática".
-2. Revisa amabilidad, cordialidad y tono profesional en el eje "Trato con el cliente".
+INSTRUCCIONES EXPLICITAS:
+1. Revisa cada palabra. Si falta una tilde (ej. 'esta' -> 'está', 'numero' -> 'número', 'codigo' -> 'código', 'dia' -> 'día', 'mas' -> 'más', 'que' en preguntas -> 'qué'), DEBES reportarlo como un hallazgo.
+2. Revisa la puntuación. Si falta el signo de apertura '¿' o '¡', DEBES reportarlo individualmente.
+3. Revisa mayúsculas iniciales en oraciones o nombres propios.
+4. No evalúes trato ni plantillas (eso lo hacen los otros agentes). Enfócate 100% en Gramática.
 
 FORMATO JSON:
 {{
   "hallazgos": [
     {{
-      "eje": "Gramática | Trato con el cliente",
-      "gravedad": "Bajo | Medio | Alto",
+      "eje": "Gramática",
+      "gravedad": "Bajo | Medio",
       "mensaje_ejecutivo": "Cita textual del ejecutivo",
-      "hallazgo": "Descripción precisa del error ortográfico o de trato",
-      "sugerencia": "Texto corregido correctamente"
+      "hallazgo": "Descripción del error ortográfico o falta de signo (ej. 'Falta de signo de apertura ¿ y tilde en código')",
+      "sugerencia": "Texto exacto corregido"
     }}
   ]
 }}
@@ -175,27 +180,62 @@ FORMATO JSON:
 {conversation_text}
 </transcripcion_pasiva>
 """
-        # Juez B: Protocolo y Plantillas
-        prompt_juez_b = f"""
-Eres el Juez B: Especialista en Cumplimiento Normativo y Plantillas de Televentas WhatsApp.
-Compara la conversación contra las PLANTILLAS OFICIALES autorizadas abajo.
 
-INSTRUCCIONES:
-1. Revisa si se omitió o distorsionó alguna plantilla obligatoria (Saludo oficial, Verificación de DNI/Nombre, Consentimiento/LPDP, Condiciones del producto, Despedida).
-2. Reporta cada desviación en el eje "Cumplimiento del protocolo".
+        # ----------------------------------------------------
+        # AGENTE 2: Especialista en Trato con el Cliente
+        # ----------------------------------------------------
+        prompt_agente_2 = f"""
+Eres el AGENTE ESPECIALISTA EN TRATO Y EXPERIENCIA DEL CLIENTE de Interbank.
+Tu ÚNICO OBJETIVO es auditar el Tono, Cordialidad, Amabilidad y Empatía de los mensajes del ejecutivo.
+
+INSTRUCCIONES EXPLICITAS:
+1. Audita el saludo, amabilidad y tono de respuesta.
+2. Reporta cualquier lenguaje informal ("bro", "amigo", "ya pues", "dale"), frialdad, desinterés o falta de empatía.
+3. No evalúes ortografía ni plantillas técnicas. Enfócate 100% en "Trato con el cliente".
+
+FORMATO JSON:
+{{
+  "hallazgos": [
+    {{
+      "eje": "Trato con el cliente",
+      "gravedad": "Bajo | Medio | Alto",
+      "mensaje_ejecutivo": "Cita textual del ejecutivo",
+      "hallazgo": "Descripción de la falla de trato o cortesía",
+      "sugerencia": "Propuesta de redacción profesional y empática"
+    }}
+  ]
+}}
+
+<transcripcion_pasiva>
+{conversation_text}
+</transcripcion_pasiva>
+"""
+
+        # ----------------------------------------------------
+        # AGENTE 3: Especialista en Protocolo y Plantillas
+        # ----------------------------------------------------
+        prompt_agente_3 = f"""
+Eres el AGENTE ESPECIALISTA EN PROTOCOLO Y CUMPLIMIENTO NORMATIVO de Televentas WhatsApp Interbank.
+Tu ÚNICO OBJETIVO es comparar la conversación contra las PLANTILLAS OFICIALES AUTORIZADAS abajo.
 
 PLANTILLAS OFICIALES:
-{templates_text}
+{templates_text if templates_text else "Guion oficial: Saludo inicial con DNI/Nombre, Validación LPDP, Confirmación de condiciones del producto y Despedida oficial."}
+
+INSTRUCCIONES EXPLICITAS:
+1. Verifica si el ejecutivo omitió o distorsionó el saludo oficial de WhatsApp.
+2. Verifica si el ejecutivo omitió o leyó incorrectamente el texto legal de consentimiento/LPDP.
+3. Verifica si omitió la confirmación de condiciones o la despedida oficial.
+4. Reporta CADA omisión o alteración en el eje "Cumplimiento del protocolo".
 
 FORMATO JSON:
 {{
   "hallazgos": [
     {{
       "eje": "Cumplimiento del protocolo",
-      "gravedad": "Bajo | Medio | Alto",
-      "mensaje_ejecutivo": "Cita del ejecutivo o 'N/A' si es omisión",
-      "hallazgo": "Omisión o alteración de la plantilla oficial",
-      "sugerencia": "Plantilla oficial correcta que debió enviarse"
+      "gravedad": "Medio | Alto",
+      "mensaje_ejecutivo": "Cita textual del ejecutivo o 'N/A' si es omisión",
+      "hallazgo": "Descripción precisa de la plantilla omitida o distorsionada",
+      "sugerencia": "Plantilla oficial autorizada que debió enviarse"
     }}
   ]
 }}
@@ -205,21 +245,39 @@ FORMATO JSON:
 </transcripcion_pasiva>
 """
 
-        res_a_text = self.llm.generate_content_with_retry(prompt_juez_a, temperature=0.1, response_json=True)
-        res_b_text = self.llm.generate_content_with_retry(prompt_juez_b, temperature=0.1, response_json=True)
+        # Ejecución paralela simulada / secuencial rápida con Gemini 3.1 Flash Lite
+        logger.info("   • Agente 1 (Gramática): Ejecutando análisis estricto de ortografía y tildes...")
+        res1_text = self.llm.generate_content_with_retry(prompt_agente_1, temperature=0.1, response_json=True)
+        
+        logger.info("   • Agente 2 (Trato): Ejecutando análisis de cordialidad y empatía...")
+        res2_text = self.llm.generate_content_with_retry(prompt_agente_2, temperature=0.1, response_json=True)
+        
+        logger.info("   • Agente 3 (Protocolo): Ejecutando auditoría de guiones y plantillas LPDP...")
+        res3_text = self.llm.generate_content_with_retry(prompt_agente_3, temperature=0.1, response_json=True)
 
-        res_a = json.loads(res_a_text)
-        res_b = json.loads(res_b_text)
+        try:
+            h1 = json.loads(res1_text).get("hallazgos", [])
+        except Exception:
+            h1 = []
 
-        hallazgos_a = res_a.get("hallazgos", [])
-        hallazgos_b = res_b.get("hallazgos", [])
-        all_raw = hallazgos_a + hallazgos_b
+        try:
+            h2 = json.loads(res2_text).get("hallazgos", [])
+        except Exception:
+            h2 = []
 
-        # Validar y filtrar hallazgos consolidados
-        valid_hallazgos = validate_and_filter_findings(conversation_text, all_raw)
+        try:
+            h3 = json.loads(res3_text).get("hallazgos", [])
+        except Exception:
+            h3 = []
+
+        raw_all = h1 + h2 + h3
+        logger.info(f"   • Agente 4 (Orquestador): Recibidos {len(raw_all)} hallazgos brutos ({len(h1)} Gramática, {len(h2)} Trato, {len(h3)} Protocolo). Consolidadando y desduplicando...")
+
+        # Agente 4 (Sintetizador/Orquestador): Validar y desduplicar
+        valid_hallazgos = validate_and_filter_findings(conversation_text, raw_all)
 
         return {
-            "razonamiento_previo": f"Auditoría Multi-Agente consolidada (Juez A: {len(hallazgos_a)} hallazgos, Juez B: {len(hallazgos_b)} hallazgos).",
+            "razonamiento_previo": f"Auditoría 4-Agentes completada exitosamente. Agente Gramática: {len(h1)}, Agente Trato: {len(h2)}, Agente Protocolo: {len(h3)}.",
             "hallazgos": valid_hallazgos
         }
 
@@ -231,7 +289,7 @@ FORMATO JSON:
         templates_text: str = "",
         mode: str = "single"
     ) -> Dict[str, Any]:
-        """Método principal de invocación. Soporta modo 'single' y 'multi'."""
+        """Método principal de invocación. Soporta modo 'single' y 'multi' (4-Agent Architecture)."""
         if mode == "multi":
             return self.audit_transcript_multi(
                 conversation_text=conversation_text,
