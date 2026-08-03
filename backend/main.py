@@ -119,6 +119,7 @@ class ConsumoRequest(BaseModel):
     run_phase4: bool = True
     run_phase5: bool = True
     clear_consent: bool = False
+    start_script: Optional[str] = None
 
 class CalidadRequest(BaseModel):
     periodo: str
@@ -127,6 +128,7 @@ class CalidadRequest(BaseModel):
     run_fase3: bool = True
     run_fase4: bool = True
     run_fase5: bool = True
+    start_script: Optional[str] = None
 
 class AudioItem(BaseModel):
     reg_ev: str
@@ -215,7 +217,8 @@ def _run_consumo_task(req: ConsumoRequest):
             run_phase2=req.run_phase2,
             run_phase3=req.run_phase3,
             run_phase4=req.run_phase4,
-            run_phase5=req.run_phase5
+            run_phase5=req.run_phase5,
+            start_from_script=req.start_script
         )
     except Exception as e:
         logger.error(f"Error en flujo de Consumo: {e}")
@@ -259,7 +262,8 @@ def _run_calidad_task(req: CalidadRequest):
             run_fase2=req.run_fase2,
             run_fase3=req.run_fase3,
             run_fase4=req.run_fase4,
-            run_fase5=req.run_fase5
+            run_fase5=req.run_fase5,
+            start_from_script=req.start_script
         )
     except Exception as e:
         logger.error(f"Error en flujo de Calidad: {e}")

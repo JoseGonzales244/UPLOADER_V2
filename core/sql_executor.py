@@ -139,15 +139,16 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
             snippet = stmt_clean[:60].replace('\n', ' ') + "..." if len(stmt_clean) > 60 else stmt_clean
             logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {snippet}")
             if progress_callback:
+                pct = int((idx / len(statements)) * 100)
                 try:
                     progress_callback(
-                        f"   🔹 [{idx}/{len(statements)}] Ejecutando sentencia...",
+                        f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Ejecutando sentencia {idx}/{len(statements)} ({pct}%)",
                         "info",
                         progress=float(idx) / len(statements)
                     )
                 except TypeError:
                     progress_callback(
-                        f"   🔹 [{idx}/{len(statements)}] Ejecutando sentencia...",
+                        f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Ejecutando sentencia {idx}/{len(statements)} ({pct}%)",
                         "info"
                     )
 
