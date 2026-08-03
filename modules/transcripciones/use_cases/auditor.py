@@ -19,9 +19,9 @@ def validate_and_filter_findings(
     min_similarity: float = 40.0
 ) -> List[Dict[str, Any]]:
     """
-    Filtro post-procesamiento determinista mediante Fuzzy Matching.
-    Verifica que la cita 'mensaje_ejecutivo' se aproxime al texto real de la conversación.
-    Conserva los hallazgos validados y omisiones de plantilla.
+    Filtro post-procesamiento determinista mediante Fuzzy Matching y Reglas de Negocio.
+    1. Verifica que la cita 'mensaje_ejecutivo' se aproxime al texto real.
+    2. Filtra falsos positivos de plantillas condicionales (ej. TLV_Dudas_por_seguridad) si el cliente no disparó la condición.
     """
     filtered = []
     text_lower = conversation_text.lower()
@@ -29,10 +29,20 @@ def validate_and_filter_findings(
     for h in hallazgos:
         cita = (h.get("mensaje_ejecutivo") or "").strip()
         obs = (h.get("hallazgo") or "").strip().lower()
+        trigger_cliente = (h.get("mensaje_desencadenante_cliente") or "").strip().lower()
 
         # Filtrar explicaciones ficticias de falta de data
         if "no se puede evaluar" in obs or "no existen mensajes" in obs or "imposibilitando la evaluaci" in obs:
             continue
+
+        # FILTRO DE PLANTILLAS CONDICIONALES:
+        # TLV_Dudas_por_seguridad solo aplica si el cliente expresó dudas de seguridad
+        if "dudas_por_seguridad" in obs or "seguridad" in obs and "omisión" in obs:
+            # Verificar si el cliente realmente expresó alguna duda de seguridad
+            sec_keywords = ["segur", "estaf", "fraude", "confia", "peligro", "riesgo", "clon", "clave", "tarjeta", "robo"]
+            if not any(k in text_lower for k in sec_keywords) and (trigger_cliente in ("n/a", "none", "", "sin desencadenante")):
+                logger.info("ℹ️ [Falso positivo bloqueado] 'TLV_Dudas_por_seguridad' descartado porque el cliente no manifestó dudas de seguridad.")
+                continue
 
         # Si es una omisión explícita de plantilla
         if not cita or cita.lower() in ("n/a", "none", "no aplica", "omisión", "omision", "sin cita", "null") or len(cita) < 3:
@@ -95,13 +105,9 @@ INSTRUCCIONES EXHAUSTIVAS DE AUDITORÍA:
    - Reporta cualquier lenguaje informal ("ya pues", "bro", "amigo"), frialdad, o falta de empatía al atender al cliente.
 
 3. CUMPLIMIENTO DEL PROTOCOLO (Plantillas Oficiales):
-   - Compara minuciosamente los mensajes del ejecutivo contra las PLANTILLAS OFICIALES autorizadas abajo.
-   - Si el ejecutivo omitió el saludo oficial con nombre/DNI, no ofreció las condiciones claras, no leyó o envió el texto legal/LPDP, o no cerró con la plantilla de despedida autorizada, DEBES reportarlo en "Cumplimiento del protocolo".
-
-4. GRAVEDAD:
-   - "Bajo": Faltas de ortografía menores (falta de tilde o signos '¿' '¡').
-   - "Medio": Tono informal o desviación parcial de la plantilla.
-   - "Alto": Omitir plantilla legal de consentimiento/LPDP, falta de respeto o error grave en condiciones del producto.
+   - `TLV_Bienvenida`: Es la ÚNICA PLANTILLA OBLIGATORIA GENERAL exigible en todas las gestiones.
+   - PLANTILLAS CONDICIONALES (TODAS LAS DEMÁS): Solo se exigen si el cliente realizó una acción o pregunta desencadenante durante el chat (ej. `TLV_Dudas_por_seguridad` SOLO si el cliente duda de la seguridad; `TLV_Sin_respuesta_2_min` SOLO si el cliente no respondió >2 min; `TLV_No_cierre_venta` SOLO si el cliente rechazó la oferta).
+   - SI EL CLIENTE NO DISPARÓ LA CONDICIÓN, PROHIBIDO REPORTAR LA PLANTILLA COMO OMITIDA.
 
 FORMATO DE SALIDA (ESTRICTO JSON):
 {{
@@ -110,9 +116,10 @@ FORMATO DE SALIDA (ESTRICTO JSON):
     {{
       "eje": "Gramática | Trato con el cliente | Cumplimiento del protocolo",
       "gravedad": "Bajo | Medio | Alto",
-      "mensaje_ejecutivo": "Cita textual exacta emitida por el ejecutivo donde se comete la falta (o 'N/A' si es omisión)",
-      "hallazgo": "Descripción clara y específica del error (ej. 'Falta de signo de apertura de interrogación (¿) y tilde en la palabra código')",
-      "sugerencia": "Texto oficial corregido con la ortografía, signos y formato correcto"
+      "mensaje_ejecutivo": "Cita textual exacta emitida por el ejecutivo (o 'N/A' si es omisión)",
+      "mensaje_desencadenante_cliente": "Cita del cliente que exigía la plantilla (o 'N/A' si es flujo obligatorio o ortografía)",
+      "hallazgo": "Descripción clara del error o falta detectada",
+      "sugerencia": "Texto oficial corregido"
     }}
   ]
 }}
@@ -170,6 +177,7 @@ FORMATO JSON:
       "eje": "Gramática",
       "gravedad": "Bajo | Medio",
       "mensaje_ejecutivo": "Cita textual del ejecutivo",
+      "mensaje_desencadenante_cliente": "N/A",
       "hallazgo": "Descripción del error ortográfico o falta de signo (ej. 'Falta de signo de apertura ¿ y tilde en código')",
       "sugerencia": "Texto exacto corregido"
     }}
@@ -200,6 +208,7 @@ FORMATO JSON:
       "eje": "Trato con el cliente",
       "gravedad": "Bajo | Medio | Alto",
       "mensaje_ejecutivo": "Cita textual del ejecutivo",
+      "mensaje_desencadenante_cliente": "N/A",
       "hallazgo": "Descripción de la falla de trato o cortesía",
       "sugerencia": "Propuesta de redacción profesional y empática"
     }}
@@ -221,11 +230,11 @@ Tu ÚNICO OBJETIVO es comparar la conversación contra las PLANTILLAS OFICIALES 
 PLANTILLAS OFICIALES:
 {templates_text if templates_text else "Guion oficial: Saludo inicial con DNI/Nombre, Validación LPDP, Confirmación de condiciones del producto y Despedida oficial."}
 
-INSTRUCCIONES EXPLICITAS:
-1. Verifica si el ejecutivo omitió o distorsionó el saludo oficial de WhatsApp.
-2. Verifica si el ejecutivo omitió o leyó incorrectamente el texto legal de consentimiento/LPDP.
-3. Verifica si omitió la confirmación de condiciones o la despedida oficial.
-4. Reporta CADA omisión o alteración en el eje "Cumplimiento del protocolo".
+INSTRUCCIONES EXPLICITAS DE EVALUACIÓN DE PROTOCOLO:
+1. OBLIGATORIEDAD:
+   - `TLV_Bienvenida`: Es la ÚNICA PLANTILLA OBLIGATORIA GENERAL exigible en todas las gestiones.
+   - PLANTILLAS CONDICIONALES (TODAS LAS DEMÁS): Solo se exigen si el cliente realizó una acción o pregunta desencadenante durante el chat (ej. `TLV_Dudas_por_seguridad` SOLO si el cliente duda de la seguridad; `TLV_Sin_respuesta_2_min` SOLO si el cliente no respondió >2 min; `TLV_No_cierre_venta` SOLO si el cliente rechazó la oferta).
+   - SI EL CLIENTE NO DISPARÓ LA CONDICIÓN, PROHIBIDO REPORTAR LA PLANTILLA COMO OMITIDA.
 
 FORMATO JSON:
 {{
@@ -234,6 +243,7 @@ FORMATO JSON:
       "eje": "Cumplimiento del protocolo",
       "gravedad": "Medio | Alto",
       "mensaje_ejecutivo": "Cita textual del ejecutivo o 'N/A' si es omisión",
+      "mensaje_desencadenante_cliente": "Cita del cliente que exigía la plantilla (o 'N/A' si no aplica)",
       "hallazgo": "Descripción precisa de la plantilla omitida o distorsionada",
       "sugerencia": "Plantilla oficial autorizada que debió enviarse"
     }}
