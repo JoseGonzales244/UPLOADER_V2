@@ -110,13 +110,25 @@
       const [pastedText, setPastedText] = useState('');
       const [parsedSolList, setParsedSolList] = useState([]);
 
+      const getDefaultPeriod = () => {
+        const d = new Date();
+        let year = d.getFullYear();
+        let month = d.getMonth(); // 0-indexed: 0 es Enero (evalua mes anterior por defecto)
+        if (month === 0) {
+          month = 12;
+          year -= 1;
+        }
+        const monthStr = String(month).padStart(2, '0');
+        return `${year}${monthStr}`;
+      };
+
       // Tab 3: Consumo
-      const [periodoConsumo, setPeriodoConsumo] = useState('202607');
+      const [periodoConsumo, setPeriodoConsumo] = useState(getDefaultPeriod());
       const [clearConsent, setClearConsent] = useState(false);
       const [consumoPhases, setConsumoPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
 
       // Tab 4: Calidad
-      const [periodoCalidad, setPeriodoCalidad] = useState('202607');
+      const [periodoCalidad, setPeriodoCalidad] = useState(getDefaultPeriod());
       const [calidadPhases, setCalidadPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
 
       const logConsoleRef = useRef(null);
