@@ -100,7 +100,9 @@ def send_progress_update(message: str, type_str: str = "info", progress: Optiona
         "message": message,
         "type": type_str,
         "progress": process_state["progress"],
-        "phase": process_state["current_phase"]
+        "phase": process_state["current_phase"],
+        "running": process_state["running"],
+        "current_process": process_state["current_process"]
     }
     
     try:
@@ -182,7 +184,9 @@ async def websocket_logs(websocket: WebSocket):
             "message": process_state["message"],
             "type": process_state["status"],
             "progress": process_state["progress"],
-            "phase": process_state["current_phase"]
+            "phase": process_state["current_phase"],
+            "running": process_state["running"],
+            "current_process": process_state["current_process"]
         })
         while True:
             await websocket.receive_text()

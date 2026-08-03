@@ -154,6 +154,9 @@
           socket.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
+              if (data.running !== undefined) setIsRunning(data.running);
+              if (data.current_process !== undefined) setCurrentProcess(data.current_process || '');
+              
               if (data.message) {
                 setStatusMsg(data.message);
                 if (data.progress !== undefined) setProgress(data.progress * 100);
@@ -186,7 +189,7 @@
         }
       }, [logs]);
 
-      // Consultar estado de la API
+      // Consultar estado inicial de la API
       const checkHealth = async () => {
         try {
           const res = await fetch('/api/health');
@@ -200,8 +203,6 @@
 
       useEffect(() => {
         checkHealth();
-        const interval = setInterval(checkHealth, 2500);
-        return () => clearInterval(interval);
       }, []);
 
       // Ejecutar Diagnóstico de Entorno
