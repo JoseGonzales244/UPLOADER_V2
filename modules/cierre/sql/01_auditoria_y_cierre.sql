@@ -1,5 +1,5 @@
 -- =====================================================================
--- 06_AUDITORIA_Y_CIERRE.SQL
+-- 01_AUDITORIA_Y_CIERRE.SQL
 -- Cierre del proceso de calidad: consolidación del período cerrado
 -- {PERIODO_ANTERIOR} en tablas históricas y mapeo de la estructura organizativa.
 -- =====================================================================
