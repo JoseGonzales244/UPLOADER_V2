@@ -13,8 +13,9 @@ ACCESOS_EXPERIENCIA.txt
 
 
 # Carpetas de datos sensibles y descargas
-!transcripciones/*.txt
+transcripciones/
 downloads/
+
 logs/
 *.log
 
