@@ -15,6 +15,10 @@ ACCESOS_EXPERIENCIA.txt
 # Carpetas de datos sensibles y descargas
 transcripciones/
 downloads/
+Auditorias Wsp/
+*.docx
+*.doc
+
 
 logs/
 *.log
