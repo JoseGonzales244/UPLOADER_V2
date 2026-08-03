@@ -32,10 +32,11 @@ def validate_and_filter_findings(
     for h in hallazgos:
         cita = (h.get("mensaje_ejecutivo") or "").strip()
         
-        # Si no hay cita textual (ej. omisión total de plantilla), se conserva
-        if not cita:
+        # Si no hay cita textual o indica omisión (ej. "N/A", "None"), se conserva sin filtrar
+        if not cita or cita.lower() in ("n/a", "none", "no aplica", "omisión", "sin cita", "null") or len(cita) < 4:
             filtered.append(h)
             continue
+
 
         cita_lower = cita.lower()
 
