@@ -1,7 +1,6 @@
 """
-Extractor de Transcripciones de WhatsApp (.docx) con Filtrado de Ejecutivo a Evaluar.
-Filtra estrictamente la conversación entre el Cliente y el Ejecutivo asignado en Ejecutivos_Gestion_Wsp.xlsx,
-omitiendo mensajes de Bot/Flujo y de otros ejecutivos no evaluados.
+Extractor de Transcripciones de WhatsApp (.docx) con Extracción de Conversación Limpia y Filtrado de Ejecutivo.
+Soporta tanto documentos con sección de 'Conversación Limpia' como exportaciones tabuladas de Genesys.
 """
 import os
 import glob
@@ -30,14 +29,12 @@ class WhatsAppTranscriptExtractor:
 
     def extract_single_docx(self, docx_path: str) -> Dict[str, Any]:
         """
-        Extrae y filtra la transcripción de un archivo .docx de WhatsApp.
-        Filtra únicamente los mensajes emitidos por el ejecutivo asignado a la interacción y el cliente.
-        Omite bots y otros ejecutivos no evaluados.
+        Extrae la conversación limpia del archivo .docx de WhatsApp.
+        Privilegia la sección 'Conversación limpia' si existe en el Word.
         """
         filename = os.path.basename(docx_path)
         interaction_id = os.path.splitext(filename)[0]
 
-        # Buscar metadatos del ejecutivo evaluado en el Excel
         exec_info = {
             "SUPERVISOR": "N/A",
             "REGISTRO COLABORADOR": "N/A",
@@ -62,16 +59,43 @@ class WhatsAppTranscriptExtractor:
                 }
 
         doc = docx.Document(docx_path)
-        
+        paragraphs_text = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+
+        # 1. Buscar si existe sección "Conversación limpia" o "Parte 1" / "Derivación a especialista"
+        clean_section = []
+        is_clean_started = False
+
+        for txt in paragraphs_text:
+            txt_lower = txt.lower()
+            if any(k in txt_lower for k in ["conversación limpia", "conversacion limpia", "parte 1", "parte 2", "derivación a especialista", "derivacion a especialista", "atención por asesor"]):
+                is_clean_started = True
+            
+            if is_clean_started:
+                if not txt.startswith("Archivo:") and not txt.startswith("Tipo de") and not txt.startswith("ID de"):
+                    clean_section.append(txt)
+
+        # Si se encontró la sección de conversación limpia en el Word
+        if clean_section:
+            header_summary = (
+                f"=== FICHA DE EVALUACIÓN WHATSAPP (CONVERSACIÓN LIMPIA) ===\n"
+                f"ID Interacción: {interaction_id}\n"
+                f"Ejecutivo Evaluado: {exec_info['COLABORADOR']} (Registro: {exec_info['REGISTRO COLABORADOR']})\n"
+                f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
+                f"====================================\n\n"
+            )
+            full_text = header_summary + "\n".join(clean_section)
+            return {
+                "archivo": filename,
+                "interaction_id": interaction_id,
+                "full_text": full_text,
+                "metadata": exec_info
+            }
+
+        # 2. Fallback: Parsear la tabla tabulada de Genesys
         filtered_dialogue = []
-        excluded_other_execs = 0
-        excluded_bots = 0
+        current_speaker = None
 
-        for p in doc.paragraphs:
-            txt = p.text.strip()
-            if not txt:
-                continue
-
+        for txt in paragraphs_text:
             parts = txt.split("\t")
             if len(parts) >= 3 and parts[1] in ("Interno", "Externo"):
                 fecha_hora = parts[0]
@@ -80,20 +104,18 @@ class WhatsAppTranscriptExtractor:
                 mensaje_texto = parts[3] if len(parts) >= 4 else ""
 
                 if tipo_part == "Externo":
-                    linea = f"Cliente ({sender})"
+                    current_speaker = f"Cliente ({sender})"
+                    linea = f"{current_speaker}"
                     if mensaje_texto:
                         linea += f": {mensaje_texto}"
                     filtered_dialogue.append(linea)
 
                 elif tipo_part == "Interno":
                     sender_lower = sender.lower()
-
-                    # Comprobar si corresponde al bot/flujo
                     if "bot" in sender_lower or "flujo" in sender_lower or "acd" in sender_lower:
-                        excluded_bots += 1
+                        current_speaker = None
                         continue
 
-                    # Comprobar si el emisor es el Ejecutivo Evaluado por Registro o Nombre
                     is_target = False
                     if target_registro and target_registro.lower() in sender_lower:
                         is_target = True
@@ -101,17 +123,13 @@ class WhatsAppTranscriptExtractor:
                         is_target = True
 
                     if is_target:
-                        linea = f"Ejecutivo Evaluado [{target_nombre or sender}] ({fecha_hora})"
+                        current_speaker = f"Ejecutivo Evaluado [{target_nombre or sender}]"
+                        linea = f"{current_speaker}"
                         if mensaje_texto:
                             linea += f": {mensaje_texto}"
                         filtered_dialogue.append(linea)
                     else:
-                        excluded_other_execs += 1
-
-        logger.info(
-            f"Chat '{filename}' parseado: {len(filtered_dialogue)} líneas validadas "
-            f"(Excluidos: {excluded_other_execs} mensajes de otros ejecutivos, {excluded_bots} de bots)."
-        )
+                        current_speaker = None
 
         header_summary = (
             f"=== FICHA DE EVALUACIÓN WHATSAPP ===\n"
@@ -120,8 +138,7 @@ class WhatsAppTranscriptExtractor:
             f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
             f"====================================\n\n"
         )
-
-        full_text = header_summary + ("\n".join(filtered_dialogue) if filtered_dialogue else "Sin mensajes registrados para el ejecutivo evaluado.")
+        full_text = header_summary + ("\n".join(filtered_dialogue) if filtered_dialogue else "Sin mensajes de texto registrados para el ejecutivo evaluado en la transcripción.")
 
         return {
             "archivo": filename,
