@@ -11,4 +11,6 @@ requests
 pandas
 pywin32
 pyodbc
-rapidfuzz
+rapidfuzz
+google-generativeai
+
