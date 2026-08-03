@@ -6,6 +6,9 @@
 --   3. Recolección de estadísticas al terminar.
 -- ==============================================================================
 
+-- [PASO 0]: Limpieza de espacios en T_SP_CD40K
+UPDATE DLAB_GEC.T_SP_CD40K SET REG_EJECUTIVO = TRIM(REG_EJECUTIVO), DNI_CLIENTE = TRIM(DNI_CLIENTE), CD_NUMERO_TC = TRIM(CD_NUMERO_TC);
+
 DELETE FROM DLAB_GEC.M_EXP_CD40K ALL;
 
 INSERT INTO DLAB_GEC.M_EXP_CD40K (
