@@ -76,6 +76,14 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Global event loop reference for thread-safe WebSocket broadcasting
+main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+@app.on_event("startup")
+async def startup_event():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+
 # Estado global de ejecución
 process_state = {
     "running": False,
@@ -105,12 +113,14 @@ def send_progress_update(message: str, type_str: str = "info", progress: Optiona
         "current_process": process_state["current_process"]
     }
     
+    global main_loop
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(manager.broadcast(payload), loop)
-    except Exception:
-        pass
+        if main_loop is None:
+            main_loop = asyncio.get_event_loop()
+        if main_loop and main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(manager.broadcast(payload), main_loop)
+    except Exception as e:
+        print(f"Error broadcasting WebSocket message: {e}")
 
 # Modelos Pydantic
 class ConsumoRequest(BaseModel):
