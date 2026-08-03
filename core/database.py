@@ -40,21 +40,28 @@ def check_table_exists(con, table_name) -> bool:
     cur = con.cursor()
     try:
         cur.execute(f"SELECT TOP 1 * FROM {table_name}")
-        cur.close()
         return True
     except Exception:
         return False
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
 
 def get_table_columns(con, table_name) -> list:
     """Gets column names of an existing table."""
     cur = con.cursor()
     try:
         cur.execute(f"SELECT TOP 1 * FROM {table_name}")
-        cols = [desc[0] for desc in cur.description]
-        cur.close()
-        return cols
+        return [desc[0] for desc in cur.description]
     except Exception:
         return []
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
 
 def execute_create_table(con, table_name, columns_with_types):
     """Creates a new table with sanitized column names and specified types."""

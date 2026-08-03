@@ -240,6 +240,7 @@ def _run_consumo_task(req: ConsumoRequest):
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
 
 @app.post("/api/orchestrate/consumo")
 def start_consumo(req: ConsumoRequest, background_tasks: BackgroundTasks):
@@ -288,6 +289,7 @@ def _run_calidad_task(req: CalidadRequest):
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
 
 @app.post("/api/orchestrate/calidad")
 def start_calidad(req: CalidadRequest, background_tasks: BackgroundTasks):
@@ -334,6 +336,7 @@ def _run_audios_task(req: AudioRequest):
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
 
 @app.post("/api/audios/download")
 def start_audios_download(req: AudioRequest, background_tasks: BackgroundTasks):

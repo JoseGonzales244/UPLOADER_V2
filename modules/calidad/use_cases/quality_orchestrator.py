@@ -360,12 +360,12 @@ def refresh_excel_sharepoint_data(file_path, progress_callback=None):
         
     # Build command pointing to this module's _refresh_excel_com_process
     # We append the parent path so Python can find core.quality_process_orchestrator
-    parent_dir = os.path.dirname(os.path.dirname(abs_path))
+    project_root = os.getcwd()
     cmd = [
         sys.executable,
         "-c",
-        f"import sys; sys.path.append(r'{parent_dir}'); "
-        f"from core.quality_process_orchestrator import _refresh_excel_com_process; "
+        f"import sys; sys.path.append(r'{project_root}'); "
+        f"from modules.calidad.use_cases.quality_orchestrator import _refresh_excel_com_process; "
         f"_refresh_excel_com_process(r'{abs_path}')"
     ]
     
