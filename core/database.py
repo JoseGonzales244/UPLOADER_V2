@@ -26,8 +26,15 @@ def connect_teradata(user, password, host='IBKTD', logmech='TD2'):
         host=host,
         user=user,
         password=password,
-        logmech=logmech
+        logmech=logmech,
+        charset='UTF8'
     )
+
+def _sanitize_cell(val):
+    if isinstance(val, str):
+        # Sanitiza caracteres que la codificación de Teradata no pueda traducir
+        return val.encode('latin-1', errors='replace').decode('latin-1')
+    return val
 
 def check_table_exists(con, table_name) -> bool:
     """Checks if a table exists in Teradata."""
@@ -106,7 +113,7 @@ def load_to_teradata(con, table_name, df: pl.DataFrame, selected_columns_config,
     
     for i in range(0, total_rows, batch_size):
         batch = records[i:i + batch_size]
-        batch_values = [[row[c] for c in df_filtered.columns] for row in batch]
+        batch_values = [[_sanitize_cell(row[c]) for c in df_filtered.columns] for row in batch]
         cur.executemany(insert_query, batch_values)
         if progress_callback:
             pct = min(100, int(((i + len(batch)) / total_rows) * 100))
