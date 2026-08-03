@@ -8,8 +8,8 @@ __pycache__/
 # Archivos de configuración y credenciales sensibles
 .env
 .env.*
-!.env.example
 ACCESOS_EXPERIENCIA.txt
+
 
 
 # Carpetas de datos sensibles y descargas

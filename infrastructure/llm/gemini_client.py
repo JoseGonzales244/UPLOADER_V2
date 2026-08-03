@@ -1,5 +1,6 @@
 """
-Infrastructure LLM Module: Modern client wrapper for Google Gemini API using official google-genai SDK.
+Infrastructure LLM Module: Client wrapper for Google Gemini API using official google-genai SDK.
+Usa estrictamente gemini-3.1-flash-lite sin ningún fallback silencioso.
 """
 import os
 import time
@@ -19,7 +20,7 @@ except ImportError:
 logger = logging.getLogger("infrastructure.llm.gemini_client")
 
 class GeminiClient:
-    def __init__(self, api_key: Optional[str] = None, default_model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, default_model: str = "gemini-3.1-flash-lite"):
         self.default_model = default_model
         load_dotenv()
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -32,7 +33,7 @@ class GeminiClient:
                 self.client = None
         else:
             self.client = None
-            logger.warning("GEMINI_API_KEY environment variable not set in .env file.")
+            logger.warning("GEMINI_API_KEY no encontrada en las variables de entorno.")
 
     def generate_content_with_retry(
         self,
@@ -63,21 +64,18 @@ class GeminiClient:
                 if res and res.text:
                     return res.text
                 else:
-                    raise Exception("Respuesta vacía de la API de Gemini")
+                    raise RuntimeError(f"Respuesta vacía recibida desde la API de Gemini para el modelo {target_model}")
 
             except Exception as e:
                 err_str = str(e)
-                # Fallback de modelo si el nombre no existe
-                if "404" in err_str or "not found" in err_str.lower():
-                    if target_model != "gemini-1.5-flash":
-                        logger.warning(f"Modelo {target_model} no disponible. Reintentando con gemini-1.5-flash...")
-                        target_model = "gemini-1.5-flash"
-                        continue
+                # Reintento únicamente si es Rate Limit 429 / Cuota superada
                 if "429" in err_str or "ResourceExhausted" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
-                    logger.warning(f"[Rate Limit 429] Esperando {delay}s antes del reintento (Intento {attempt+1}/{max_retries})...")
+                    logger.warning(f"[Rate Limit 429] Reintentando en {delay}s (Intento {attempt+1}/{max_retries})...")
                     time.sleep(delay)
                     delay *= 2
                 else:
+                    # CERO FALLBACKS: Elevar la excepción inmediatamente si el modelo o la llamada falla
+                    logger.error(f"Error en Gemini API ({target_model}): {e}")
                     raise e
 
-        raise Exception(f"Error al generar contenido tras {max_retries} intentos debido a límites de cuota.")
+        raise RuntimeError(f"Error en Gemini API ({target_model}): Superado el máximo de {max_retries} reintentos por 429 Rate Limit.")
