@@ -75,15 +75,11 @@ def main():
 
     mode_label = "Multi-Agent (Sistema de 4 Agentes Especializados)" if audit_mode == "multi" else "Single-Agent (Evaluador Directo)"
 
-    # 5. Cantidad de archivos a procesar
+    # 5. Cantidad de archivos a procesar (Por defecto: 100% de los chats detectados)
     if args.count:
         max_files = min(args.count, len(transcripts))
     else:
-        max_count_input = input(f"\n¿Cuántos chats deseas auditar? (1 - {len(transcripts)}) [Enter para procesar los {len(transcripts)}]: ").strip()
-        if max_count_input.isdigit():
-            max_files = min(int(max_count_input), len(transcripts))
-        else:
-            max_files = len(transcripts)
+        max_files = len(transcripts)
 
     selected_transcripts = transcripts[:max_files]
 
