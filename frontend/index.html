@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interbank Uploader V2 - Control Center</title>
+
+  <!-- React 18 & Babel via CDN para ejecucion ligera instantanea -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind CSS para diseño moderno -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Inter Font -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0d1117;
+      color: #c9d1d9;
+    }
+    .glass-panel {
+      background: rgba(22, 27, 34, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(48, 54, 61, 0.7);
+    }
+    .interbank-green {
+      color: #00a859;
+    }
+    .bg-interbank-green {
+      background-color: #00a859;
+    }
+    .hover-interbank-green:hover {
+      background-color: #008f4c;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #161b22;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('consumo');
+      const [periodo, setPeriodo] = useState('202607');
+      const [clearConsent, setClearConsent] = useState(false);
+      const [isRunning, setIsRunning] = useState(false);
+      const [currentProcess, setCurrentProcess] = useState('');
+      const [progress, setProgress] = useState(0);
+      const [statusMsg, setStatusMsg] = useState('Sistema listo.');
+      const [statusType, setStatusType] = useState('info');
+      const [logs, setLogs] = useState([]);
+
+      const logContainerRef = useRef(null);
+
+      // Conexión WebSocket para Logs en vivo
+      useEffect(() => {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+        let socket;
+
+        function connectWS() {
+          socket = new WebSocket(wsUrl);
+
+          socket.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.message) {
+                setStatusMsg(data.message);
+                if (data.type) setStatusType(data.type);
+                if (data.progress !== undefined) setProgress(data.progress * 100);
+
+                setLogs((prev) => [
+                  ...prev.slice(-499), // Mantener últimos 500 logs
+                  {
+                    time: data.timestamp || new Date().toLocaleTimeString(),
+                    text: data.message,
+                    type: data.type || 'info'
+                  }
+                ]);
+              }
+            } catch (err) {
+              console.error('Error parseando mensaje WS:', err);
+            }
+          };
+
+          socket.onclose = () => {
+            setTimeout(connectWS, 3000); // Reintentar reconexión automática
+          };
+        }
+
+        connectWS();
+        return () => socket && socket.close();
+      }, []);
+
+      // Auto-scroll en consola de logs
+      useEffect(() => {
+        if (logContainerRef.current) {
+          logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+      }, [logs]);
+
+      // Consultar estado de la API
+      const checkHealth = async () => {
+        try {
+          const res = await fetch('/api/health');
+          const data = await res.json();
+          if (data.process_state) {
+            setIsRunning(data.process_state.running);
+            setCurrentProcess(data.process_state.current_process || '');
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      useEffect(() => {
+        checkHealth();
+        const interval = setInterval(checkHealth, 2500);
+        return () => clearInterval(interval);
+      }, []);
+
+      // Disparar proceso de Consumo
+      const handleRunConsumo = async () => {
+        if (isRunning) return;
+        setIsRunning(true);
+        setCurrentProcess('Consumo');
+        setLogs([]);
+        try {
+          const res = await fetch('/api/orchestrate/consumo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              periodo: periodo,
+              clear_consent: clearConsent
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.detail || 'Error iniciando proceso');
+            setIsRunning(false);
+          }
+        } catch (err) {
+          alert('Error conectando con el servidor Backend: ' + err.message);
+          setIsRunning(false);
+        }
+      };
+
+      // Disparar proceso de Calidad
+      const handleRunCalidad = async () => {
+        if (isRunning) return;
+        setIsRunning(true);
+        setCurrentProcess('Calidad');
+        setLogs([]);
+        try {
+          const res = await fetch('/api/orchestrate/calidad', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              periodo: periodo
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.detail || 'Error iniciando proceso');
+            setIsRunning(false);
+          }
+        } catch (err) {
+          alert('Error conectando con el servidor Backend: ' + err.message);
+          setIsRunning(false);
+        }
+      };
+
+      return (
+        <div class="min-h-screen flex flex-col">
+          {/* Header Bar */}
+          <header class="glass-panel border-b border-gray-800 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-interbank-green flex items-center justify-center font-bold text-white shadow-lg">
+                IB
+              </div>
+              <div>
+                <h1 class="text-lg font-bold text-white tracking-wide">Uploader V2 Control Center</h1>
+                <p class="text-xs text-gray-400">Plataforma de Orquestación & Ingesta Teradata</p>
+              </div>
+            </div>
+
+            {/* Badges de Estado */}
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 border border-gray-700">
+                <span class={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                <span class="text-gray-300">{isRunning ? `Ejecutando: ${currentProcess}` : 'Sistema En Espera'}</span>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Layout */}
+          <div class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* Panel Izquierdo: Controles */}
+            <div class="lg:col-span-5 space-y-6">
+              
+              {/* Navegación por Tabs */}
+              <div class="glass-panel p-1.5 rounded-xl flex gap-1 border border-gray-800">
+                <button
+                  onClick={() => setActiveTab('consumo')}
+                  class={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'consumo'
+                      ? 'bg-interbank-green text-white shadow'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  ⚡ Consumo (KRI)
+                </button>
+                <button
+                  onClick={() => setActiveTab('calidad')}
+                  class={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'calidad'
+                      ? 'bg-interbank-green text-white shadow'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  📊 Calidad (NTD)
+                </button>
+              </div>
+
+              {/* Formulario de Parámetros */}
+              <div class="glass-panel p-6 rounded-2xl space-y-5">
+                <h2 class="text-sm font-semibold text-white uppercase tracking-wider border-b border-gray-800 pb-2">
+                  Configuración del Proceso
+                </h2>
+
+                <div>
+                  <label class="block text-xs font-medium text-gray-400 mb-1.5">Período de Ejecución (YYYYMM)</label>
+                  <input
+                    type="text"
+                    value={periodo}
+                    onChange={(e) => setPeriodo(e.target.value)}
+                    placeholder="Ej. 202607"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                {activeTab === 'consumo' && (
+                  <div class="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="clearConsent"
+                      checked={clearConsent}
+                      onChange={(e) => setClearConsent(e.target.checked)}
+                      class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                    />
+                    <label htmlFor="clearConsent" class="text-xs text-gray-300 cursor-pointer">
+                      Limpiar registros previos de Consentimiento Diario
+                    </label>
+                  </div>
+                )}
+
+                {/* Botón de Ejecución */}
+                <button
+                  onClick={activeTab === 'consumo' ? handleRunConsumo : handleRunCalidad}
+                  disabled={isRunning}
+                  class={`w-full py-3 px-4 rounded-xl text-sm font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
+                    isRunning
+                      ? 'bg-gray-700 cursor-not-allowed opacity-60'
+                      : 'bg-interbank-green hover-interbank-green active:scale-95'
+                  }`}
+                >
+                  {isRunning ? (
+                    <>
+                      <svg class="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Ejecutando Proceso...</span>
+                    </>
+                  ) : (
+                    <span>🚀 Iniciar Orquestación de {activeTab === 'consumo' ? 'Consumo' : 'Calidad'}</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Barra de Progreso en Vivo */}
+              <div class="glass-panel p-5 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-medium text-gray-400">Progreso Global</span>
+                  <span class="font-bold text-emerald-400">{Math.round(progress)}%</span>
+                </div>
+                <div class="w-full h-2.5 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+                  <div
+                    class="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+                <p class="text-xs text-gray-400 truncate pt-1">{statusMsg}</p>
+              </div>
+
+            </div>
+
+            {/* Panel Derecho: Consola de Logs en Tiempo Real */}
+            <div class="lg:col-span-7 flex flex-col">
+              <div class="glass-panel flex-1 rounded-2xl p-5 flex flex-col min-h-[500px]">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-800 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <h3 class="text-xs font-semibold text-white uppercase tracking-wider">Consola de Eventos en Vivo</h3>
+                  </div>
+                  <button
+                    onClick={() => setLogs([])}
+                    class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition"
+                  >
+                    Limpiar Consola
+                  </button>
+                </div>
+
+                <div
+                  ref={logContainerRef}
+                  class="flex-1 bg-black/50 border border-gray-800/80 rounded-xl p-4 font-mono text-xs overflow-y-auto space-y-2 max-h-[550px]"
+                >
+                  {logs.length === 0 ? (
+                    <div class="text-gray-600 text-center py-20">
+                      En espera de ejecución de procesos...
+                    </div>
+                  ) : (
+                    logs.map((log, index) => (
+                      <div key={index} class="flex items-start gap-2 leading-relaxed">
+                        <span class="text-gray-500 shrink-0">[{log.time}]</span>
+                        <span
+                          class={
+                            log.type === 'error'
+                              ? 'text-red-400 font-semibold'
+                              : log.type === 'warning'
+                              ? 'text-amber-300'
+                              : log.type === 'success'
+                              ? 'text-emerald-400 font-semibold'
+                              : 'text-gray-300'
+                          }
+                        >
+                          {log.text}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Footer */}
+          <footer class="text-center py-4 text-xs text-gray-500 border-t border-gray-800 glass-panel mt-6">
+            UPLOADER V2 • Interbank Analytics & Engineering • Servidor FastAPI + React SPA
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

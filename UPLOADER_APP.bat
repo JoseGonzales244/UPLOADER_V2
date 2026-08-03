@@ -4,20 +4,25 @@ cd /d "%~dp0"
 
 set "VENV_PYTHON=%~dp0.venv\Scripts\python.exe"
 
+echo Starting Interbank Uploader V2 (FastAPI + React Control Center)...
+
 if exist "%VENV_PYTHON%" (
-    "%VENV_PYTHON%" -m streamlit run index.py
+    start "" "http://localhost:8000"
+    "%VENV_PYTHON%" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ) else (
     where py >nul 2>nul
     if %ERRORLEVEL% EQU 0 (
-        py -3 -m streamlit run index.py
+        start "" "http://localhost:8000"
+        py -3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
     ) else (
-        python -m streamlit run index.py
+        start "" "http://localhost:8000"
+        python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
     )
 )
 
 if errorlevel 1 (
     echo.
-    echo No se pudo iniciar Streamlit.
-    echo Verifica que Python y las dependencias del proyecto esten instaladas.
+    echo No se pudo iniciar el Servidor Uploader V2.
+    echo Verifica que Python y las dependencias esten instaladas.
     pause
 )

@@ -13,5 +13,10 @@ pywin32
 pyodbc
 rapidfuzz
 google-genai
+fastapi
+uvicorn
+websockets
+python-multipart
+plyer
 
 
