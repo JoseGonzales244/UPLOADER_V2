@@ -55,22 +55,35 @@ def main():
 
     print(f"\n📁 Transcripciones de WhatsApp detectadas: {len(transcripts)} archivos .docx en 'Auditorias Wsp/'")
 
+    import argparse
+    parser = argparse.ArgumentParser(description="Auditoría Gerencial de Transcripciones WhatsApp")
+    parser.add_argument("--mode", choices=["single", "multi"], help="Modo de auditoría: 'single' o 'multi'")
+    parser.add_argument("--count", type=int, help="Número de chats a auditar")
+    args, unknown = parser.parse_known_args()
+
     # 4. Modo de auditoría (Single vs Multi-Agent)
-    print("\n" + "=" * 50)
-    print("🤖 Seleccione el Modo de Auditoría de Inteligencia Artificial:")
-    print("  [1] Single-Agent (Evaluador directo exhaustivo con Gemini 3.1 Flash Lite)")
-    print("  [2] Multi-Agent  (Doble Juez Adversarial: Juez Gramática/Trato + Juez Protocolo)")
-    print("=" * 50)
-    mode_choice = input("Seleccione el modo (1 o 2) [Enter por defecto: 1 - Single Agent]: ").strip()
-    audit_mode = "multi" if mode_choice == "2" else "single"
-    mode_label = "Multi-Agent (Doble Juez Adversarial)" if audit_mode == "multi" else "Single-Agent (Evaluador Directo)"
+    if args.mode:
+        audit_mode = args.mode
+    else:
+        print("\n" + "=" * 65)
+        print("🤖 Seleccione el Modo de Auditoría de Inteligencia Artificial:")
+        print("  [1] Single-Agent (Evaluador directo exhaustivo con Gemini 3.1 Flash Lite)")
+        print("  [2] Multi-Agent  (Sistema de 4 Agentes: 1 Orquestador + 3 Especialistas)")
+        print("=" * 65)
+        mode_choice = input("Seleccione el modo (1 o 2) [Enter por defecto: 2 - Multi-Agent]: ").strip()
+        audit_mode = "single" if mode_choice == "1" else "multi"
+
+    mode_label = "Multi-Agent (Sistema de 4 Agentes Especializados)" if audit_mode == "multi" else "Single-Agent (Evaluador Directo)"
 
     # 5. Cantidad de archivos a procesar
-    max_count_input = input(f"\n¿Cuántos chats deseas auditar? (1 - {len(transcripts)}) [Enter para procesar los {len(transcripts)}]: ").strip()
-    if max_count_input.isdigit():
-        max_files = min(int(max_count_input), len(transcripts))
+    if args.count:
+        max_files = min(args.count, len(transcripts))
     else:
-        max_files = len(transcripts)
+        max_count_input = input(f"\n¿Cuántos chats deseas auditar? (1 - {len(transcripts)}) [Enter para procesar los {len(transcripts)}]: ").strip()
+        if max_count_input.isdigit():
+            max_files = min(int(max_count_input), len(transcripts))
+        else:
+            max_files = len(transcripts)
 
     selected_transcripts = transcripts[:max_files]
 
