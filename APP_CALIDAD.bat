@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 set "VENV_PYTHON=%~dp0.venv\Scripts\python.exe"
 
-echo Starting Interbank Uploader V2 (FastAPI + React Control Center)...
+echo Starting Interbank Plataforma Calidad Televentas (FastAPI + React Control Center)...
 
 if exist "%VENV_PYTHON%" (
     start "" "http://localhost:8000"

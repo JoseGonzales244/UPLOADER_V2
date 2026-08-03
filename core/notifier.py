@@ -10,7 +10,7 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-def notify_desktop(title: str = "Uploader V2", message: str = "Proceso completado exitosamente", duration_sec: int = 5):
+def notify_desktop(title: str = "Plataforma Calidad Televentas", message: str = "Proceso completado exitosamente", duration_sec: int = 5):
     """
     Envía una notificación nativa de Windows (Toast / Balloon) que permanece en pantalla
     durante el tiempo especificado en seconds (por defecto 5s).
