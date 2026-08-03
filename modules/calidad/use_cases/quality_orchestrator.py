@@ -899,6 +899,16 @@ def run_quality_process_flow(
             if progress_callback:
                 progress_callback("🎉 ¡Proceso NTD (Fase 5) completado exitosamente!", "success")
                 
+            try:
+                from core.notifier import notify_desktop
+                notify_desktop(
+                    title="Uploader V2 - Calidad",
+                    message="¡Proceso NTD completado exitosamente!",
+                    duration_sec=5
+                )
+            except Exception as err:
+                logger.warning(f"No se pudo enviar la notificación de escritorio: {err}")
+                
         except Exception as e:
             if progress_callback:
                 progress_callback(f"❌ Fallo crítico en el procesamiento SQL de NTD. Revirtiendo cambios (Rollback)... Error: {e}", "error")

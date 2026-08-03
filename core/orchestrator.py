@@ -404,6 +404,17 @@ def run_orchestration_flow(
         logger.info(f"=== PROCESO DE CONSUMO COMPLETADO EXITOSAMENTE PARA EL PERÍODO {period_str} ===")
         if progress_callback:
             progress_callback(msg_ok, "success")
+        
+        # Enviar notificación nativa de escritorio
+        try:
+            from core.notifier import notify_desktop
+            notify_desktop(
+                title="Uploader V2 - Consumo",
+                message=f"¡Proceso completado exitosamente para el período {period_str}!",
+                duration_sec=5
+            )
+        except Exception as err:
+            logger.warning(f"No se pudo enviar la notificación de escritorio: {err}")
     finally:
         if con:
             try:
