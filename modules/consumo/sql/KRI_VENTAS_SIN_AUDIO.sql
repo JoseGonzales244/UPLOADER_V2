@@ -257,32 +257,8 @@ SET TIEMPO2 = TIEMPO * 86400,
     END,
     FLAG_EVALUADO = 'NO';
 
--- [PASO 7.1.1]: Nivelación Dinámica Aleatoria KRI (< 0.5% por producto)
--- Parcha aleatoriamente los registros excedentes de [SIN AUDIO] asignándoles un porcentaje natural y variable (<0.5%, ej. 0.23%, 0.37%, 0.41%) por producto
-UPDATE DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
-FROM (
-    SELECT CODDOC, TIP_CLIENTE
-    FROM (
-        SELECT CODDOC, TIP_CLIENTE,
-               ROW_NUMBER() OVER (PARTITION BY TIP_CLIENTE ORDER BY HASHROW(CODDOC)) AS RN
-        FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
-        WHERE RANGO_TIEMPO = '[SIN AUDIO]'
-    ) T
-    WHERE RN > (
-        -- Proporcional al volumen de ventas por producto (usando CEIL para evitar truncamiento a 0)
-        SELECT CEIL(CAST(COUNT(*) AS DECIMAL(18,4)) * ((18 + (HASHAMP(HASHBUCKET(HASHROW(MAX(V.TIP_CLIENTE)))) MOD 20)) / 10000.0))
-        FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL V
-        WHERE V.TIP_CLIENTE = T.TIP_CLIENTE
-    )
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY CODDOC, TIP_CLIENTE ORDER BY CODDOC) = 1
-) B
-SET ORIGEN_LLAMADA = 'TRAFICO_CLOUD',
-    TIEMPO = '          822.00',
-    TIEMPO2 = '71020800',
-    RANGO_TIEMPO = '[20MIN]'
-WHERE DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL.CODDOC = B.CODDOC
-  AND DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL.TIP_CLIENTE = B.TIP_CLIENTE
-  AND DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL.RANGO_TIEMPO = '[SIN AUDIO]';
+-- [PASO 7.1.1]: PARCHE DESACTIVADO - Se preservan las ventas sin audio reales de Genesys (1394 registros)
+-- UPDATE DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL ...
 
 -- [PASO 7.2]: Actualizar FLAG_EVALUADO contra M_EXP_DOCUMENTOS_EVALUADOS
 UPDATE DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL 
