@@ -26,8 +26,7 @@ def connect_teradata(user, password, host='IBKTD', logmech='TD2'):
         host=host,
         user=user,
         password=password,
-        logmech=logmech,
-        charset='UTF8'
+        logmech=logmech
     )
 
 def _sanitize_cell(val):
