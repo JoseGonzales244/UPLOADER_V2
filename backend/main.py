@@ -259,8 +259,12 @@ def _run_calidad_task(req: CalidadRequest):
     try:
         from dotenv import load_dotenv
         load_dotenv()
+        insight_user = os.getenv("INSIGHT_USER", "")
+        insight_password = os.getenv("INSIGHT_PASSWORD", "")
         verint_user = os.getenv("VERINT_USER", "")
         verint_password = os.getenv("VERINT_PASSWORD", "")
+        td_user = os.getenv("TERADATA_USER", "")
+        td_password = os.getenv("TERADATA_PASSWORD", "")
 
         run_quality_process_flow(
             insight_user=insight_user,
