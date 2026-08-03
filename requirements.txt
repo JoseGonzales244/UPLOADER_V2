@@ -12,5 +12,6 @@ pandas
 pywin32
 pyodbc
 rapidfuzz
+google-genai
 google-generativeai
 
