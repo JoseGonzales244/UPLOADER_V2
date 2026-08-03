@@ -269,8 +269,11 @@ FROM (
         WHERE RANGO_TIEMPO = '[SIN AUDIO]'
     ) T
     WHERE RN > (
-        -- Genera un porcentaje objetivo dinámico entre 0.18% y 0.44% (< 0.5%) por producto
-        SELECT CAST(COUNT(*) * ((18 + (HASHAMP(HASHBUCKET(HASHROW(MAX(V.TIP_CLIENTE)))) MOD 26)) / 10000.0) AS INT)
+        -- Genera una cuota objetivo manteniendo al menos 5 registros sin audio por producto (total global ~33-40)
+        SELECT CASE 
+            WHEN CAST(COUNT(*) * ((20 + (HASHAMP(HASHBUCKET(HASHROW(MAX(V.TIP_CLIENTE)))) MOD 20)) / 10000.0) AS INT) < 5 THEN 5
+            ELSE CAST(COUNT(*) * ((20 + (HASHAMP(HASHBUCKET(HASHROW(MAX(V.TIP_CLIENTE)))) MOD 20)) / 10000.0) AS INT)
+        END
         FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL V
         WHERE V.TIP_CLIENTE = T.TIP_CLIENTE
     )
