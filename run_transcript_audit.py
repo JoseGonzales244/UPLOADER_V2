@@ -133,7 +133,7 @@ def main():
                     "Sugerencia de Corrección": h.get("sugerencia", "")
                 })
 
-            # Acumular resumen por chat para la pestaña "Resumen_Evaluaciones" (con Transcripción Completa al final)
+            # Acumular resumen por chat para la pestaña "Resumen_Evaluaciones" (con Interacción del Ejecutivo Evaluado al final)
             audit_summary.append({
                 "ID Conversación": item["interaction_id"],
                 "Supervisor": supervisor,
@@ -146,7 +146,7 @@ def main():
                 "Obs Trato Cliente": cant_trato,
                 "Obs Protocolo": cant_protocolo,
                 "Estado Evaluación": "CON OBSERVACIONES" if len(hallazgos) > 0 else "CONFORME",
-                "Transcripción Completa": content
+                "Transcripción Completa": item.get("executive_interaction", item["full_text"])
             })
 
         except Exception as e:

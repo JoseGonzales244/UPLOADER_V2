@@ -76,6 +76,21 @@ class WhatsAppTranscriptExtractor:
 
         # Si se encontró la sección de conversación limpia en el Word
         if clean_section:
+            # Filtrar si hay diálogos de otros ejecutivos no evaluados
+            eval_dialogue = []
+            for line in clean_section:
+                line_lower = line.lower()
+                # Excluir líneas que pertenecen a otros ejecutivos explícitamente
+                if ":" in line and not any(k in line_lower for k in ["cliente", "usuario", "externo"]):
+                    # Verificar si la línea pertenece al ejecutivo evaluado
+                    if target_nombre and not any(t.lower() in line_lower for t in target_nombre.split(",") if len(t.strip()) > 3):
+                        if target_registro and target_registro.lower() not in line_lower:
+                            # Si es otro ejecutivo explícito, saltar esta línea
+                            continue
+                eval_dialogue.append(line)
+
+            raw_dialogue_text = "\n".join(eval_dialogue if eval_dialogue else clean_section)
+            
             header_summary = (
                 f"=== FICHA DE EVALUACIÓN WHATSAPP (CONVERSACIÓN LIMPIA) ===\n"
                 f"ID Interacción: {interaction_id}\n"
@@ -83,11 +98,12 @@ class WhatsAppTranscriptExtractor:
                 f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
                 f"====================================\n\n"
             )
-            full_text = header_summary + "\n".join(clean_section)
+            full_text = header_summary + raw_dialogue_text
             return {
                 "archivo": filename,
                 "interaction_id": interaction_id,
                 "full_text": full_text,
+                "executive_interaction": raw_dialogue_text,
                 "metadata": exec_info
             }
 
@@ -131,6 +147,7 @@ class WhatsAppTranscriptExtractor:
                     else:
                         current_speaker = None
 
+        raw_dialogue_text = "\n".join(filtered_dialogue) if filtered_dialogue else "Sin mensajes de texto registrados para el ejecutivo evaluado en la transcripción."
         header_summary = (
             f"=== FICHA DE EVALUACIÓN WHATSAPP ===\n"
             f"ID Interacción: {interaction_id}\n"
@@ -138,12 +155,13 @@ class WhatsAppTranscriptExtractor:
             f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
             f"====================================\n\n"
         )
-        full_text = header_summary + ("\n".join(filtered_dialogue) if filtered_dialogue else "Sin mensajes de texto registrados para el ejecutivo evaluado en la transcripción.")
+        full_text = header_summary + raw_dialogue_text
 
         return {
             "archivo": filename,
             "interaction_id": interaction_id,
             "full_text": full_text,
+            "executive_interaction": raw_dialogue_text,
             "metadata": exec_info
         }
 
