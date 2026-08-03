@@ -3,75 +3,131 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interbank Uploader V2 - Control Center</title>
+  <title>Plataforma Unificada de Datos V2 - Interbank</title>
 
-  <!-- React 18 & Babel via CDN para ejecucion ligera instantanea -->
+  <!-- React 18 & Babel via CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Tailwind CSS para diseño moderno -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Inter Font -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #0d1117;
-      color: #c9d1d9;
+      background-color: #0b0f19;
+      color: #cbd5e1;
     }
-    .glass-panel {
-      background: rgba(22, 27, 34, 0.85);
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(48, 54, 61, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.7);
     }
-    .interbank-green {
-      color: #00a859;
+    .sidebar-panel {
+      background: #0f172a;
+      border-right: 1px solid #1e293b;
     }
-    .bg-interbank-green {
-      background-color: #00a859;
+    .btn-primary {
+      background: linear-gradient(135deg, #00a859 0%, #008f4c 100%);
+      color: white;
     }
-    .hover-interbank-green:hover {
-      background-color: #008f4c;
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #008f4c 0%, #00733d 100%);
     }
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
+    .stepper-line {
+      position: absolute;
+      top: 20px;
+      left: 40px;
+      right: 40px;
+      height: 3px;
+      background: #334155;
+      z-index: 1;
     }
-    ::-webkit-scrollbar-track {
-      background: #161b22;
+    .stepper-progress-bar {
+      position: absolute;
+      top: 20px;
+      left: 40px;
+      height: 3px;
+      background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+      z-index: 1;
+      transition: width 0.4s ease;
     }
-    ::-webkit-scrollbar-thumb {
-      background: #30363d;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #484f58;
-    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between">
+<body class="min-h-screen flex flex-col">
 
-  <div id="root"></div>
+  <div id="root" class="flex-1 flex flex-col"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
     function App() {
-      const [activeTab, setActiveTab] = useState('consumo');
-      const [periodo, setPeriodo] = useState('202607');
-      const [clearConsent, setClearConsent] = useState(false);
+      // Navegación de pestañas principales
+      const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'audios', 'consumo', 'calidad'
+
+      // Sidebar Config
+      const [fileType, setFileType] = useState('Excel');
+      const [templates, setTemplates] = useState({});
+      const [selectedTemplate, setSelectedTemplate] = useState('Ninguno');
+      const [convertirSinAcentos, setConvertirSinAcentos] = useState(true);
+      const [transformarVarcharLatin, setTransformarVarcharLatin] = useState(false);
+      const [maxLenVarchar, setMaxLenVarchar] = useState(3000);
+      const [healthStatus, setHealthStatus] = useState(null);
+      const [isHealthChecking, setIsHealthChecking] = useState(false);
+
+      // Estado Global de Proceso & WebSocket Logs
       const [isRunning, setIsRunning] = useState(false);
       const [currentProcess, setCurrentProcess] = useState('');
       const [progress, setProgress] = useState(0);
+      const [currentPhase, setCurrentPhase] = useState(0);
       const [statusMsg, setStatusMsg] = useState('Sistema listo.');
-      const [statusType, setStatusType] = useState('info');
       const [logs, setLogs] = useState([]);
 
-      const logContainerRef = useRef(null);
+      // Tab 1: Upload
+      const [uploadedFile, setUploadedFile] = useState(null);
+      const [filePreview, setFilePreview] = useState(null);
+      const [columnsConfig, setColumnsConfig] = useState([]);
+      const [tdUser, setTdUser] = useState('');
+      const [tdPass, setTdPass] = useState('');
+      const [tdTable, setTdTable] = useState('');
+      const [loadAction, setLoadAction] = useState('Solo agregar nuevos registros');
+
+      // Tab 2: Audios
+      const [audioSource, setAudioSource] = useState('outlook'); // 'outlook', 'manual'
+      const [outlookEmails, setOutlookEmails] = useState([]);
+      const [selectedEmailIdx, setSelectedEmailIdx] = useState(null);
+      const [isFetchingOutlook, setIsFetchingOutlook] = useState(false);
+      // Manual Audios sub-tabs
+      const [manualSubTab, setManualSubTab] = useState('direct'); // 'direct', 'paste', 'excel'
+      const [manRegEv, setManRegEv] = useState('');
+      const [manDni, setManDni] = useState('');
+      const [manPref, setManPref] = useState('AUDIO');
+      const [pastedText, setPastedText] = useState('');
+      const [parsedSolList, setParsedSolList] = useState([]);
+
+      // Tab 3: Consumo
+      const [periodoConsumo, setPeriodoConsumo] = useState('202607');
+      const [clearConsent, setClearConsent] = useState(false);
+      const [consumoPhases, setConsumoPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
+
+      // Tab 4: Calidad
+      const [periodoCalidad, setPeriodoCalidad] = useState('202607');
+      const [calidadPhases, setCalidadPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
+
+      const logConsoleRef = useRef(null);
+
+      // Cargar plantillas y credenciales
+      useEffect(() => {
+        fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || {})).catch(console.error);
+        fetch('/api/credentials').then(r => r.json()).then(d => {
+          if (d.teradata_user) setTdUser(d.teradata_user);
+        }).catch(console.error);
+      }, []);
 
       // Conexión WebSocket para Logs en vivo
       useEffect(() => {
@@ -81,17 +137,16 @@
 
         function connectWS() {
           socket = new WebSocket(wsUrl);
-
           socket.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
               if (data.message) {
                 setStatusMsg(data.message);
-                if (data.type) setStatusType(data.type);
                 if (data.progress !== undefined) setProgress(data.progress * 100);
+                if (data.phase !== undefined) setCurrentPhase(data.phase);
 
                 setLogs((prev) => [
-                  ...prev.slice(-499), // Mantener últimos 500 logs
+                  ...prev.slice(-499),
                   {
                     time: data.timestamp || new Date().toLocaleTimeString(),
                     text: data.message,
@@ -100,23 +155,20 @@
                 ]);
               }
             } catch (err) {
-              console.error('Error parseando mensaje WS:', err);
+              console.error('Error parseando WS:', err);
             }
           };
-
-          socket.onclose = () => {
-            setTimeout(connectWS, 3000); // Reintentar reconexión automática
-          };
+          socket.onclose = () => setTimeout(connectWS, 3000);
         }
 
         connectWS();
         return () => socket && socket.close();
       }, []);
 
-      // Auto-scroll en consola de logs
+      // Auto-scroll logs console
       useEffect(() => {
-        if (logContainerRef.current) {
-          logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        if (logConsoleRef.current) {
+          logConsoleRef.current.scrollTop = logConsoleRef.current.scrollHeight;
         }
       }, [logs]);
 
@@ -129,9 +181,7 @@
             setIsRunning(data.process_state.running);
             setCurrentProcess(data.process_state.current_process || '');
           }
-        } catch (e) {
-          console.error(e);
-        }
+        } catch (e) {}
       };
 
       useEffect(() => {
@@ -140,237 +190,649 @@
         return () => clearInterval(interval);
       }, []);
 
-      // Disparar proceso de Consumo
+      // Ejecutar Diagnóstico de Entorno
+      const handleRunHealthCheck = async () => {
+        setIsHealthChecking(true);
+        try {
+          const res = await fetch('/api/health-check');
+          const data = await res.json();
+          setHealthStatus(data.health || {});
+        } catch (err) {
+          alert('Error verificando entorno: ' + err.message);
+        } finally {
+          setIsHealthChecking(false);
+        }
+      };
+
+      // Manejar Selección de Archivos para Ingesta (Tab 1)
+      const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploadedFile(file);
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_type', fileType);
+        formData.append('selected_template', selectedTemplate);
+
+        try {
+          const res = await fetch('/api/upload/preview', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setFilePreview(data);
+            setColumnsConfig(data.columns || []);
+          } else {
+            alert('Error leyendo vista previa: ' + (data.detail || 'Fallo desconocido'));
+          }
+        } catch (err) {
+          alert('Error enviando archivo: ' + err.message);
+        }
+      };
+
+      // Consultar Outlook
+      const handleFetchOutlook = async () => {
+        setIsFetchingOutlook(true);
+        try {
+          const res = await fetch('/api/audios/outlook-fetch');
+          const data = await res.json();
+          setOutlookEmails(data.correos || []);
+        } catch (err) {
+          alert('Error conectando con Outlook: ' + err.message);
+        } finally {
+          setIsFetchingOutlook(false);
+        }
+      };
+
+      // Parsear texto pegado de Excel
+      useEffect(() => {
+        if (!pastedText) {
+          setParsedSolList([]);
+          return;
+        }
+        const lines = pastedText.split('\n');
+        const list = [];
+        const seen = new Set();
+        lines.forEach((line) => {
+          const mReg = line.match(/\b([A-Za-z]\d{5})\b/);
+          const mDni = line.match(/\b(\d{7,8})\b/);
+          if (mReg && mDni) {
+            const reg = mReg[1].toUpperCase();
+            const dni = mDni[1].padStart(8, '0');
+            const key = `${reg}_${dni}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              list.push({
+                reg_ev: reg,
+                dni: dni,
+                nombre_archivo: `${manPref}_${reg}_DNI${dni}`,
+                prefijo: manPref
+              });
+            }
+          }
+        });
+        setParsedSolList(list);
+      }, [pastedText, manPref]);
+
+      // Iniciar Consumo
       const handleRunConsumo = async () => {
         if (isRunning) return;
         setIsRunning(true);
-        setCurrentProcess('Consumo');
+        setCurrentProcess('PBI Base Consumo');
         setLogs([]);
         try {
           const res = await fetch('/api/orchestrate/consumo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              periodo: periodo,
+              periodo: periodoConsumo,
+              run_phase1: consumoPhases.f1,
+              run_phase2: consumoPhases.f2,
+              run_phase3: consumoPhases.f3,
+              run_phase4: consumoPhases.f4,
+              run_phase5: consumoPhases.f5,
               clear_consent: clearConsent
             })
           });
-          const data = await res.json();
           if (!res.ok) {
-            alert(data.detail || 'Error iniciando proceso');
+            const data = await res.json();
+            alert(data.detail || 'Error iniciando Consumo');
             setIsRunning(false);
           }
         } catch (err) {
-          alert('Error conectando con el servidor Backend: ' + err.message);
+          alert('Error conectando con el backend: ' + err.message);
           setIsRunning(false);
         }
       };
 
-      // Disparar proceso de Calidad
+      // Iniciar Calidad
       const handleRunCalidad = async () => {
         if (isRunning) return;
         setIsRunning(true);
-        setCurrentProcess('Calidad');
+        setCurrentProcess('PBI Evaluaciones Calidad');
         setLogs([]);
         try {
           const res = await fetch('/api/orchestrate/calidad', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              periodo: periodo
+              periodo: periodoCalidad,
+              run_fase1: calidadPhases.f1,
+              run_fase2: calidadPhases.f2,
+              run_fase3: calidadPhases.f3,
+              run_fase4: calidadPhases.f4,
+              run_fase5: calidadPhases.f5
             })
           });
-          const data = await res.json();
           if (!res.ok) {
-            alert(data.detail || 'Error iniciando proceso');
+            const data = await res.json();
+            alert(data.detail || 'Error iniciando Calidad');
             setIsRunning(false);
           }
         } catch (err) {
-          alert('Error conectando con el servidor Backend: ' + err.message);
+          alert('Error conectando con el backend: ' + err.message);
           setIsRunning(false);
         }
       };
 
       return (
-        <div class="min-h-screen flex flex-col">
+        <div class="flex-1 flex flex-col h-screen overflow-hidden">
           {/* Header Bar */}
-          <header class="glass-panel border-b border-gray-800 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+          <header class="glass-card border-b border-slate-800 px-6 py-3.5 flex items-center justify-between z-50">
             <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg bg-interbank-green flex items-center justify-center font-bold text-white shadow-lg">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-500 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/40">
                 IB
               </div>
               <div>
-                <h1 class="text-lg font-bold text-white tracking-wide">Uploader V2 Control Center</h1>
-                <p class="text-xs text-gray-400">Plataforma de Orquestación & Ingesta Teradata</p>
+                <h1 class="text-base font-bold text-white tracking-wide">Plataforma Unificada de Datos V2</h1>
+                <p class="text-xs text-slate-400">Descarga, Configuración e Ingesta a Teradata</p>
               </div>
             </div>
 
             {/* Badges de Estado */}
             <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 border border-gray-700">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 border border-slate-700">
                 <span class={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
-                <span class="text-gray-300">{isRunning ? `Ejecutando: ${currentProcess}` : 'Sistema En Espera'}</span>
+                <span class="text-slate-300">{isRunning ? `Ejecutando: ${currentProcess}` : 'Sistema listo'}</span>
               </div>
             </div>
           </header>
 
-          {/* Main Layout */}
-          <div class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Body: Sidebar + Main Content Layout */}
+          <div class="flex-1 flex overflow-hidden">
+            
+            {/* BARRA LATERAL IZQUIERDA (Sidebar) */}
+            <aside class="sidebar-panel w-80 p-5 flex flex-col gap-6 overflow-y-auto shrink-0">
+              <div class="space-y-4">
+                <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
+                  <span>⚙️</span> Configuración de Lectura
+                </div>
 
-            {/* Panel Izquierdo: Controles */}
-            <div class="lg:col-span-5 space-y-6">
-              
-              {/* Navegación por Tabs */}
-              <div class="glass-panel p-1.5 rounded-xl flex gap-1 border border-gray-800">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Tipo de archivo a cargar</label>
+                  <select
+                    value={fileType}
+                    onChange={(e) => setFileType(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="Excel">Excel (.xlsx, .xls)</option>
+                    <option value="CSV">CSV (.csv)</option>
+                    <option value="Texto Unicode">Texto Unicode (.txt)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">📋 Plantillas de Mapeo</label>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="Ninguno">Ninguno</option>
+                    {Object.keys(templates).map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Limpieza de Datos */}
+              <div class="space-y-3">
+                <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
+                  <span>🧹</span> Limpieza de Datos
+                </div>
+
+                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={convertirSinAcentos}
+                    onChange={(e) => setConvertirSinAcentos(e.target.checked)}
+                    class="accent-emerald-500 rounded"
+                  />
+                  <span>Eliminar acentos en textos</span>
+                </label>
+
+                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transformarVarcharLatin}
+                    onChange={(e) => setTransformarVarcharLatin(e.target.checked)}
+                    class="accent-emerald-500 rounded"
+                  />
+                  <span>Limpiar caracteres especiales (LATIN)</span>
+                </label>
+
+                {transformarVarcharLatin && (
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Longitud máxima VARCHAR</label>
+                    <input
+                      type="number"
+                      value={maxLenVarchar}
+                      onChange={(e) => setMaxLenVarchar(Number(e.target.value))}
+                      class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Diagnóstico de Entorno */}
+              <div class="space-y-3 pt-2">
+                <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
+                  <span>🩺</span> Diagnóstico de Entorno
+                </div>
+
                 <button
-                  onClick={() => setActiveTab('consumo')}
-                  class={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'consumo'
-                      ? 'bg-interbank-green text-white shadow'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  onClick={handleRunHealthCheck}
+                  disabled={isHealthChecking}
+                  class="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 transition"
+                >
+                  {isHealthChecking ? 'Verificando...' : '🔍 Verificar Entorno'}
+                </button>
+
+                {healthStatus && (
+                  <div class="space-y-1.5 text-xs">
+                    {Object.entries(healthStatus).map(([key, info]) => (
+                      <div key={key} class="flex items-center gap-1.5">
+                        <span>{info.status ? '✅' : '⚠️'}</span>
+                        <span class="text-slate-300">{info.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            {/* CONTENIDO PRINCIPAL (4 Tabs + Console) */}
+            <main class="flex-1 flex flex-col p-6 overflow-y-auto space-y-6">
+              
+              {/* Header Tabs Navigation */}
+              <div class="glass-card p-1.5 rounded-xl flex gap-2 border border-slate-800">
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  class={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'upload' ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  ⚡ Consumo (KRI)
+                  <span>📁</span> Subir a Teradata
+                </button>
+                <button
+                  onClick={() => setActiveTab('audios')}
+                  class={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'audios' ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🎧</span> Solicitud de Audios (Genesys)
+                </button>
+                <button
+                  onClick={() => setActiveTab('consumo')}
+                  class={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'consumo' ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>⚡</span> PBI Base Consumo
                 </button>
                 <button
                   onClick={() => setActiveTab('calidad')}
-                  class={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === 'calidad'
-                      ? 'bg-interbank-green text-white shadow'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  class={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'calidad' ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  📊 Calidad (NTD)
+                  <span>📊</span> PBI Evaluaciones Calidad
                 </button>
               </div>
 
-              {/* Formulario de Parámetros */}
-              <div class="glass-panel p-6 rounded-2xl space-y-5">
-                <h2 class="text-sm font-semibold text-white uppercase tracking-wider border-b border-gray-800 pb-2">
-                  Configuración del Proceso
-                </h2>
-
-                <div>
-                  <label class="block text-xs font-medium text-gray-400 mb-1.5">Período de Ejecución (YYYYMM)</label>
-                  <input
-                    type="text"
-                    value={periodo}
-                    onChange={(e) => setPeriodo(e.target.value)}
-                    placeholder="Ej. 202607"
-                    class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                  />
-                </div>
-
-                {activeTab === 'consumo' && (
-                  <div class="flex items-center gap-2 pt-1">
+              {/* ========================================== */}
+              {/* TAB 1: SUBIR A TERADATA                    */}
+              {/* ========================================== */}
+              {activeTab === 'upload' && (
+                <div class="space-y-6">
+                  <div class="glass-card p-6 rounded-2xl space-y-4">
+                    <h2 class="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
+                      📁 Cargar Archivo Origen ({fileType})
+                    </h2>
                     <input
-                      type="checkbox"
-                      id="clearConsent"
-                      checked={clearConsent}
-                      onChange={(e) => setClearConsent(e.target.checked)}
-                      class="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                      type="file"
+                      onChange={handleFileChange}
+                      class="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer"
                     />
-                    <label htmlFor="clearConsent" class="text-xs text-gray-300 cursor-pointer">
-                      Limpiar registros previos de Consentimiento Diario
+                  </div>
+
+                  {filePreview && (
+                    <div class="glass-card p-6 rounded-2xl space-y-4">
+                      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <h3 class="text-sm font-bold text-white">👀 Vista Previa de Archivo</h3>
+                        <span class="text-xs text-emerald-400 font-semibold">{filePreview.total_rows} registros | {filePreview.total_cols} columnas</span>
+                      </div>
+                      <div class="overflow-x-auto border border-slate-800 rounded-xl max-h-48">
+                        <table class="w-full text-xs text-left text-slate-300">
+                          <thead class="bg-slate-900 text-slate-200 font-semibold border-b border-slate-800">
+                            <tr>
+                              {Object.keys(filePreview.preview[0] || {}).map((col) => (
+                                <th key={col} class="px-3 py-2">{col}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filePreview.preview.map((row, idx) => (
+                              <tr key={idx} class="border-b border-slate-800/50 hover:bg-slate-800/40">
+                                {Object.values(row).map((val, i) => (
+                                  <td key={i} class="px-3 py-1.5 truncate max-w-xs">{String(val)}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Destino Teradata */}
+                      <div class="pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label class="block text-xs text-slate-400 mb-1">Usuario Teradata</label>
+                          <input type="text" value={tdUser} onChange={(e) => setTdUser(e.target.value)} class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label class="block text-xs text-slate-400 mb-1">Contraseña Teradata</label>
+                          <input type="password" value={tdPass} onChange={(e) => setTdPass(e.target.value)} class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label class="block text-xs text-slate-400 mb-1">Tabla Destino</label>
+                          <input type="text" value={tdTable} onChange={(e) => setTdTable(e.target.value)} placeholder="DLAB_GEC.nombre_tabla" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                      </div>
+
+                      <button class="w-full py-3 rounded-xl btn-primary font-bold text-sm shadow-lg">
+                        🚀 Cargar a Teradata
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================== */}
+              {/* TAB 2: SOLICITUD DE AUDIOS (GENESYS)       */}
+              {/* ========================================== */}
+              {activeTab === 'audios' && (
+                <div class="glass-card p-6 rounded-2xl space-y-6">
+                  <h2 class="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
+                    🎧 Solicitud y Descarga de Audios de Genesys
+                  </h2>
+
+                  <div class="flex gap-4">
+                    <label class="flex items-center gap-2 text-xs text-white cursor-pointer">
+                      <input type="radio" name="audioSource" checked={audioSource === 'outlook'} onChange={() => setAudioSource('outlook')} class="accent-emerald-500" />
+                      <span>📧 Leer de Outlook</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-white cursor-pointer">
+                      <input type="radio" name="audioSource" checked={audioSource === 'manual'} onChange={() => setAudioSource('manual')} class="accent-emerald-500" />
+                      <span>✏️ Ingreso Manual</span>
                     </label>
                   </div>
-                )}
 
-                {/* Botón de Ejecución */}
-                <button
-                  onClick={activeTab === 'consumo' ? handleRunConsumo : handleRunCalidad}
-                  disabled={isRunning}
-                  class={`w-full py-3 px-4 rounded-xl text-sm font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
-                    isRunning
-                      ? 'bg-gray-700 cursor-not-allowed opacity-60'
-                      : 'bg-interbank-green hover-interbank-green active:scale-95'
-                  }`}
-                >
-                  {isRunning ? (
-                    <>
-                      <svg class="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Ejecutando Proceso...</span>
-                    </>
+                  {audioSource === 'outlook' ? (
+                    <div class="space-y-4">
+                      <button
+                        onClick={handleFetchOutlook}
+                        disabled={isFetchingOutlook}
+                        class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700"
+                      >
+                        {isFetchingOutlook ? 'Consultando Outlook...' : '🔄 Buscar últimos 3 correos'}
+                      </button>
+
+                      {outlookEmails.length > 0 && (
+                        <div class="space-y-2">
+                          <label class="block text-xs font-semibold text-slate-300">Seleccione el correo específico a atender:</label>
+                          {outlookEmails.map((c, i) => (
+                            <div key={i} onClick={() => setSelectedEmailIdx(i)} class={`p-3 rounded-xl border cursor-pointer transition ${selectedEmailIdx === i ? 'bg-emerald-950/40 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}>
+                              <p class="text-xs font-bold text-white">Correo #{c.index} | Asunto: {c.asunto}</p>
+                              <p class="text-xs text-slate-400">De: {c.remitente} | Registros: {c.cant_registros} ({c.fecha})</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <span>🚀 Iniciar Orquestación de {activeTab === 'consumo' ? 'Consumo' : 'Calidad'}</span>
+                    <div class="space-y-4">
+                      <div class="flex gap-2 border-b border-slate-800 pb-2">
+                        <button onClick={() => setManualSubTab('direct')} class={`px-3 py-1.5 rounded-lg text-xs font-semibold ${manualSubTab === 'direct' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Formulario Directo</button>
+                        <button onClick={() => setManualSubTab('paste')} class={`px-3 py-1.5 rounded-lg text-xs font-semibold ${manualSubTab === 'paste' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>📋 Copiar y Pegar de Excel</button>
+                      </div>
+
+                      {manualSubTab === 'direct' ? (
+                        <div class="grid grid-cols-3 gap-4">
+                          <div>
+                            <label class="block text-xs text-slate-400 mb-1">Registro Ejecutivo (Reg EV)</label>
+                            <input type="text" value={manRegEv} onChange={(e) => setManRegEv(e.target.value)} placeholder="Ej: B12345" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="block text-xs text-slate-400 mb-1">DNI</label>
+                            <input type="text" value={manDni} onChange={(e) => setManDni(e.target.value)} placeholder="Ej: 72839405" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="block text-xs text-slate-400 mb-1">Producto / Prefijo</label>
+                            <select value={manPref} onChange={(e) => setManPref(e.target.value)} class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                              {["AUDIO", "EC", "CC", "SEG", "HIP", "PP", "TC"].map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      ) : (
+                        <div class="space-y-3">
+                          <textarea
+                            rows="5"
+                            value={pastedText}
+                            onChange={(e) => setPastedText(e.target.value)}
+                            placeholder="Pega celdas de Excel con Ejecutivo y DNI..."
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white font-mono"
+                          ></textarea>
+                          {parsedSolList.length > 0 && (
+                            <p class="text-xs text-emerald-400 font-semibold">✅ Se detectaron {parsedSolList.length} solicitudes válidas en el texto pegado.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
-                </button>
-              </div>
 
-              {/* Barra de Progreso en Vivo */}
-              <div class="glass-panel p-5 rounded-2xl space-y-3">
-                <div class="flex justify-between items-center text-xs">
-                  <span class="font-medium text-gray-400">Progreso Global</span>
-                  <span class="font-bold text-emerald-400">{Math.round(progress)}%</span>
+                  <button class="w-full py-3 rounded-xl btn-primary font-bold text-sm shadow-lg">
+                    ▶️ Iniciar Descarga de Audios Genesys
+                  </button>
                 </div>
-                <div class="w-full h-2.5 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
-                  <div
-                    class="h-full bg-emerald-500 transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                  ></div>
+              )}
+
+              {/* ========================================== */}
+              {/* TAB 3: PBI BASE CONSUMO                    */}
+              {/* ========================================== */}
+              {activeTab === 'consumo' && (
+                <div class="glass-card p-6 rounded-2xl space-y-6">
+                  <h2 class="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
+                    ⚡ Orquestación PBI Base Consumo
+                  </h2>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">Período de Ejecución (YYYYMM)</label>
+                      <input
+                        type="text"
+                        value={periodoConsumo}
+                        onChange={(e) => setPeriodoConsumo(e.target.value)}
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div class="flex items-center pt-5">
+                      <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={clearConsent}
+                          onChange={(e) => setClearConsent(e.target.checked)}
+                          class="accent-emerald-500 rounded"
+                        />
+                        <span>Limpiar registros previos de Consentimiento Diario</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Fases Checkboxes */}
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-300">Selección de Fases a Ejecutar:</label>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      {[
+                        { key: 'f1', label: 'Fase 1: Ingesta Insight' },
+                        { key: 'f2', label: 'Fase 2: CD40K' },
+                        { key: 'f3', label: 'Fase 3: SQL Server' },
+                        { key: 'f4', label: 'Fase 4: SQL Teradata' },
+                        { key: 'f5', label: 'Fase 5: Selección' }
+                      ].map((f) => (
+                        <label key={f.key} class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={consumoPhases[f.key]}
+                            onChange={(e) => setConsumoPhases({ ...consumoPhases, [f.key]: e.target.checked })}
+                            class="accent-emerald-500 rounded"
+                          />
+                          <span>{f.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Stepper Gráfico */}
+                  <div class="relative py-6 px-4 bg-slate-900/60 rounded-xl border border-slate-800">
+                    <div class="stepper-line"></div>
+                    <div class="stepper-progress-bar" style={{ width: `${currentPhase > 0 ? (currentPhase - 1) * 25 : 0}%` }}></div>
+                    <div class="relative z-10 flex justify-between">
+                      {['1. Insight', '2. CD40K', '3. SQL Server', '4. Teradata', '5. Selección'].map((lbl, idx) => {
+                        const stepNum = idx + 1;
+                        const isCompleted = currentPhase > stepNum;
+                        const isActive = currentPhase === stepNum;
+                        return (
+                          <div key={idx} class="flex flex-col items-center">
+                            <div class={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                              isCompleted ? 'bg-emerald-500 text-white border-2 border-emerald-400' : isActive ? 'bg-blue-600 text-white border-2 border-blue-400 shadow-lg shadow-blue-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 border-2 border-slate-700'
+                            }`}>
+                              {isCompleted ? '✔' : stepNum}
+                            </div>
+                            <span class={`text-[11px] mt-2 ${isActive ? 'text-blue-400 font-bold' : 'text-slate-400'}`}>{lbl}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleRunConsumo}
+                    disabled={isRunning}
+                    class="w-full py-3.5 rounded-xl btn-primary font-bold text-sm shadow-lg transition active:scale-98"
+                  >
+                    🚀 Iniciar Orquestación de Consumo
+                  </button>
                 </div>
-                <p class="text-xs text-gray-400 truncate pt-1">{statusMsg}</p>
-              </div>
+              )}
 
-            </div>
+              {/* ========================================== */}
+              {/* TAB 4: PBI EVALUACIONES CALIDAD           */}
+              {/* ========================================== */}
+              {activeTab === 'calidad' && (
+                <div class="glass-card p-6 rounded-2xl space-y-6">
+                  <h2 class="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
+                    📊 Orquestación PBI Evaluaciones Calidad (NTD)
+                  </h2>
 
-            {/* Panel Derecho: Consola de Logs en Tiempo Real */}
-            <div class="lg:col-span-7 flex flex-col">
-              <div class="glass-panel flex-1 rounded-2xl p-5 flex flex-col min-h-[500px]">
-                <div class="flex items-center justify-between pb-3 border-b border-gray-800 mb-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Período de Ejecución (YYYYMM)</label>
+                    <input
+                      type="text"
+                      value={periodoCalidad}
+                      onChange={(e) => setPeriodoCalidad(e.target.value)}
+                      class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white max-w-xs"
+                    />
+                  </div>
+
+                  {/* Fases Checkboxes */}
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-300">Selección de Fases a Ejecutar:</label>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      {[
+                        { key: 'f1', label: 'Fase 1: Insumos' },
+                        { key: 'f2', label: 'Fase 2: Ingesta' },
+                        { key: 'f3', label: 'Fase 3: Transformaciones' },
+                        { key: 'f4', label: 'Fase 4: Script SQL' },
+                        { key: 'f5', label: 'Fase 5: NTD' }
+                      ].map((f) => (
+                        <label key={f.key} class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={calidadPhases[f.key]}
+                            onChange={(e) => setCalidadPhases({ ...calidadPhases, [f.key]: e.target.checked })}
+                            class="accent-emerald-500 rounded"
+                          />
+                          <span>{f.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleRunCalidad}
+                    disabled={isRunning}
+                    class="w-full py-3.5 rounded-xl btn-primary font-bold text-sm shadow-lg transition active:scale-98"
+                  >
+                    🚀 Iniciar Orquestación de Calidad
+                  </button>
+                </div>
+              )}
+
+              {/* ========================================== */}
+              {/* CONSOLA DE LOGS EN VIVO EN TIEMPO REAL     */}
+              {/* ========================================== */}
+              <div class="glass-card rounded-2xl p-5 flex flex-col min-h-[300px]">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
                   <div class="flex items-center gap-2">
                     <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-                    <h3 class="text-xs font-semibold text-white uppercase tracking-wider">Consola de Eventos en Vivo</h3>
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider">Consola de Eventos en Vivo</h3>
                   </div>
-                  <button
-                    onClick={() => setLogs([])}
-                    class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition"
-                  >
+                  <button onClick={() => setLogs([])} class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition">
                     Limpiar Consola
                   </button>
                 </div>
 
-                <div
-                  ref={logContainerRef}
-                  class="flex-1 bg-black/50 border border-gray-800/80 rounded-xl p-4 font-mono text-xs overflow-y-auto space-y-2 max-h-[550px]"
-                >
+                <div ref={logConsoleRef} class="flex-1 bg-black/60 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-y-auto space-y-1.5 max-h-[350px]">
                   {logs.length === 0 ? (
-                    <div class="text-gray-600 text-center py-20">
-                      En espera de ejecución de procesos...
-                    </div>
+                    <div class="text-slate-600 text-center py-10">En espera de eventos de ejecución...</div>
                   ) : (
                     logs.map((log, index) => (
                       <div key={index} class="flex items-start gap-2 leading-relaxed">
-                        <span class="text-gray-500 shrink-0">[{log.time}]</span>
-                        <span
-                          class={
-                            log.type === 'error'
-                              ? 'text-red-400 font-semibold'
-                              : log.type === 'warning'
-                              ? 'text-amber-300'
-                              : log.type === 'success'
-                              ? 'text-emerald-400 font-semibold'
-                              : 'text-gray-300'
-                          }
-                        >
-                          {log.text}
-                        </span>
+                        <span class="text-slate-500 shrink-0">[{log.time}]</span>
+                        <span class={
+                          log.type === 'error' ? 'text-red-400 font-semibold' : log.type === 'warning' ? 'text-amber-300' : log.type === 'success' ? 'text-emerald-400 font-semibold' : 'text-slate-300'
+                        }>{log.text}</span>
                       </div>
                     ))
                   )}
                 </div>
               </div>
-            </div>
 
+            </main>
           </div>
-
-          {/* Footer */}
-          <footer class="text-center py-4 text-xs text-gray-500 border-t border-gray-800 glass-panel mt-6">
-            UPLOADER V2 • Interbank Analytics & Engineering • Servidor FastAPI + React SPA
-          </footer>
         </div>
       );
     }
