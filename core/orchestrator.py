@@ -1,51 +1,69 @@
+"""
+Módulo Orquestador de Consumo:
+Orquesta las 5 Fases del Proceso de Consumo (Insight, CD40K, SQL Server, Pipelines SQL Teradata y Selección).
+Registra el detalle técnico completo en logs/app.log y emite mensajes ejecutivos amigables para el usuario en la UI.
+"""
 import os
 import re
 import shutil
 import datetime
+import logging
 import subprocess
+import glob
 import polars as pl
 from pathlib import Path
 from core.Insight_downloader import download_insight_data
 from core.cleaners import clean_dataframe, sanitize_identifier
 from core.database import load_credentials, connect_teradata, load_to_teradata, check_table_exists
+from core.logging_config import setup_logging
 from ui.components import load_templates
+
+# Configurar logger técnico para el proceso de Consumo
+logger = setup_logging("core.orchestrator", log_prefix="consumo")
 
 # Insumos configuration mapping
 INSUMOS_CONFIG = {
     "TRAFICO_GENESYS": {
         "query_name": "TRAFICO_GENESYS",
         "template_key": "P009-INSIGHT_01_TRAFICO_GENESYS",
-        "tables": ["DLAB_GEC.M_EXP_TRAFICO_GENESIS"]
+        "tables": ["DLAB_GEC.M_EXP_TRAFICO_GENESIS"],
+        "nombre_ejecutivo": "Tráfico Genesys"
     },
     "CONV_ATTRIBUTES": {
         "query_name": "CONV_ATTRIBUTES",
         "template_key": "P010-INSIGHT_02_CONV_ATTRIBUTES",
-        "tables": ["DLAB_GEC.M_EXP_BT_CONVERSATIONS_ATTRIBUTES"]
+        "tables": ["DLAB_GEC.M_EXP_BT_CONVERSATIONS_ATTRIBUTES"],
+        "nombre_ejecutivo": "Atributos de Conversaciones"
     },
     "DERIVA_BT": {
         "query_name": "DERIVA_BT",
         "template_key": "P011-INSIGHT_03_DERIVA_BT",
-        "tables": ["DLAB_GEC.M_EXP_DERIVA_BT_TIEMPOS"]
+        "tables": ["DLAB_GEC.M_EXP_DERIVA_BT_TIEMPOS"],
+        "nombre_ejecutivo": "Tiempos de Derivación"
     },
     "CLOUD_MARCA_TRANSF": {
         "query_name": "CLOUD_MARCA_TRANSF",
         "template_key": "P012-INSIGHT_04_CLOUD_MARCA_TRANSF",
-        "tables": ["DLAB_GEC.M_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE"]
+        "tables": ["DLAB_GEC.M_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE"],
+        "nombre_ejecutivo": "Marcas de Transferencia"
     },
     "BT_TRANSFERENCIA": {
         "query_name": "BT_TRANSFERENCIA",
         "template_key": "P013-INSIGHT_05_BT_TRANSFERENCIA",
-        "tables": ["DLAB_GEC.M_DERIVA_BT_EV_TRANSFERENCIA"]
+        "tables": ["DLAB_GEC.M_DERIVA_BT_EV_TRANSFERENCIA"],
+        "nombre_ejecutivo": "Evaluación de Transferencias"
     },
     "IVR_VENTAS": {
         "query_name": "IVR_VENTAS",
         "template_key": "P014-INSIGHT_06_IVR_VENTAS",
-        "tables": ["DLAB_GEC.M_EXP_IVR_VENTAS_2022"]
+        "tables": ["DLAB_GEC.M_EXP_IVR_VENTAS_2022"],
+        "nombre_ejecutivo": "Ventas IVR"
     },
     "EVALUATIONS": {
         "query_name": "EVALUATIONS",
         "template_key": "P008-INSIGHT_07_EVALUATIONS",
-        "tables": ["DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE"]
+        "tables": ["DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE"],
+        "nombre_ejecutivo": "Evaluaciones de Calidad"
     }
 }
 
@@ -78,13 +96,15 @@ def run_orchestration_flow(
     start_from_script=None
 ):
     """
-    Runs the orchestration process in phases:
-    Fase 1: Insight (7 Insumos)
-    Fase 2: Ingesta CD40K Manual
-    Fase 3: Ingesta Desembolsos (SQL Server)
-    Fase 4: Pipeline SQL Consumo
-    Fase 5: Ingesta Selección (Secundario)
+    Ejecuta el flujo de orquestación de Consumo en 5 Fases:
+    Fase 1: Descarga e Ingesta de Insumos de Insight
+    Fase 2: Carga Manual CD40K
+    Fase 3: Extracción de Desembolsos
+    Fase 4: Consolidación SQL de Consumo
+    Fase 5: Transformación de Selección
     """
+    logger.info(f"=== INICIANDO PROCESO DE CONSUMO PARA EL PERÍODO {period_str} ===")
+    
     templates = load_templates()
     credenciales = load_credentials()
     host = credenciales.get('teradata_host', 'IBKTD')
@@ -95,27 +115,35 @@ def run_orchestration_flow(
  
     downloaded_files = {}
     
+    # ----------------------------------------------------
+    # FASE 1: DESCARGA DE INSIGHT
+    # ----------------------------------------------------
     if run_phase1:
+        msg_user = "📥 Fase 1: Descargando fuentes de información de Insight..."
+        logger.info(msg_user)
         if progress_callback:
-            progress_callback("⚡ [Fase 1] Iniciando descarga de insumos de Insight...", "info")
+            progress_callback(msg_user, "info")
      
-        # Sequence of Insight downloads
         for insumo_key, conf in INSUMOS_CONFIG.items():
             q_name = conf["query_name"]
+            n_ejecutivo = conf["nombre_ejecutivo"]
             
-            # Verificar si el archivo ya fue descargado el día de hoy
             today_str = datetime.datetime.now().strftime("%Y%m%d")
             expected_filename = f"Reporte_Insight_{q_name}_{today_str}.txt"
             expected_path = os.path.join(INPUT_BASE_CONSUMO_DIR, expected_filename)
             
             if os.path.exists(expected_path) and os.path.getsize(expected_path) > 0:
+                msg_local = f"ℹ️ Archivo local encontrado para {n_ejecutivo}. Se usará la copia guardada de hoy."
+                logger.info(f"Insight file exists locally: {expected_path}")
                 if progress_callback:
-                    progress_callback(f"ℹ️ El archivo de hoy '{expected_filename}' ya existe localmente. Se omitirá la descarga de Insight.", "info")
+                    progress_callback(msg_local, "info")
                 downloaded_files[insumo_key] = expected_path
                 continue
                 
+            msg_dl = f"📡 Descargando insumo: {n_ejecutivo}..."
+            logger.info(f"Downloading Insight query '{q_name}'...")
             if progress_callback:
-                progress_callback(f"📡 Descargando insumo '{q_name}' desde Insight...", "info")
+                progress_callback(msg_dl, "info")
                 
             try:
                 local_path = download_insight_data(
@@ -126,76 +154,67 @@ def run_orchestration_flow(
                     output_dir=INPUT_BASE_CONSUMO_DIR
                 )
                 downloaded_files[insumo_key] = local_path
+                logger.info(f"Downloaded Insight insumo '{q_name}' successfully: {local_path}")
             except Exception as err:
-                msg = f"⚠️ ALERTA: Falló al descargar insumo '{q_name}' desde Insight. Error: {err}. Se continuará con el flujo."
+                msg_err = f"⚠️ No se pudo descargar el insumo '{n_ejecutivo}'. Se continuará con los datos disponibles."
+                logger.warning(f"Failed to download Insight insumo '{q_name}': {err}")
                 if progress_callback:
-                    progress_callback(msg, "warning")
+                    progress_callback(msg_err, "warning")
 
-    # Connect to Teradata if any phase requiring the main connection is True
+    # Conectar a Teradata
     con = None
     if run_phase1 or run_phase2 or run_phase3 or run_phase4:
+        msg_conn = "⚡ Estableciendo conexión segura con Teradata..."
+        logger.info(f"Connecting to Teradata (Host: {host}, User: {td_user})...")
         if progress_callback:
-            progress_callback("📡 Conectando a Teradata para iniciar las fases correspondientes...", "info")
+            progress_callback(msg_conn, "info")
             
         try:
             con = connect_teradata(td_user, td_password, host=host, logmech=logmech)
             con.autocommit = True
+            logger.info("Conexión con Teradata establecida correctamente.")
         except Exception as err:
+            logger.error(f"Error crítico al conectar con Teradata: {err}")
             raise RuntimeError(f"Error de conexión con Teradata: {err}")
             
     try:
         # ----------------------------------------------------
-        # FASE 1: UPLOAD INSIGHT INSUMOS TO TERADATA
+        # FASE 1 (CONTINUACIÓN): INGESTA A TERADATA
         # ----------------------------------------------------
         if run_phase1 and con:
             for insumo_key, conf in INSUMOS_CONFIG.items():
                 q_name = conf["query_name"]
                 t_key = conf["template_key"]
                 tables = conf["tables"]
+                n_ejecutivo = conf["nombre_ejecutivo"]
                 
-                # Check if file path is registered in downloads, or look for files in INPUT_BASE_CONSUMO
                 local_path = downloaded_files.get(insumo_key)
                 if not local_path or not os.path.exists(local_path):
-                    import glob
                     matching_files = glob.glob(os.path.join(INPUT_BASE_CONSUMO_DIR, f"Reporte_Insight_{q_name}_*.txt"))
                     if matching_files:
                         local_path = sorted(matching_files)[-1]
                     
-                if not local_path or not os.path.exists(local_path):
-                    msg = f"⚠️ ALERTA: El archivo para el insumo '{q_name}' no existe en la carpeta INPUT_BASE_CONSUMO. Se omitirá la carga de esta tabla."
+                if not local_path or not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
+                    msg_warn = f"⚠️ Omitiendo la ingesta de '{n_ejecutivo}' por no contar con archivo válido."
+                    logger.warning(f"Skipping table load for '{q_name}': file missing or empty.")
                     if progress_callback:
-                        progress_callback(msg, "warning")
+                        progress_callback(msg_warn, "warning")
                     continue
                     
-                # Check if file is empty
-                if os.path.getsize(local_path) == 0:
-                    msg = f"⚠️ ALERTA: El archivo '{os.path.basename(local_path)}' está vacío (0 bytes). Se omitirá la carga de esta tabla."
-                    if progress_callback:
-                        progress_callback(msg, "warning")
-                    continue
-                    
+                msg_clean = f"🧹 Procesando y limpiando datos de {n_ejecutivo}..."
+                logger.info(f"Cleaning dataframe for '{q_name}' from path {local_path}...")
                 if progress_callback:
-                    progress_callback(f"🧹 Leyendo y limpiando archivo '{os.path.basename(local_path)}'...", "info")
+                    progress_callback(msg_clean, "info")
                     
-                # Read tab-separated txt file, forcing all columns as string to avoid parsing errors.
-                # Types are cleaned and cast later in clean_dataframe based on templates.
                 df = pl.read_csv(local_path, separator='\t', infer_schema_length=0, truncate_ragged_lines=True)
                 
                 if df.is_empty():
-                    msg = f"⚠️ ALERTA: El archivo '{os.path.basename(local_path)}' no contiene registros. Se omitirá la carga de esta tabla."
-                    if progress_callback:
-                        progress_callback(msg, "warning")
+                    logger.warning(f"File '{local_path}' is empty. Skipping load.")
                     continue
                 
-                # Map selections using template
                 template_config = templates.get(t_key, {})
-                if not template_config:
-                    if progress_callback:
-                        progress_callback(f"⚠️ Advertencia: No se encontró la plantilla '{t_key}' en plantillas.json. Se cargará con mapeo automático.", "warning")
-                
                 selections = get_selections_from_template(df, template_config)
                 
-                # Clean dataframe
                 df_clean = clean_dataframe(
                     df,
                     selections,
@@ -204,39 +223,40 @@ def run_orchestration_flow(
                     max_len_varchar=3000
                 )
                 
-                # Load to Teradata table(s)
                 for table_name in tables:
+                    msg_upload = f"🚀 Actualizando base de datos para {n_ejecutivo}..."
+                    logger.info(f"Loading Polars dataframe ({len(df_clean)} rows) to Teradata table '{table_name}'...")
                     if progress_callback:
-                        progress_callback(f"🚀 Subiendo datos a la tabla '{table_name}'...", "info")
+                        progress_callback(msg_upload, "info")
                     
                     load_to_teradata(
                         con=con,
                         table_name=table_name,
                         df=df_clean,
                         selected_columns_config=selections,
-                        clear_table=True, # Always clear and load
+                        clear_table=True,
                         progress_callback=progress_callback
                     )
-                    
+                    logger.info(f"Table '{table_name}' loaded successfully.")
+
         # ----------------------------------------------------
-        # FASE 2: AUTOMATIC UPLOAD OF CD40K MANUAL EXCEL
+        # FASE 2: INGESTA CD40K MANUAL
         # ----------------------------------------------------
         if run_phase2 and con:
             cd40k_path = os.path.join(INPUT_BASE_CONSUMO_DIR, "CD40K_NEW.xlsx")
             
             if os.path.exists(cd40k_path):
+                msg_f2 = "📂 Fase 2: Cargando información manual de CD40K..."
+                logger.info(f"Phase 2: Processing manual CD40K Excel at {cd40k_path}")
                 if progress_callback:
-                    progress_callback(f"📂 [Fase 2] Archivo manual de CD40K detectado en: {os.path.basename(cd40k_path)}. Iniciando carga automática...", "info")
+                    progress_callback(msg_f2, "info")
                 try:
-                    # Actualizar el Excel desde SharePoint vía COM antes de leerlo
                     from core.quality_process_orchestrator import refresh_excel_sharepoint_data
                     try:
                         refresh_excel_sharepoint_data(cd40k_path, progress_callback)
                     except Exception as refresh_err:
-                        if progress_callback:
-                            progress_callback(f"⚠️ Advertencia al actualizar CD40K desde SharePoint: {refresh_err}. Se continuará leyendo el archivo en su estado actual.", "warning")
+                        logger.warning(f"SharePoint Excel refresh warning for CD40K: {refresh_err}")
     
-                    # Read excel
                     df_cd40k = pl.read_excel(cd40k_path)
                     template_cd40k = templates.get("P003-CD40K", {})
                     
@@ -250,9 +270,7 @@ def run_orchestration_flow(
                             max_len_varchar=3000
                         )
                         
-                        if progress_callback:
-                            progress_callback(f"🚀 Subiendo base manual a Teradata 'DLAB_GEC.T_SP_CD40K'...", "info")
-                            
+                        logger.info(f"Uploading CD40K dataframe ({len(df_cd40k_clean)} rows) to Teradata 'DLAB_GEC.T_SP_CD40K'...")
                         load_to_teradata(
                             con=con,
                             table_name="DLAB_GEC.T_SP_CD40K",
@@ -261,21 +279,23 @@ def run_orchestration_flow(
                             clear_table=True,
                             progress_callback=progress_callback
                         )
-                    else:
-                        if progress_callback:
-                            progress_callback("⚠️ No se encontró la plantilla P003-CD40K para la carga automática del Excel manual.", "warning")
+                        logger.info("CD40K table loaded successfully.")
                 except Exception as cd_err:
+                    msg_warn = f"⚠️ Advertencia al procesar la base manual CD40K: {cd_err}. Se continuará con el flujo."
+                    logger.error(f"Error processing CD40K manual Excel: {cd_err}")
                     if progress_callback:
-                        progress_callback(f"⚠️ Advertencia: Error al cargar el Excel manual de CD40K: {cd_err}. Se continuará con el flujo de orquestación.", "warning")
-    
+                        progress_callback(msg_warn, "warning")
+
         # ----------------------------------------------------
-        # FASE 3: AUTOMATIC UPLOAD OF BN_DESEMBOLSOS_GENERAL FROM SQL SERVER
+        # FASE 3: EXTRACCIÓN DE DESEMBOLSOS (SQL SERVER)
         # ----------------------------------------------------
         if run_phase3 and con:
             sql_server = os.getenv("SQLSERVER_SERVER")
             if sql_server and sql_server != "tu_servidor_sql":
+                msg_f3 = "📡 Fase 3: Obteniendo información de desembolsos y ventas..."
+                logger.info(f"Phase 3: Connecting to SQL Server ({sql_server})...")
                 if progress_callback:
-                    progress_callback("📡 [Fase 3] Conectando a SQL Server para extraer BN_DESEMBOLSOS_GENERAL...", "info")
+                    progress_callback(msg_f3, "info")
                 try:
                     import pyodbc
                     
@@ -290,20 +310,16 @@ def run_orchestration_flow(
                         conn_str = f"DRIVER={sql_driver};SERVER={sql_server};DATABASE={sql_database};Trusted_Connection=yes;"
                         
                     sql_conn = pyodbc.connect(conn_str)
-                    
-                    # Convertir período a formato numérico (ej. 202607) para el filtro
                     periodo_num = int(period_str)
                     query = f"SELECT * FROM BN_DESEMBOLSOS_GENERAL WHERE periodo >= {periodo_num}"
                     
-                    # Leer usando Polars
                     df_desemb = pl.read_database(query=query, connection=sql_conn)
                     sql_conn.close()
+                    logger.info(f"Extracted {len(df_desemb)} records from SQL Server.")
                     
                     if progress_callback:
-                        progress_callback(f"📥 Extracción exitosa. {len(df_desemb):,} registros obtenidos.", "info")
-                        progress_callback("🚀 Transformando datos en Python y subiendo a Teradata 'DLAB_GEC.T_VENTAS_BPE_MARKET'...", "info")
+                        progress_callback(f"📥 Se obtuvieron {len(df_desemb):,} registros de desembolsos.", "info")
                     
-                    # Realizar transformaciones equivalentes a las de Teradata en Polars
                     df_desemb_clean = df_desemb.with_columns([
                         pl.col("COD_DOC").alias("CODDOC"),
                         pl.col("CLIENTE").alias("REPRESENTANTE_LEGAL"),
@@ -326,7 +342,6 @@ def run_orchestration_flow(
                         "CAMPANA_N2"
                     ])
                     
-                    # Configurar mapeo de selección local para el cargador de Teradata
                     selections_desemb = [
                         {"name": col, "selected": True, "convert_nulls": False, "datatype": "VARCHAR(255)" if col not in ("REGISTRO", "TIPO_PERSONA") else "VARCHAR(50)", "new_name": col}
                         for col in df_desemb_clean.columns
@@ -341,30 +356,25 @@ def run_orchestration_flow(
                         progress_callback=progress_callback
                     )
                     
-                    # Ejecutar actualizaciones post-carga para los flags EVALUADO y FECHA_UPDATE
-                    if progress_callback:
-                        progress_callback("🔄 Actualizando flags EVALUADO y FECHA_UPDATE en Teradata...", "info")
-                    try:
-                        with con.cursor() as cursor:
-                            cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET SET EVALUADO = 'NO'")
-                            cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET FROM DLAB_GEC.M_EXP_DOCUMENTOS_EVALUADOS B SET EVALUADO = 'SI' WHERE CODDOC = B.DOCUMENTO")
-                            cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET SET FECHA_UPDATE = CURRENT_TIMESTAMP(0)")
-                    except Exception as upd_err:
-                        if progress_callback:
-                            progress_callback(f"⚠️ Advertencia al actualizar flags en T_VENTAS_BPE_MARKET: {upd_err}", "warning")
-                            
-                    if progress_callback:
-                        progress_callback("✅ Tabla Teradata 'DLAB_GEC.T_VENTAS_BPE_MARKET' cargada y actualizada exitosamente.", "success")
+                    with con.cursor() as cursor:
+                        cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET SET EVALUADO = 'NO'")
+                        cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET FROM DLAB_GEC.M_EXP_DOCUMENTOS_EVALUADOS B SET EVALUADO = 'SI' WHERE CODDOC = B.DOCUMENTO")
+                        cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET SET FECHA_UPDATE = CURRENT_TIMESTAMP(0)")
+                        
+                    logger.info("Updated EVALUADO and FECHA_UPDATE flags in T_VENTAS_BPE_MARKET.")
                 except Exception as desemb_err:
+                    logger.error(f"Error extracting desembolsos from SQL Server: {desemb_err}")
                     if progress_callback:
-                        progress_callback(f"⚠️ Advertencia: Error al cargar BN_DESEMBOLSO desde SQL Server: {desemb_err}. Se continuará con el flujo.", "warning")
-    
+                        progress_callback(f"⚠️ No se pudo obtener desembolsos de SQL Server: {desemb_err}", "warning")
+
         # ----------------------------------------------------
-        # FASE 4: RUN POST-LOAD SQL TRANSFORMATIONS
+        # FASE 4: SCRIPTS SQL DE CONSUMO
         # ----------------------------------------------------
         if run_phase4 and con:
+            msg_f4 = "⚡ Fase 4: Ejecutando reglas de negocio y cálculo diario de Consumo..."
+            logger.info("Phase 4: Running post-load SQL transformations for Consumo...")
             if progress_callback:
-                progress_callback("⚡ [Fase 4] Iniciando ejecución de scripts SQL optimizados en Teradata...", "info")
+                progress_callback(msg_f4, "info")
             
             from core.sql_executor import run_post_load_transformations
             run_post_load_transformations(
@@ -376,11 +386,13 @@ def run_orchestration_flow(
             )
 
         # ----------------------------------------------------
-        # FASE 5: RUN SELECTION TRANSFORMATION (Secondary Connection)
+        # FASE 5: TRANSFORMACIÓN DE SELECCIÓN
         # ----------------------------------------------------
         if run_phase5:
+            msg_f5 = "⚡ Fase 5: Generando consolidado de selección..."
+            logger.info("Phase 5: Running selection transformation with secondary connection...")
             if progress_callback:
-                progress_callback("⚡ [Fase 5] Iniciando ejecución del script de selección con conexión secundaria...", "info")
+                progress_callback(msg_f5, "info")
             
             from core.sql_executor import run_selection_transformation
             run_selection_transformation(
@@ -388,11 +400,14 @@ def run_orchestration_flow(
                 progress_callback=progress_callback
             )
             
+        msg_ok = "🎉 ¡Proceso de Consumo completado exitosamente!"
+        logger.info(f"=== PROCESO DE CONSUMO COMPLETADO EXITOSAMENTE PARA EL PERÍODO {period_str} ===")
         if progress_callback:
-            progress_callback("🎉 ¡Proceso de orquestación finalizado con éxito para Calidad Insumos!", "success")
+            progress_callback(msg_ok, "success")
     finally:
         if con:
             try:
                 con.close()
+                logger.info("Conexión de Teradata cerrada limpiamente.")
             except Exception:
                 pass
