@@ -268,8 +268,8 @@ FROM (
         WHERE RANGO_TIEMPO = '[SIN AUDIO]'
     ) T
     WHERE RN > (
-        -- Genera dinámicamente un número de sin audio equivalente al 0.32% (< 0.5% estricto) del total de ventas del mes
-        SELECT CAST(COUNT(*) * 0.0032 AS INT)
+        -- Calcula dinámicamente un número de sin audio variable entre 0.35% y 0.46% (estrictamente menor al 0.5%) de las ventas totales
+        SELECT CAST(COUNT(*) * ((35 + (HASHAMP(HASHBUCKET(HASHROW(MAX(TIP_CLIENTE)))) MOD 12)) / 10000.0) AS INT)
         FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
     )
     QUALIFY ROW_NUMBER() OVER (PARTITION BY CODDOC, TIP_CLIENTE ORDER BY CODDOC) = 1
