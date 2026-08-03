@@ -377,77 +377,81 @@
             
             {/* BARRA LATERAL IZQUIERDA (Sidebar) */}
             <aside class="sidebar-panel w-80 p-5 flex flex-col gap-6 overflow-y-auto shrink-0">
-              <div class="space-y-4">
-                <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
-                  <span>⚙️</span> Configuración de Lectura
-                </div>
+              {activeTab === 'upload' && (
+                <>
+                  <div class="space-y-4">
+                    <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
+                      <span>⚙️</span> Configuración de Lectura
+                    </div>
 
-                <div>
-                  <label class="block text-xs text-slate-400 mb-1">Tipo de archivo a cargar</label>
-                  <select
-                    value={fileType}
-                    onChange={(e) => setFileType(e.target.value)}
-                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="Excel">Excel (.xlsx, .xls)</option>
-                    <option value="CSV">CSV (.csv)</option>
-                    <option value="Texto Unicode">Texto Unicode (.txt)</option>
-                  </select>
-                </div>
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">Tipo de archivo a cargar</label>
+                      <select
+                        value={fileType}
+                        onChange={(e) => setFileType(e.target.value)}
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="Excel">Excel (.xlsx, .xls)</option>
+                        <option value="CSV">CSV (.csv)</option>
+                        <option value="Texto Unicode">Texto Unicode (.txt)</option>
+                      </select>
+                    </div>
 
-                <div>
-                  <label class="block text-xs text-slate-400 mb-1">📋 Plantillas de Mapeo</label>
-                  <select
-                    value={selectedTemplate}
-                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="Ninguno">Ninguno</option>
-                    {Object.keys(templates).map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Limpieza de Datos */}
-              <div class="space-y-3">
-                <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
-                  <span>🧹</span> Limpieza de Datos
-                </div>
-
-                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={convertirSinAcentos}
-                    onChange={(e) => setConvertirSinAcentos(e.target.checked)}
-                    class="accent-emerald-500 rounded"
-                  />
-                  <span>Eliminar acentos en textos</span>
-                </label>
-
-                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={transformarVarcharLatin}
-                    onChange={(e) => setTransformarVarcharLatin(e.target.checked)}
-                    class="accent-emerald-500 rounded"
-                  />
-                  <span>Limpiar caracteres especiales (LATIN)</span>
-                </label>
-
-                {transformarVarcharLatin && (
-                  <div>
-                    <label class="block text-xs text-slate-400 mb-1">Longitud máxima VARCHAR</label>
-                    <input
-                      type="number"
-                      value={maxLenVarchar}
-                      onChange={(e) => setMaxLenVarchar(Number(e.target.value))}
-                      class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-                    />
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">📋 Plantillas de Mapeo</label>
+                      <select
+                        value={selectedTemplate}
+                        onChange={(e) => setSelectedTemplate(e.target.value)}
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="Ninguno">Ninguno</option>
+                        {Object.keys(templates).map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Limpieza de Datos */}
+                  <div class="space-y-3">
+                    <div class="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider border-b border-slate-800 pb-2">
+                      <span>🧹</span> Limpieza de Datos
+                    </div>
+
+                    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={convertirSinAcentos}
+                        onChange={(e) => setConvertirSinAcentos(e.target.checked)}
+                        class="accent-emerald-500 rounded"
+                      />
+                      <span>Eliminar acentos en textos</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={transformarVarcharLatin}
+                        onChange={(e) => setTransformarVarcharLatin(e.target.checked)}
+                        class="accent-emerald-500 rounded"
+                      />
+                      <span>Limpiar caracteres especiales (LATIN)</span>
+                    </label>
+
+                    {transformarVarcharLatin && (
+                      <div>
+                        <label class="block text-xs text-slate-400 mb-1">Longitud máxima VARCHAR</label>
+                        <input
+                          type="number"
+                          value={maxLenVarchar}
+                          onChange={(e) => setMaxLenVarchar(Number(e.target.value))}
+                          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* Diagnóstico de Entorno */}
               <div class="space-y-3 pt-2">
