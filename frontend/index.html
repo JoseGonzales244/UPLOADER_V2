@@ -132,6 +132,7 @@
       const [periodoCalidad, setPeriodoCalidad] = useState(getDefaultPeriod());
       const [calidadPhases, setCalidadPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
       const [startScriptCalidad, setStartScriptCalidad] = useState('Todo');
+      const [soloCierre, setSoloCierre] = useState(false);
 
       const logConsoleRef = useRef(null);
 
@@ -323,11 +324,11 @@
         }
       };
 
-      // Iniciar Calidad
+      // Iniciar Calidad / Cierre
       const handleRunCalidad = async () => {
         if (isRunning) return;
         setIsRunning(true);
-        setCurrentProcess('PBI Evaluaciones Calidad');
+        setCurrentProcess(soloCierre ? 'Cierre Mensual (01 Auditoría + 02 KRI)' : 'PBI Evaluaciones Calidad');
         setLogs([]);
         try {
           const res = await fetch('/api/orchestrate/calidad', {
@@ -340,12 +341,13 @@
               run_fase3: calidadPhases.f3,
               run_fase4: calidadPhases.f4,
               run_fase5: calidadPhases.f5,
-              start_script: startScriptCalidad === 'Todo' ? null : startScriptCalidad
+              start_script: startScriptCalidad === 'Todo' ? null : startScriptCalidad,
+              solo_cierre: soloCierre
             })
           });
           if (!res.ok) {
             const data = await res.json();
-            alert(data.detail || 'Error iniciando Calidad');
+            alert(data.detail || 'Error iniciando Calidad/Cierre');
             setIsRunning(false);
           }
         } catch (err) {
@@ -829,51 +831,79 @@
                     />
                   </div>
 
-                  {/* Fases Checkboxes */}
-                  <div class="space-y-2">
-                    <label class="block text-xs font-semibold text-slate-300">Selección de Fases a Ejecutar:</label>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {[
-                        { key: 'f1', label: 'Fase 1: Insight PC' },
-                        { key: 'f2', label: 'Fase 2: Verint SA' },
-                        { key: 'f3', label: 'Fase 3: Acción tomada' },
-                        { key: 'f4', label: 'Fase 4: Scripts SQL' },
-                        { key: 'f5', label: 'Fase 5: NTD' }
-                      ].map((f) => (
-                        <label key={f.key} class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={calidadPhases[f.key]}
-                            disabled={isRunning}
-                            onChange={(e) => setCalidadPhases({ ...calidadPhases, [f.key]: e.target.checked })}
-                            class="accent-emerald-500 rounded disabled:opacity-50"
-                          />
-                          <span>{f.label}</span>
-                        </label>
-                      ))}
-                    </div>
+                  {/* Selector de Modo Cierre Mensual */}
+                  <div class="p-3.5 bg-slate-900/90 rounded-xl border border-blue-900/50 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner">
+                    <label class="flex items-center gap-3 text-xs text-slate-200 font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={soloCierre}
+                        disabled={isRunning}
+                        onChange={(e) => setSoloCierre(e.target.checked)}
+                        class="accent-blue-500 rounded w-4 h-4 disabled:opacity-50"
+                      />
+                      <span class="text-blue-400 font-bold text-sm">🔒 Modo Cierre Mensual</span>
+                      <span class="text-slate-400 text-xs font-normal">(Ejecutar exclusivamente scripts de Cierre: 01 Auditoría y 02 KRI)</span>
+                    </label>
                   </div>
 
-                  {/* Selector de Inicio de Fase 4 Calidad */}
-                  {calidadPhases.f4 && (
-                    <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <label class="text-xs font-semibold text-slate-300 flex items-center gap-2">
-                        <span>▶️ Iniciar Fase 4 (Script SQL Calidad) desde:</span>
-                      </label>
-                      <select
-                        value={startScriptCalidad}
-                        disabled={isRunning}
-                        onChange={(e) => setStartScriptCalidad(e.target.value)}
-                        class="bg-slate-950 border border-slate-700 text-xs text-emerald-400 font-medium rounded-lg px-3 py-2 max-w-md focus:border-emerald-500 outline-none disabled:opacity-50"
-                      >
-                        <option value="Todo">▶️ Todo (Ejecutar secuencia completa)</option>
-                        <option value="01_evaluacion_manual_pc.sql">1. 01_evaluacion_manual_pc.sql</option>
-                        <option value="02_sa_marcacion_ventas_lpdp.sql">2. 02_sa_marcacion_ventas_lpdp.sql</option>
-                        <option value="03_sa_calculo_pesos_unpivot.sql">3. 03_sa_calculo_pesos_unpivot.sql</option>
-                        <option value="04_sa_ajustes_curva.sql">4. 04_sa_ajustes_curva.sql</option>
-                        <option value="04_b_sa_parche_nota_cero.sql">5. 04_b_sa_parche_nota_cero.sql</option>
-                        <option value="05_consolidacion_nota_final.sql">6. 05_consolidacion_nota_final.sql</option>
-                      </select>
+                  {/* Fases Checkboxes (Ocultas o deshabilitadas si soloCierre) */}
+                  {!soloCierre ? (
+                    <>
+                      <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-slate-300">Selección de Fases a Ejecutar:</label>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          {[
+                            { key: 'f1', label: 'Fase 1: Insight PC' },
+                            { key: 'f2', label: 'Fase 2: Verint SA' },
+                            { key: 'f3', label: 'Fase 3: Acción tomada' },
+                            { key: 'f4', label: 'Fase 4: Scripts SQL' },
+                            { key: 'f5', label: 'Fase 5: NTD' }
+                          ].map((f) => (
+                            <label key={f.key} class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={calidadPhases[f.key]}
+                                disabled={isRunning}
+                                onChange={(e) => setCalidadPhases({ ...calidadPhases, [f.key]: e.target.checked })}
+                                class="accent-emerald-500 rounded disabled:opacity-50"
+                              />
+                              <span>{f.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Selector de Inicio de Fase 4 Calidad */}
+                      {calidadPhases.f4 && (
+                        <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <label class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                            <span>▶️ Iniciar Fase 4 (Script SQL Calidad) desde:</span>
+                          </label>
+                          <select
+                            value={startScriptCalidad}
+                            disabled={isRunning}
+                            onChange={(e) => setStartScriptCalidad(e.target.value)}
+                            class="bg-slate-950 border border-slate-700 text-xs text-emerald-400 font-medium rounded-lg px-3 py-2 max-w-md focus:border-emerald-500 outline-none disabled:opacity-50"
+                          >
+                            <option value="Todo">▶️ Todo (Ejecutar secuencia completa)</option>
+                            <option value="01_evaluacion_manual_pc.sql">1. 01_evaluacion_manual_pc.sql</option>
+                            <option value="02_sa_marcacion_ventas_lpdp.sql">2. 02_sa_marcacion_ventas_lpdp.sql</option>
+                            <option value="03_sa_calculo_pesos_unpivot.sql">3. 03_sa_calculo_pesos_unpivot.sql</option>
+                            <option value="04_sa_ajustes_curva.sql">4. 04_sa_ajustes_curva.sql</option>
+                            <option value="04_b_sa_parche_nota_cero.sql">5. 04_b_sa_parche_nota_cero.sql</option>
+                            <option value="05_consolidacion_nota_final.sql">6. 05_consolidacion_nota_final.sql</option>
+                          </select>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div class="p-4 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300 space-y-1">
+                      <p class="font-bold flex items-center gap-2">ℹ️ Modo Cierre Activado</p>
+                      <p class="text-slate-300">Se omitirán las Fases 1 a 5. Se ejecutarán únicamente:</p>
+                      <ul class="list-disc list-inside ml-2 text-slate-400 space-y-0.5 font-mono">
+                        <li>01_auditoria_y_cierre.sql (Limpieza previa + Consolidación gerencial)</li>
+                        <li>02_kri_resumen_total.sql (Limpieza previa + Resumen de métricas KRI)</li>
+                      </ul>
                     </div>
                   )}
 
@@ -883,6 +913,8 @@
                     class={`w-full py-3.5 rounded-xl font-bold text-sm shadow-lg transition flex items-center justify-center gap-2 ${
                       isRunning
                         ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-80'
+                        : soloCierre
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white active:scale-98 cursor-pointer shadow-blue-900/50 border border-blue-400/30'
                         : 'btn-primary active:scale-98 cursor-pointer'
                     }`}
                   >
@@ -892,10 +924,10 @@
                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Ejecutando Orquestación de Calidad...</span>
+                        <span>{soloCierre ? 'Ejecutando Cierre Mensual...' : 'Ejecutando Orquestación de Calidad...'}</span>
                       </>
                     ) : (
-                      <span>🚀 Iniciar Orquestación de Calidad</span>
+                      <span>{soloCierre ? '🔒 Iniciar Cierre Mensual (01 Auditoría + 02 KRI)' : '🚀 Iniciar Orquestación de Calidad'}</span>
                     )}
                   </button>
                 </div>

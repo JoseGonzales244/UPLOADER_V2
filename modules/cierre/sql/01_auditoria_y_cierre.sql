@@ -4,6 +4,10 @@
 -- {PERIODO_ANTERIOR} en tablas históricas y mapeo de la estructura organizativa.
 -- =====================================================================
 
+-- Limpieza previa para garantizar idempotencia en re-ejecuciones
+DELETE FROM DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL
+WHERE PERIODO = '{PERIODO_ANTERIOR}';
+
 -- Insertar datos del período cerrado en la tabla consolidadora gerencial
 INSERT INTO DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL
 (

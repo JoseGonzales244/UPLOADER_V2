@@ -36,6 +36,7 @@ from core.readers import read_excel_file, read_csv_file, read_unicode_text_file
 from core.cleaners import clean_dataframe, sanitize_identifier, suggest_sql_type
 from core.database import load_credentials, connect_teradata, load_to_teradata
 from core.health_check import run_preflight_health_check
+from modules.cierre.use_cases.cierre_orchestrator import run_cierre_process_flow
 from ui.components import load_templates
 
 logger = setup_logging("backend.main", log_prefix="fastapi")
@@ -141,6 +142,7 @@ class CalidadRequest(BaseModel):
     run_fase4: bool = True
     run_fase5: bool = True
     start_script: Optional[str] = None
+    solo_cierre: bool = False
 
 class AudioItem(BaseModel):
     reg_ev: str
@@ -250,12 +252,12 @@ def start_consumo(req: ConsumoRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_consumo_task, req)
     return {"status": "started", "process": "Consumo", "periodo": req.periodo}
 
-# --- FLUJO CALIDAD ---
+# --- FLUJO CALIDAD & CIERRE ---
 def _run_calidad_task(req: CalidadRequest):
     process_state["running"] = True
-    process_state["current_process"] = "PBI Evaluaciones Calidad"
+    process_state["current_process"] = "Cierre Mensual (01 Auditoría + 02 KRI)" if req.solo_cierre else "PBI Evaluaciones Calidad"
     process_state["progress"] = 0.0
-    process_state["current_phase"] = 1
+    process_state["current_phase"] = 6 if req.solo_cierre else 1
     
     try:
         from dotenv import load_dotenv
@@ -267,25 +269,34 @@ def _run_calidad_task(req: CalidadRequest):
         td_user = os.getenv("TERADATA_USER", "")
         td_password = os.getenv("TERADATA_PASSWORD", "")
 
-        run_quality_process_flow(
-            insight_user=insight_user,
-            insight_password=insight_password,
-            verint_user=verint_user,
-            verint_password=verint_password,
-            td_user=td_user,
-            td_password=td_password,
-            period_str=req.periodo,
-            progress_callback=send_progress_update,
-            run_phase1=req.run_fase1,
-            run_phase2=req.run_fase2,
-            run_phase3=req.run_fase3,
-            run_phase4=req.run_fase4,
-            run_phase5=req.run_fase5,
-            start_from_script=req.start_script
-        )
+        if req.solo_cierre:
+            run_cierre_process_flow(
+                period_str=req.periodo,
+                td_user=td_user,
+                td_password=td_password,
+                progress_callback=send_progress_update
+            )
+        else:
+            run_quality_process_flow(
+                insight_user=insight_user,
+                insight_password=insight_password,
+                verint_user=verint_user,
+                verint_password=verint_password,
+                td_user=td_user,
+                td_password=td_password,
+                period_str=req.periodo,
+                progress_callback=send_progress_update,
+                run_phase1=req.run_fase1,
+                run_phase2=req.run_fase2,
+                run_phase3=req.run_fase3,
+                run_phase4=req.run_fase4,
+                run_phase5=req.run_fase5,
+                start_from_script=req.start_script
+            )
     except Exception as e:
-        logger.error(f"Error en flujo de Calidad: {e}")
-        send_progress_update(f"❌ Error en flujo de Calidad: {e}", "error")
+        proc_label = "Cierre Mensual" if req.solo_cierre else "flujo de Calidad"
+        logger.error(f"Error en {proc_label}: {e}")
+        send_progress_update(f"❌ Error en {proc_label}: {e}", "error")
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
@@ -297,7 +308,8 @@ def start_calidad(req: CalidadRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail=f"Ya hay un proceso en ejecución: {process_state['current_process']}")
 
     background_tasks.add_task(_run_calidad_task, req)
-    return {"status": "started", "process": "Calidad", "periodo": req.periodo}
+    label = "Cierre Mensual" if req.solo_cierre else "Calidad"
+    return {"status": "started", "process": label, "periodo": req.periodo}
 
 # --- GENESYS AUDIOS & OUTLOOK ---
 @app.get("/api/audios/outlook-fetch")

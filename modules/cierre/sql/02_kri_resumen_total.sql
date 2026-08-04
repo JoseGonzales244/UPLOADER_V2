@@ -4,6 +4,10 @@
 -- y teléfonos no autorizados para el periodo cerrado {PERIODO_ANTERIOR}
 -- =====================================================================
 
+-- Limpieza previa para garantizar idempotencia en re-ejecuciones
+DELETE FROM DLAB_GEC.M_KRI_RESUMEN_TOTAL
+WHERE PERIODO = CAST('{PERIODO_ANTERIOR}' AS INTEGER);
+
 INSERT INTO DLAB_GEC.M_KRI_RESUMEN_TOTAL (
     PERIODO,
     VENTAS,
