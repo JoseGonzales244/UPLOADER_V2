@@ -133,6 +133,7 @@
       const [calidadPhases, setCalidadPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
       const [startScriptCalidad, setStartScriptCalidad] = useState('Todo');
       const [soloCierre, setSoloCierre] = useState(false);
+      const [cierreScripts, setCierreScripts] = useState({ s1: true, s2: true });
 
       const logConsoleRef = useRef(null);
 
@@ -342,7 +343,9 @@
               run_fase4: calidadPhases.f4,
               run_fase5: calidadPhases.f5,
               start_script: startScriptCalidad === 'Todo' ? null : startScriptCalidad,
-              solo_cierre: soloCierre
+              solo_cierre: soloCierre,
+              run_cierre_01: cierreScripts.s1,
+              run_cierre_02: cierreScripts.s2
             })
           });
           if (!res.ok) {
@@ -897,13 +900,36 @@
                       )}
                     </>
                   ) : (
-                    <div class="p-4 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300 space-y-1">
-                      <p class="font-bold flex items-center gap-2">ℹ️ Modo Cierre Activado</p>
-                      <p class="text-slate-300">Se omitirán las Fases 1 a 5. Se ejecutarán únicamente:</p>
-                      <ul class="list-disc list-inside ml-2 text-slate-400 space-y-0.5 font-mono">
-                        <li>01_auditoria_y_cierre.sql (Limpieza previa + Consolidación gerencial)</li>
-                        <li>02_kri_resumen_total.sql (Limpieza previa + Resumen de métricas KRI)</li>
-                      </ul>
+                    <div class="p-4 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300 space-y-3">
+                      <p class="font-bold flex items-center gap-2">🔒 Selección de Scripts de Cierre Mensual a Ejecutar:</p>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 cursor-pointer hover:border-blue-700 transition">
+                          <input
+                            type="checkbox"
+                            checked={cierreScripts.s1}
+                            disabled={isRunning}
+                            onChange={(e) => setCierreScripts({ ...cierreScripts, s1: e.target.checked })}
+                            class="accent-blue-500 rounded w-4 h-4 disabled:opacity-50"
+                          />
+                          <div>
+                            <span class="font-bold text-white block">1. 01_auditoria_y_cierre.sql</span>
+                            <span class="text-slate-400 text-[11px]">Consolidado Gerencial & Jerarquías</span>
+                          </div>
+                        </label>
+                        <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 cursor-pointer hover:border-blue-700 transition">
+                          <input
+                            type="checkbox"
+                            checked={cierreScripts.s2}
+                            disabled={isRunning}
+                            onChange={(e) => setCierreScripts({ ...cierreScripts, s2: e.target.checked })}
+                            class="accent-blue-500 rounded w-4 h-4 disabled:opacity-50"
+                          />
+                          <div>
+                            <span class="font-bold text-white block">2. 02_kri_resumen_total.sql</span>
+                            <span class="text-slate-400 text-[11px]">Resumen de Métricas KRI</span>
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   )}
 

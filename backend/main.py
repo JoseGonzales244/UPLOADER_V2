@@ -143,6 +143,8 @@ class CalidadRequest(BaseModel):
     run_fase5: bool = True
     start_script: Optional[str] = None
     solo_cierre: bool = False
+    run_cierre_01: bool = True
+    run_cierre_02: bool = True
 
 class AudioItem(BaseModel):
     reg_ev: str
@@ -274,6 +276,8 @@ def _run_calidad_task(req: CalidadRequest):
                 period_str=req.periodo,
                 td_user=td_user,
                 td_password=td_password,
+                run_cierre_01=req.run_cierre_01,
+                run_cierre_02=req.run_cierre_02,
                 progress_callback=send_progress_update
             )
         else:
