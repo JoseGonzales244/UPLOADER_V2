@@ -25,6 +25,18 @@ def _looks_like_expected_header(row_values, expected_columns) -> bool:
     return matches >= 3
 
 
+def _should_use_manual_excel_reader(selected_template: str | None) -> bool:
+    if not selected_template:
+        return False
+
+    return (
+        selected_template == "P001-CALIDAD_SA"
+        or selected_template == "P030-RETENCION_CONVENIOS"
+        or selected_template == "P025-SA_TCAD"
+        or selected_template == "P026-CROSS_TCAD"
+    )
+
+
 def _read_excel_with_openpyxl(uploaded_file) -> pl.DataFrame | None:
     """Read the workbook manually for the P001-CALIDAD_SA template so the real header row is preserved."""
     if load_workbook is None:
@@ -74,7 +86,7 @@ def _read_excel_with_openpyxl(uploaded_file) -> pl.DataFrame | None:
 
 def read_excel_file(uploaded_file, selected_template: str | None = None, templates: dict | None = None) -> pl.DataFrame:
     """Reads Excel files (.xlsx, .xls) using the high-performance calamine engine or openpyxl for this template."""
-    if selected_template in ("P001-CALIDAD_SA", "P025-SA_TCAD", "P030-RETENCION_CONVENIOS"):
+    if _should_use_manual_excel_reader(selected_template):
         df = _read_excel_with_openpyxl(uploaded_file)
         if df is not None:
             return df
