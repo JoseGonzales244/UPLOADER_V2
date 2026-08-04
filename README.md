@@ -1,6 +1,6 @@
 # ⚡ Plataforma Calidad Televentas (FastAPI + React SPA)
 
-Plataforma unificada de alto rendimiento para la orquestación de pipelines de datos de **Consumo (KRI Ventas)**, **Calidad (NTD)**, **Solicitud de Audios (Genesys/Outlook)** e **Ingesta de datos a Teradata**.
+Plataforma unificada de alto rendimiento para la orquestación de pipelines de datos de **Consumo (KRI Ventas)**, **Calidad (NTD)**, **Modo Cierre Mensual**, **Solicitud de Audios (Genesys/Outlook)** e **Ingesta de datos a Teradata**.
 
 ---
 
@@ -8,8 +8,9 @@ Plataforma unificada de alto rendimiento para la orquestación de pipelines de d
 1. [Arquitectura y Rendimiento](#-arquitectura-y-rendimiento)
 2. [Cómo Ejecutar](#-cómo-ejecutar)
 3. [Funcionalidades Principales](#-funcionalidades-principales)
-4. [Estructura del Proyecto](#-estructura-del-proyecto)
-5. [Modo de Respaldo (Streamlit)](#-modo-de-respaldo-streamlit)
+4. [Documentación Técnica (Carpeta docs/)](#-documentación-técnica-carpeta-docs)
+5. [Estructura del Proyecto](#-estructura-del-proyecto)
+6. [Modo de Respaldo (Streamlit)](#-modo-de-respaldo-streamlit)
 
 ---
 
@@ -40,7 +41,20 @@ Esto iniciará el servidor Uvicorn FastAPI en `http://127.0.0.1:8000` y abrirá 
 2. **🎧 Solicitud de Audios (Genesys)**: Lectura automática de correos en Outlook Desktop y formularios directos o pegado masivo desde Excel para descarga automatizada en Genesys Cloud.
 3. **⚡ PBI Base Consumo**: Orquestación en 5 Fases del pipeline de Consumo con ejecuciones parametrizadas de scripts Teradata SQL (`VENTAS_DN`, `CD40K`, `SOURCE_TVL`, `CA_CONSENTIMIENTO_DIARIO`, `KRI_VENTAS_SIN_AUDIO`, `TLF_NO_AUTORIZADO`).
 4. **📊 PBI Evaluaciones Calidad**: Orquestación en 5 Fases para el consolidado de calidad NTD.
-5. **🩺 Diagnóstico de Entorno**: Chequeo en tiempo real de disponibilidad para Outlook Desktop, Chrome CDP (Genesys) y conectividad a Teradata.
+5. **🔒 Modo Cierre Mensual**: Ejecución aislada e idempotente de los scripts de cierre mensual (`01_auditoria_y_cierre.sql` y `02_kri_resumen_total.sql`) con selección individual de scripts desde la UI.
+6. **🩺 Diagnóstico de Entorno**: Chequeo en tiempo real de disponibilidad para Outlook Desktop, Chrome CDP (Genesys) y conectividad a Teradata.
+
+---
+
+## 📚 Documentación Técnica (Carpeta `docs/`)
+
+Toda la documentación detallada de flujos, tablas de entrada (INPUTS) y tablas de salida (OUTPUTS) se encuentra centralizada en la carpeta **[`docs/`](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs)**:
+
+- 📖 **[MANUAL_USUARIO.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/MANUAL_USUARIO.md)**: Manual del usuario final y guía paso a paso.
+- ⚡ **[FLUJO_CONSUMO.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CONSUMO.md)**: Detalle del proceso PBI Base Consumo (Fases 1 a 5, inputs/outputs por fase).
+- 📊 **[FLUJO_CALIDAD.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CALIDAD.md)**: Detalle del proceso PBI Evaluaciones Calidad (Fases 1 a 5, inputs/outputs por fase).
+- 🔒 **[FLUJO_CIERRE.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CIERRE.md)**: Detalle del Modo Cierre Mensual (idempotencia DELETE+INSERT, inputs/outputs por script).
+- 🎧 **[FLUJO_AUDIOS_Y_CARGA.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_AUDIOS_Y_CARGA.md)**: Descarga de Audios Genesys/Outlook e Ingesta a Teradata.
 
 ---
 
@@ -49,6 +63,12 @@ Esto iniciará el servidor Uvicorn FastAPI en `http://127.0.0.1:8000` y abrirá 
 ```
 PLATAFORMA_CALIDAD_TELEVENTAS/
 ├── APP_CALIDAD.bat             <-- Ejecutable de inicio rápido
+├── docs/                       <-- Documentación unificada de flujos del sistema
+│   ├── MANUAL_USUARIO.md
+│   ├── FLUJO_CONSUMO.md
+│   ├── FLUJO_CALIDAD.md
+│   ├── FLUJO_CIERRE.md
+│   └── FLUJO_AUDIOS_Y_CARGA.md
 ├── backend/
 │   ├── main.py                 <-- Servidor FastAPI con WebSockets y REST API
 │   └── __init__.py
@@ -58,12 +78,12 @@ PLATAFORMA_CALIDAD_TELEVENTAS/
 │   ├── orchestrator.py         <-- Orquestador de Consumo
 │   ├── quality_process_orchestrator.py <-- Orquestador de Calidad
 │   ├── notifier.py             <-- Módulo de Notificaciones de Escritorio
-│   ├── health_check.py        <-- Diagnóstico de Entorno
-│   └── database.py             <-- Conexión e Ingesta Teradata (FastLoad)
+│   ├── health_check.py         <-- Diagnóstico de Entorno
+│   └── database.py             <-- Conexión e Ingesta Teradata
 ├── modules/
-│   ├── consumo/sql/            <-- Scripts Teradata SQL optimizados
-│   └── calidad/
-├── MANUAL_USUARIO.md           <-- Manual detallado para usuario final
+│   ├── consumo/sql/            <-- Scripts Teradata SQL de Consumo
+│   ├── calidad/sql/            <-- Scripts Teradata SQL de Calidad
+│   └── cierre/                 <-- Orquestador y scripts de Cierre Mensual
 └── index.py                    <-- Aplicación Streamlit original (Respaldo)
 ```
 
