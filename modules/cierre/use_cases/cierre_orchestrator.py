@@ -95,17 +95,28 @@ def run_cierre_process_flow(
     period_str: str,
     td_user: str = None,
     td_password: str = None,
+    run_cierre_01: bool = True,
+    run_cierre_02: bool = True,
     progress_callback=None
 ):
     """
-    Ejecuta el flujo completo de Cierre Mensual.
+    Ejecuta el flujo de Cierre Mensual seleccionando individualmente los scripts deseados.
     """
     params = get_cierre_period_params(period_str)
     periodo_cerrado = params["PERIODO_ANTERIOR"]
     
-    logger.info(f"=== INICIANDO PROCESO DE CIERRE MENSUAL PARA PERÍODO CERRADO {periodo_cerrado} (Período base: {period_str}) ===")
+    cierre_scripts = []
+    if run_cierre_01:
+        cierre_scripts.append("modules/cierre/sql/01_auditoria_y_cierre.sql")
+    if run_cierre_02:
+        cierre_scripts.append("modules/cierre/sql/02_kri_resumen_total.sql")
+        
+    if not cierre_scripts:
+        raise ValueError("Debe seleccionar al menos un script de cierre a ejecutar (01 Auditoría o 02 KRI).")
+        
+    logger.info(f"=== INICIANDO PROCESO DE CIERRE MENSUAL PARA PERÍODO CERRADO {periodo_cerrado} ({len(cierre_scripts)} script(s) seleccionados) ===")
     if progress_callback:
-        progress_callback(f"🔒 Iniciando Cierre Mensual para el período cerrado: **{periodo_cerrado}**...", "info", progress=0.0, phase=6)
+        progress_callback(f"🔒 Iniciando Cierre Mensual para el período cerrado: **{periodo_cerrado}** ({len(cierre_scripts)} script(s))...", "info", progress=0.0, phase=6)
         
     credenciales = load_credentials()
     user = td_user or credenciales.get("teradata_user")
@@ -115,11 +126,6 @@ def run_cierre_process_flow(
     
     if not user or not password:
         raise ValueError("Credenciales de Teradata no proporcionadas ni encontradas en .env.")
-        
-    cierre_scripts = [
-        "modules/cierre/sql/01_auditoria_y_cierre.sql",
-        "modules/cierre/sql/02_kri_resumen_total.sql"
-    ]
     
     if progress_callback:
         progress_callback("🔌 Conectando a Teradata...", "info")
