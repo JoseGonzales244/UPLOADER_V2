@@ -18,27 +18,14 @@ logger = setup_logging("modules.cierre.orchestrator", log_prefix="cierre")
 
 def get_cierre_period_params(period_str: str) -> dict:
     """
-    Calcula parámetros de período en formato YYYYMM.
-    Si se ingresa '202607', PERIODO_ANTERIOR es '202606'.
+    Retorna el diccionario de parámetros inyectando directamente el período ingresado.
     """
     if not re.match(r'^\d{6}$', period_str):
         raise ValueError(f"Formato de período inválido '{period_str}'. Debe ser YYYYMM.")
         
-    year = int(period_str[:4])
-    month = int(period_str[4:])
-    
-    if month == 1:
-        prev_year = year - 1
-        prev_month = 12
-    else:
-        prev_year = year
-        prev_month = month - 1
-        
-    period_prev = f"{prev_year}{prev_month:02d}"
-    
     return {
         "PERIODO": period_str,
-        "PERIODO_ANTERIOR": period_prev,
+        "PERIODO_ANTERIOR": period_str,
     }
 
 def inject_variables(sql_text: str, context: dict) -> str:
