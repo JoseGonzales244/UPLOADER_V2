@@ -91,6 +91,7 @@
       // Tab 1: Upload
       const [uploadedFile, setUploadedFile] = useState(null);
       const [filePreview, setFilePreview] = useState(null);
+      const [isPreviewLoading, setIsPreviewLoading] = useState(false);
       const [columnsConfig, setColumnsConfig] = useState([]);
       const [tdUser, setTdUser] = useState('');
       const [tdPass, setTdPass] = useState('');
@@ -221,16 +222,14 @@
         }
       };
 
-      // Manejar Selección de Archivos para Ingesta (Tab 1)
-      const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setUploadedFile(file);
+      const fetchFilePreview = async (fileObj, typeVal, templateVal) => {
+        if (!fileObj) return;
+        setIsPreviewLoading(true);
 
         const formData = new FormData();
-        formData.append('file', file);
-        formData.append('file_type', fileType);
-        formData.append('selected_template', selectedTemplate);
+        formData.append('file', fileObj);
+        formData.append('file_type', typeVal);
+        formData.append('selected_template', templateVal);
 
         try {
           const res = await fetch('/api/upload/preview', {
@@ -246,6 +245,101 @@
           }
         } catch (err) {
           alert('Error enviando archivo: ' + err.message);
+        } finally {
+          setIsPreviewLoading(false);
+        }
+      };
+
+      // Manejar Selección de Archivos para Ingesta (Tab 1)
+      const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploadedFile(file);
+        await fetchFilePreview(file, fileType, selectedTemplate);
+      };
+
+      const TEMPLATE_TABLE_MAP = {
+        'P001-CALIDAD_SA': 'DLAB_GEC.M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS',
+        'P002-LPDP': 'DLAB_GEC.DATA_LPDP_SA',
+        'P003-CD40K': 'DLAB_GEC.DATA_CD40K_SA',
+        'P004-ACC_TOMADA': 'DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE',
+        'P007-CONSULTAS_BT': 'DLAB_GEC.DATA_CONSULTAS_BT',
+        'P008-INSIGHT_07_EVALUATIONS': 'DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE',
+        'P009-INSIGHT_01_TRAFICO_GENESYS': 'DLAB_GEC.M_EXP_TRAFICO_GENESIS',
+        'P010-INSIGHT_02_CONV_ATTRIBUTES': 'DLAB_GEC.M_EXP_BT_CONVERSATIONS_ATTRIBUTES',
+        'P011-INSIGHT_03_DERIVA_BT': 'DLAB_GEC.M_EXP_DERIVA_BT_TIEMPOS',
+        'P012-INSIGHT_04_CLOUD_MARCA_TRANSF': 'DLAB_GEC.M_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE',
+        'P013-INSIGHT_05_BT_TRANSFERENCIA': 'DLAB_GEC.M_DERIVA_BT_EV_TRANSFERENCIA',
+        'P014-INSIGHT_06_IVR_VENTAS': 'DLAB_GEC.M_EXP_IVR_VENTAS_2022',
+        'P016-MAESTRA_PESOS_PC': 'DLAB_GEC.M_EXP_MAESTRA_PESOS_SA',
+        'P021-TELEVENTAS_EJECUTIVOS': 'DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS',
+        'P025-SA_TCAD': 'DLAB_GEC.DATA_SA_TCAD_PRE',
+        'P030-RETENCION_CONVENIOS': 'DLAB_GEC.DATA_RET_CONVENIOS_SA'
+      };
+
+      const handleTemplateChange = async (e) => {
+        const newTpl = e.target.value;
+        setSelectedTemplate(newTpl);
+        if (TEMPLATE_TABLE_MAP[newTpl]) {
+          setTdTable(TEMPLATE_TABLE_MAP[newTpl]);
+        } else {
+          setTdTable('');
+        }
+        if (uploadedFile) {
+          await fetchFilePreview(uploadedFile, fileType, newTpl);
+        }
+      };
+
+      const handleFileTypeChange = async (e) => {
+        const newType = e.target.value;
+        setFileType(newType);
+        if (uploadedFile) {
+          await fetchFilePreview(uploadedFile, newType, selectedTemplate);
+        }
+      };
+
+      // Iniciar Ingesta a Teradata (Tab 1)
+      const handleUploadToTeradata = async () => {
+        if (isRunning) return;
+        if (!uploadedFile) {
+          alert('Por favor seleccione un archivo primero.');
+          return;
+        }
+        if (!tdTable) {
+          alert('Por favor ingrese la tabla destino de Teradata.');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', uploadedFile);
+        formData.append('file_type', fileType);
+        formData.append('selected_template', selectedTemplate);
+        formData.append('convertir_sin_acentos', convertirSinAcentos);
+        formData.append('transformar_varchar_latin', transformarVarcharLatin);
+        formData.append('max_len_varchar', maxLenVarchar);
+        formData.append('teradata_table', tdTable);
+        formData.append('load_action', loadAction);
+        if (columnsConfig.length > 0) {
+          formData.append('columns_json', JSON.stringify(columnsConfig));
+        }
+
+        setIsRunning(true);
+        setCurrentProcess(`Ingesta Teradata: ${tdTable}`);
+        setLogs([]);
+
+        try {
+          const res = await fetch('/api/upload/teradata', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.detail || 'Error iniciando la carga a Teradata');
+            setIsRunning(false);
+          }
+        } catch (err) {
+          alert('Error enviando solicitud de carga: ' + err.message);
+          setIsRunning(false);
         }
       };
 
@@ -398,7 +492,7 @@
                       <label class="block text-xs text-slate-400 mb-1">Tipo de archivo a cargar</label>
                       <select
                         value={fileType}
-                        onChange={(e) => setFileType(e.target.value)}
+                        onChange={handleFileTypeChange}
                         class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
                       >
                         <option value="Excel">Excel (.xlsx, .xls)</option>
@@ -411,7 +505,7 @@
                       <label class="block text-xs text-slate-400 mb-1">📋 Plantillas de Mapeo</label>
                       <select
                         value={selectedTemplate}
-                        onChange={(e) => setSelectedTemplate(e.target.value)}
+                        onChange={handleTemplateChange}
                         class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
                       >
                         <option value="Ninguno">Ninguno</option>
@@ -548,15 +642,29 @@
                   {filePreview && (
                     <div class="glass-card p-6 rounded-2xl space-y-4">
                       <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                        <h3 class="text-sm font-bold text-white">👀 Vista Previa de Archivo</h3>
+                        <div class="flex items-center gap-2">
+                          <h3 class="text-sm font-bold text-white">👀 Vista Previa de Archivo</h3>
+                          {isPreviewLoading && (
+                            <span class="text-xs text-amber-400 font-semibold animate-pulse flex items-center gap-1">
+                              <span>🔄</span> Actualizando vista previa...
+                            </span>
+                          )}
+                        </div>
                         <span class="text-xs text-emerald-400 font-semibold">{filePreview.total_rows} registros | {filePreview.total_cols} columnas</span>
                       </div>
-                      <div class="overflow-x-auto border border-slate-800 rounded-xl max-h-48">
+                      <div class="overflow-x-auto border border-slate-800 rounded-xl max-h-48 relative">
+                        {isPreviewLoading && (
+                          <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm z-10 flex items-center justify-center">
+                            <div class="flex items-center gap-2 text-amber-400 text-xs font-semibold">
+                              <span class="animate-spin text-sm">⏳</span> Actualizando vista previa de la plantilla...
+                            </div>
+                          </div>
+                        )}
                         <table class="w-full text-xs text-left text-slate-300">
                           <thead class="bg-slate-900 text-slate-200 font-semibold border-b border-slate-800">
                             <tr>
                               {Object.keys(filePreview.preview[0] || {}).map((col) => (
-                                <th key={col} class="px-3 py-2">{col}</th>
+                                <th key={col} class="px-3 py-2 whitespace-nowrap">{col}</th>
                               ))}
                             </tr>
                           </thead>
@@ -564,7 +672,7 @@
                             {filePreview.preview.map((row, idx) => (
                               <tr key={idx} class="border-b border-slate-800/50 hover:bg-slate-800/40">
                                 {Object.values(row).map((val, i) => (
-                                  <td key={i} class="px-3 py-1.5 truncate max-w-xs">{String(val)}</td>
+                                  <td key={i} class="px-3 py-1.5 truncate max-w-xs whitespace-nowrap">{String(val)}</td>
                                 ))}
                               </tr>
                             ))}
@@ -573,23 +681,32 @@
                       </div>
 
                       {/* Destino Teradata */}
-                      <div class="pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label class="block text-xs text-slate-400 mb-1">Usuario Teradata</label>
-                          <input type="text" value={tdUser} onChange={(e) => setTdUser(e.target.value)} class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
-                        </div>
-                        <div>
-                          <label class="block text-xs text-slate-400 mb-1">Contraseña Teradata</label>
-                          <input type="password" value={tdPass} onChange={(e) => setTdPass(e.target.value)} class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
-                        </div>
+                      <div class="pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label class="block text-xs text-slate-400 mb-1">Tabla Destino</label>
                           <input type="text" value={tdTable} onChange={(e) => setTdTable(e.target.value)} placeholder="DLAB_GEC.nombre_tabla" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
                         </div>
+                        <div>
+                          <label class="block text-xs text-slate-400 mb-1">Acción de Carga</label>
+                          <select
+                            value={loadAction}
+                            onChange={(e) => setLoadAction(e.target.value)}
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                          >
+                            <option value="Solo agregar nuevos registros">Solo agregar nuevos registros</option>
+                            <option value="Reemplazar registros existentes (Vaciar y cargar)">Reemplazar registros existentes (Vaciar y cargar)</option>
+                          </select>
+                        </div>
                       </div>
 
-                      <button class="w-full py-3 rounded-xl btn-primary font-bold text-sm shadow-lg">
-                        🚀 Cargar a Teradata
+                      <button
+                        onClick={handleUploadToTeradata}
+                        disabled={isRunning}
+                        class={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition ${
+                          isRunning ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'btn-primary'
+                        }`}
+                      >
+                        {isRunning ? '⏳ Ejecutando proceso...' : '🚀 Cargar a Teradata'}
                       </button>
                     </div>
                   )}

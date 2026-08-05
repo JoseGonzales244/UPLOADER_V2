@@ -391,9 +391,10 @@ async def preview_file(
         template_config = templates.get(selected_template, {})
         
         for col in df.columns:
-            suggested = suggest_sql_type(df[col])
+            suggested = suggest_sql_type(df[col].dtype)
             columns_info.append({
                 "original_name": col,
+                "name": col,
                 "new_name": sanitize_identifier(col),
                 "datatype": suggested,
                 "selected": True,
@@ -413,6 +414,152 @@ async def preview_file(
     except Exception as e:
         logger.error(f"Error procesando archivo para vista previa: {e}")
         return JSONResponse(status_code=400, content={"status": "error", "detail": str(e)})
+
+
+def _run_upload_task(
+    tmp_path: str,
+    file_type: str,
+    selected_template: str,
+    convertir_sin_acentos: bool,
+    transformar_varchar_latin: bool,
+    max_len_varchar: int,
+    teradata_user: str,
+    teradata_password: str,
+    teradata_table: str,
+    load_action: str,
+    selections: list
+):
+    try:
+        process_state["running"] = True
+        process_state["current_process"] = f"Ingesta Teradata: {teradata_table}"
+        send_progress_update("🛠️ Leyendo archivo para ingesta...", "info", progress=0.1)
+
+        templates = load_templates()
+        if file_type == "Excel":
+            df = read_excel_file(tmp_path, selected_template=selected_template, templates=templates)
+        elif file_type == "CSV":
+            df = read_csv_file(tmp_path)
+        else:
+            df = read_unicode_text_file(tmp_path)
+
+        send_progress_update("🧹 Limpiando y preparando datos...", "info", progress=0.3)
+        df_clean = clean_dataframe(
+            df,
+            selections,
+            convertir_sin_acentos,
+            transformar_varchar_latin,
+            max_len_varchar
+        )
+
+        send_progress_update("📡 Conectando a Teradata...", "info", progress=0.5)
+        credenciales = load_credentials()
+        host = credenciales.get('teradata_host', 'IBKTD')
+        logmech = credenciales.get('teradata_logmech', 'TD2')
+        user = teradata_user or credenciales.get('teradata_user', '')
+        pwd = teradata_password or credenciales.get('teradata_password', '')
+        con = connect_teradata(user, pwd, host=host, logmech=logmech)
+
+        clear_table = (load_action == "Reemplazar registros existentes (Vaciar y cargar)")
+
+        send_progress_update(f"🚀 Iniciando transferencia a tabla '{teradata_table}'...", "info", progress=0.7)
+        def progress_cb(msg):
+            log_type = "info"
+            if "advertencia" in msg.lower() or "warning" in msg.lower():
+                log_type = "warning"
+            elif "error" in msg.lower() or "fallo" in msg.lower():
+                log_type = "error"
+            elif "éxito" in msg.lower() or "completada" in msg.lower() or "completado" in msg.lower():
+                log_type = "success"
+            send_progress_update(msg, log_type)
+
+        load_to_teradata(
+            con,
+            teradata_table,
+            df_clean,
+            selections,
+            clear_table,
+            progress_callback=progress_cb
+        )
+        con.close()
+        send_progress_update(f"🎉 ¡Ingesta completada con éxito en la tabla '{teradata_table}'!", "success", progress=1.0)
+    except Exception as e:
+        logger.exception(f"Error en ingesta a Teradata ({teradata_table}): {e}")
+        send_progress_update(f"❌ Error en ingesta a Teradata: {e}", "error")
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        process_state["running"] = False
+        process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
+
+
+@app.post("/api/upload/teradata")
+async def upload_to_teradata(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    file_type: str = Form("Excel"),
+    selected_template: str = Form("Ninguno"),
+    convertir_sin_acentos: bool = Form(True),
+    transformar_varchar_latin: bool = Form(False),
+    max_len_varchar: int = Form(3000),
+    teradata_user: str = Form(""),
+    teradata_password: str = Form(""),
+    teradata_table: str = Form(...),
+    load_action: str = Form("Solo agregar nuevos registros"),
+    columns_json: Optional[str] = Form(None)
+):
+    if process_state["running"]:
+        raise HTTPException(status_code=400, detail=f"Ya hay un proceso en ejecución: {process_state['current_process']}")
+
+    content = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    selections = []
+    if columns_json:
+        try:
+            selections = json.loads(columns_json)
+        except Exception:
+            pass
+
+    if not selections:
+        templates = load_templates()
+        if file_type == "Excel":
+            df = read_excel_file(tmp_path, selected_template=selected_template, templates=templates)
+        elif file_type == "CSV":
+            df = read_csv_file(tmp_path)
+        else:
+            df = read_unicode_text_file(tmp_path)
+        for col in df.columns:
+            selections.append({
+                "original_name": col,
+                "name": col,
+                "new_name": sanitize_identifier(col),
+                "datatype": suggest_sql_type(df[col].dtype),
+                "selected": True,
+                "convert_nulls": False
+            })
+
+    background_tasks.add_task(
+        _run_upload_task,
+        tmp_path,
+        file_type,
+        selected_template,
+        convertir_sin_acentos,
+        transformar_varchar_latin,
+        max_len_varchar,
+        teradata_user,
+        teradata_password,
+        teradata_table,
+        load_action,
+        selections
+    )
+    return {"status": "started", "message": f"Iniciando ingesta a {teradata_table}"}
+
 
 # Servir Frontend
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")

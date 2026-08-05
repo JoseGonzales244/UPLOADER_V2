@@ -6,7 +6,10 @@ from core.cleaners import suggest_sql_type, sanitize_identifier
 
 def load_templates():
     """Loads templates from JSON configuration file."""
-    path = 'appsFiles/excelToTeraFiles/plantillas.json'
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    path = os.path.join(base_dir, 'appsFiles', 'excelToTeraFiles', 'plantillas.json')
+    if not os.path.exists(path):
+        path = 'appsFiles/excelToTeraFiles/plantillas.json'
     if os.path.exists(path):
         try:
             with open(path, 'r', encoding='utf-8') as f:

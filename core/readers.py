@@ -85,11 +85,15 @@ def _read_excel_with_openpyxl(uploaded_file) -> pl.DataFrame | None:
 
 
 def read_excel_file(uploaded_file, selected_template: str | None = None, templates: dict | None = None) -> pl.DataFrame:
-    """Reads Excel files (.xlsx, .xls) using the high-performance calamine engine or openpyxl for this template."""
+    """Reads Excel files (.xlsx, .xls) using the high-performance calamine engine or openpyxl for templates with header on row 29."""
     if _should_use_manual_excel_reader(selected_template):
-        df = _read_excel_with_openpyxl(uploaded_file)
-        if df is not None:
-            return df
+        source = uploaded_file if isinstance(uploaded_file, str) else (uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file)
+        try:
+            return pl.read_excel(source, engine="calamine", read_options={"header_row": 28})
+        except Exception:
+            df = _read_excel_with_openpyxl(uploaded_file)
+            if df is not None:
+                return df
 
     if isinstance(uploaded_file, str):
         df = pl.read_excel(uploaded_file, engine="calamine")
