@@ -1,12 +1,15 @@
 """
 Infrastructure LLM Module: Client wrapper for Google Gemini API using official google-genai SDK.
 Usa estrictamente gemini-3.1-flash-lite sin ningún fallback silencioso.
+Implementa ILLMProvider para cumplir con Inversión de Dependencias (DIP).
 """
 import os
 import time
 import logging
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+
+from core.interfaces.llm_provider import ILLMProvider
 
 load_dotenv()
 
@@ -19,7 +22,8 @@ except ImportError:
 
 logger = logging.getLogger("infrastructure.llm.gemini_client")
 
-class GeminiClient:
+
+class GeminiClient(ILLMProvider):
     def __init__(self, api_key: Optional[str] = None, default_model: str = "gemini-3.1-flash-lite"):
         self.default_model = default_model
         load_dotenv()

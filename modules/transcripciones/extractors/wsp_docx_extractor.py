@@ -1,6 +1,7 @@
 """
 Extractor de Transcripciones de WhatsApp (.docx) con Extracción de Conversación Limpia y Filtrado de Ejecutivo.
 Soporta tanto documentos con sección de 'Conversación Limpia' como exportaciones tabuladas de Genesys.
+Implementa ITranscriptExtractor para respetar contratos abstractos.
 """
 import os
 import re
@@ -9,6 +10,8 @@ import logging
 import docx
 import pandas as pd
 from typing import List, Dict, Any, Optional
+
+from core.interfaces.transcript_extractor import ITranscriptExtractor
 
 logger = logging.getLogger("modules.transcripciones.extractors.wsp_docx_extractor")
 
@@ -24,9 +27,12 @@ def get_paragraph_full_text(p) -> str:
     return "".join(text_pieces)
 
 
-class WhatsAppTranscriptExtractor:
-    def __init__(self, folder_path: str = "Auditorias Wsp"):
-        self.folder_path = folder_path
+class WhatsAppTranscriptExtractor(ITranscriptExtractor):
+    def __init__(self, folder_path: Optional[str] = None):
+        self.folder_path = folder_path or os.environ.get(
+            "WSP_INPUT_DIR",
+            os.path.join("data", "input", "auditorias_wsp")
+        )
         self.ejecutivos_df = self._load_ejecutivos_mapping()
 
     def _load_ejecutivos_mapping(self) -> pd.DataFrame:

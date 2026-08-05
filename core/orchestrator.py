@@ -110,7 +110,7 @@ def run_orchestration_flow(
     host = credenciales.get('teradata_host', 'IBKTD')
     logmech = credenciales.get('teradata_logmech', 'TD2')
     
-    INPUT_BASE_CONSUMO_DIR = os.path.join(os.getcwd(), "INPUT_BASE_CONSUMO")
+    INPUT_BASE_CONSUMO_DIR = os.path.join(os.getcwd(), "data", "input", "base_consumo")
     os.makedirs(INPUT_BASE_CONSUMO_DIR, exist_ok=True)
  
     downloaded_files = {}

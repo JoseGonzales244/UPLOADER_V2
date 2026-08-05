@@ -76,7 +76,7 @@ flowchart TD
 ### 📌 Fase 2: Ingesta de CD40K Manual
 
 - 📥 **INPUTS**:
-  - **Archivo Excel Local**: `INPUT_BASE_CONSUMO/CD40K_NEW.xlsx`
+  - **Archivo Excel Local**: `data/input/base_consumo/CD40K_NEW.xlsx`
   - **Plantilla de Mapeo**: `P003-CD40K` en `plantillas.json`
   - **Automatización**: Actualización automática desde SharePoint mediante conexión COM de Excel antes de la lectura.
 

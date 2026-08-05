@@ -2,12 +2,14 @@
 Caso de Uso: Pipeline de Auditoría de Transcripciones de WhatsApp con Gemini 3.1 Flash Lite (Nivel de Producción).
 Evalúa minuciosamente los mensajes del ejecutivo en 3 ejes: Gramática, Trato con el cliente y Cumplimiento del protocolo.
 Incluye nivel de Gravedad (Bajo, Medio, Alto) y elimina respuestas de omisión ficticias.
+Inyección de dependencias basada en la interfaz abstracta ILLMProvider (DIP).
 """
 import json
 import logging
 from typing import List, Dict, Any, Optional
 from rapidfuzz import fuzz
 
+from core.interfaces.llm_provider import ILLMProvider
 from infrastructure.llm.gemini_client import GeminiClient
 
 logger = logging.getLogger("modules.transcripciones.use_cases.auditor")
@@ -71,8 +73,8 @@ def validate_and_filter_findings(
 
 
 class TranscriptAuditorUseCase:
-    def __init__(self, llm_client: Optional[GeminiClient] = None):
-        self.llm = llm_client or GeminiClient(default_model="gemini-3.1-flash-lite")
+    def __init__(self, llm_client: Optional[ILLMProvider] = None):
+        self.llm: ILLMProvider = llm_client or GeminiClient(default_model="gemini-3.1-flash-lite")
 
     def audit_transcript_single(
         self,

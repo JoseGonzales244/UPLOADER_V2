@@ -483,7 +483,7 @@ def run_quality_process_flow(
     host = credenciales.get('teradata_host', 'IBKTD')
     logmech = credenciales.get('teradata_logmech', 'TD2')
     
-    INPUT_PROCESO_CALIDAD_DIR = os.path.join(os.getcwd(), "INPUT_PROCESO_CALIDAD")
+    INPUT_PROCESO_CALIDAD_DIR = os.path.join(os.getcwd(), "data", "input", "proceso_calidad")
     os.makedirs(INPUT_PROCESO_CALIDAD_DIR, exist_ok=True)
     
     # ----------------------------------------------------
@@ -590,7 +590,7 @@ def run_quality_process_flow(
                     period=period_str,
                     headless=True,
                     progress_callback=progress_callback,
-                    output_dir="INPUT_PROCESO_CALIDAD"
+                    output_dir=INPUT_PROCESO_CALIDAD_DIR
                 )
             except Exception as err:
                 raise RuntimeError(f"Fallo crítico al descargar datos de Verint: {err}")
@@ -660,7 +660,7 @@ def run_quality_process_flow(
             
         excel_path = os.path.join(INPUT_PROCESO_CALIDAD_DIR, "ACCION_TOMADA.xlsx")
         if not os.path.exists(excel_path):
-            raise FileNotFoundError(f"No se encontró el archivo Excel requerido en: {excel_path}. Por favor, colócalo en la carpeta 'INPUT_PROCESO_CALIDAD'.")
+            raise FileNotFoundError(f"No se encontró el archivo Excel requerido en: {excel_path}. Colócalo en 'data/input/proceso_calidad/'.")
             
         # Auto-refresh Excel via COM (Option B) before loading
         try:

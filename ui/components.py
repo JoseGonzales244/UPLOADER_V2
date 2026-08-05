@@ -4,19 +4,18 @@ import os
 import pandas as pd
 from core.cleaners import suggest_sql_type, sanitize_identifier
 
-def load_templates():
-    """Loads templates from JSON configuration file."""
+def load_templates() -> dict:
+    """Carga las plantillas de mapping Excel→Teradata desde config/plantillas.json."""
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    path = os.path.join(base_dir, 'appsFiles', 'excelToTeraFiles', 'plantillas.json')
+    path = os.path.join(base_dir, "config", "plantillas.json")
     if not os.path.exists(path):
-        path = 'appsFiles/excelToTeraFiles/plantillas.json'
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+        raise FileNotFoundError(
+            f"Archivo de plantillas no encontrado: '{path}'. "
+            "Asegúrate de que 'config/plantillas.json' existe en la raíz del proyecto."
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 
 def render_sidebar():
     """Renders the Streamlit sidebar controls and returns configuration settings."""

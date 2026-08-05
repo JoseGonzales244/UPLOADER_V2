@@ -63,7 +63,7 @@ flowchart TD
 
 - 📥 **INPUTS**:
   - **Plataforma Origen**: Verint Speech Analytics (WFO).
-  - **Archivos Excel Descargados**: Archivos `INPUT_PROCESO_CALIDAD/Export_Calidad_*.xlsx`.
+  - **Archivos Excel Descargados**: Archivos `data/input/proceso_calidad/Export_Calidad_*.xlsx`.
   - **Plantilla de Mapeo**: `P001-CALIDAD_SA` en `plantillas.json`.
 
 - 📤 **OUTPUTS**:
@@ -74,7 +74,7 @@ flowchart TD
 ### 📌 Fase 3: Ingesta de Acciones Tomadas
 
 - 📥 **INPUTS**:
-  - **Archivo Excel Local**: `INPUT_PROCESO_CALIDAD/ACCION_TOMADA.xlsx` (actualizado automáticamente desde SharePoint vía COM).
+  - **Archivo Excel Local**: `data/input/proceso_calidad/ACCION_TOMADA.xlsx` (actualizado automáticamente desde SharePoint vía COM).
   - **Plantilla de Mapeo**: `P004-ACC_TOMADA` en `plantillas.json`.
   - **Filtro / Limpieza**: Deduplicación por orden de severidad de acción tomada.
 
