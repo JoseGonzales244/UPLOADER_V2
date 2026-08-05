@@ -19,7 +19,7 @@ Auditorias Wsp/
 *.docx
 *.doc
 openspec/
-
+data/
 logs/
 *.log
 
