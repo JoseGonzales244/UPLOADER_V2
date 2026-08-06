@@ -192,35 +192,62 @@ def ejecutar_test_especifico():
     # 4. Descargar MP3 de las llamadas válidas
     for sub_idx, (conv, wrapups) in enumerate(candidatas, 1):
         conv_id = conv.get("conversationId")
-        print(f"\nDescargando audio para Conv ID: {conv_id}...")
-
+        # Probar Método 1: GET /api/v2/conversations/{conv_id}/recordings
         rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
         rec_resp = requests.get(rec_url, headers=headers, verify=False, timeout=15)
-        print(f"Status /recordings: {rec_resp.status_code}")
+        print(f"Método 1 (/recordings) Status: {rec_resp.status_code}")
         
         recs = []
-        if rec_resp.status_code == 200:
+        if rec_resp.status_code == 200 and rec_resp.json():
             recs = rec_resp.json()
-            print(f"Total grabaciones devueltas por /recordings: {len(recs)}")
+            print(f"  -> {len(recs)} grabación(es) obtenida(s) con Método 1")
         else:
-            print(f"Respuesta /recordings: {rec_resp.text[:300]}")
+            print(f"  -> Respuesta Método 1: {rec_resp.text[:250]}")
 
-        # Si /recordings devolvió 0 o error, probar /recordingmetadata
+        # Probar Método 2: GET /api/v2/conversations/{conv_id}/recordingmetadata
         if not recs:
             meta_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordingmetadata"
             meta_resp = requests.get(meta_url, headers=headers, verify=False, timeout=15)
-            print(f"Status /recordingmetadata: {meta_resp.status_code}")
-            if meta_resp.status_code == 200:
+            print(f"Método 2 (/recordingmetadata) Status: {meta_resp.status_code}")
+            if meta_resp.status_code == 200 and meta_resp.json():
                 recs = meta_resp.json()
-                print(f"Total grabaciones devueltas por /recordingmetadata: {len(recs)}")
+                print(f"  -> {len(recs)} grabación(es) obtenida(s) con Método 2")
             else:
-                print(f"Respuesta /recordingmetadata: {meta_resp.text[:300]}")
+                print(f"  -> Respuesta Método 2: {meta_resp.text[:250]}")
+
+        # Probar Método 3: POST /api/v2/recording/batchrequests (Batch API)
+        if not recs:
+            print("Método 3: Probando Batch Request API (/api/v2/recording/batchrequests)...")
+            batch_url = "https://api.mypurecloud.com/api/v2/recording/batchrequests"
+            batch_payload = {"conversationIds": [conv_id]}
+            batch_resp = requests.post(batch_url, headers=headers, json=batch_payload, verify=False, timeout=15)
+            print(f"  -> Status Batch POST: {batch_resp.status_code}")
+            print(f"  -> Respuesta Batch: {batch_resp.text[:300]}")
+            
+            if batch_resp.status_code in [200, 202]:
+                batch_job = batch_resp.json()
+                job_id = batch_job.get("id")
+                if job_id:
+                    print(f"  -> Consultando estado del Batch Job {job_id}...")
+                    for b_att in range(1, 6):
+                        time.sleep(2)
+                        job_url = f"https://api.mypurecloud.com/api/v2/recording/batchrequests/{job_id}"
+                        job_resp = requests.get(job_url, headers=headers, verify=False, timeout=15)
+                        print(f"     Status Intento {b_att}: {job_resp.status_code}")
+                        if job_resp.status_code == 200:
+                            job_data = job_resp.json()
+                            print(f"     Estado Job: {job_data.get('state')}")
+                            results = job_data.get("results", [])
+                            if results:
+                                recs = results
+                                print(f"     -> {len(results)} grabación(es) obtenida(s) vía Batch Request!")
+                                break
 
         if not recs:
-            print(f"❌ No se obtuvieron grabaciones para {conv_id}")
+            print(f"❌ No se obtuvieron grabaciones para {conv_id} mediante ninguno de los 3 métodos.")
             continue
 
-        rec_id = rec_resp.json()[0].get("id")
+        rec_id = recs[0].get("id")
         media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
 
         download_link = None
