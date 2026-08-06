@@ -144,7 +144,7 @@ def ejecutar_test_especifico():
             if p_user_id:
                 user_id = p_user_id
 
-    # 2. Consultar nombre de usuario usando el userId encontrado
+    # 2. Consultar nombre de usuario usando el userId encontrado y probar /users/search por campo 'name'
     if user_id:
         url_usr = f"https://api.mypurecloud.com/api/v2/users/{user_id}"
         r_usr = requests.get(url_usr, headers=headers, verify=False, timeout=15)
@@ -157,20 +157,36 @@ def ejecutar_test_especifico():
             print(f"   -> Username: {u_data.get('username')}")
             print(f"   -> State: {u_data.get('state')}")
 
-    # 3. Probar la búsqueda en /analytics/conversations/details/query usando el userId GUID exacto
+        # Probar POST /api/v2/users/search filtrando especificamente por campo 'name' y state='any'
+        search_url = "https://api.mypurecloud.com/api/v2/users/search"
+        search_payload = {
+            "query": [
+                {"fields": ["name"], "type": "CONTAINS", "value": "B46108"},
+                {"fields": ["state"], "type": "EXACT", "value": "any"}
+            ]
+        }
+        r_search = requests.post(search_url, headers=headers, json=search_payload, verify=False, timeout=15)
+        print(f"\n   POST /api/v2/users/search por campo 'name' -> Status: {r_search.status_code}")
+        if r_search.status_code == 200:
+            results = r_search.json().get("results", [])
+            print(f"   Resultados encontrados: {len(results)}")
+            for res in results:
+                print(f"   - Match ID: {res.get('id')} | Name: {res.get('name')} | State: {res.get('state')}")
+
+    # 3. Probar la búsqueda en /analytics/conversations/details/query con segmentFilters y userId
     if user_id:
-        print(f"\n3. Consultando /analytics/conversations/details/query con userId GUID {user_id}...")
+        print(f"\n3. Consultando /analytics/conversations/details/query usando segmentFilters con userId {user_id}...")
         conv_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
         conv_payload = {
             "order": "desc",
             "orderBy": "conversationStart",
             "paging": {"pageSize": 20, "pageNumber": 1},
             "interval": "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z",
-            "userFilters": [
+            "segmentFilters": [
                 {
                     "type": "or",
                     "predicates": [
-                        {"type": "dimension", "dimension": "userId", "value": user_id}
+                        {"dimension": "userId", "value": user_id}
                     ]
                 }
             ]
@@ -179,11 +195,14 @@ def ejecutar_test_especifico():
         print(f"   Status respuesta consulta: {r_conv.status_code}")
         if r_conv.status_code == 200:
             convs = r_conv.json().get("conversations", [])
-            print(f"   ¡EXITO TOTAL! Conversaciones recuperadas para el usuario inactivo: {len(convs)}")
+            print(f"   ¡EXITO TOTAL! Conversaciones recuperadas para la ejecutiva inactiva: {len(convs)}")
             for c in convs[:5]:
                 print(f"   - Conv ID: {c.get('conversationId')} | Start: {c.get('conversationStart')}")
+        else:
+            print(f"   Error consulta: {r_conv.text[:300]}")
 
 if __name__ == "__main__":
     ejecutar_test_especifico()
+
 )
 
