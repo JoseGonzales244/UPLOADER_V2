@@ -74,8 +74,8 @@ def ejecutar_test_navegacion():
         if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
             try:
                 origin = page.url.split("/directory")[0] if "/directory" in page.url else GENESYS_URL.split("/directory")[0]
-                target_url = f"{origin}/directory/#/analytics/interactions"
-                logger.info(f"Navegando dinámicamente a {target_url}...")
+                target_url = automation.construir_url_interacciones_fecha(origin, anio=2026, mes=7)
+                logger.info(f"Navegando dinámicamente con fecha pre-filtrada a {target_url}...")
                 page.goto(target_url)
                 time.sleep(2)
             except Exception:

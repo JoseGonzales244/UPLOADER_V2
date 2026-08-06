@@ -132,6 +132,18 @@ class GenesysBrowserAutomation:
         except Exception as e:
             logger.debug(f"Error asegurando panel de filtros: {e}")
 
+    @staticmethod
+    def construir_url_interacciones_fecha(origin: str, anio: int = 2026, mes: int = 7) -> str:
+        """Construye la URL parametrizada con el rango de fechas directo para Genesys Cloud."""
+        start_dt = f"{anio:04d}-{mes:02d}-01T05%3A00%3A00.000Z"
+        if mes == 12:
+            end_dt = f"{anio+1:04d}-01-01T05%3A00%3A00.000Z"
+        else:
+            end_dt = f"{anio:04d}-{mes+1:02d}-01T05%3A00%3A00.000Z"
+        
+        base_origin = origin.split("/directory")[0] if "/directory" in origin else origin
+        return f"{base_origin}/directory/#/analytics/interactions?start={start_dt}&end={end_dt}&hasMedia=false&mediaType=all"
+
     def _asegurar_filtro_fecha(self, analytics_frame: Frame, mes_deseado: str = "julio", anio_deseado: str = "2026") -> None:
         """Verifica el filtro de fecha actual. Si no coincide con el mes/año requerido, despliega el calendario gux-calendar y selecciona desde el 1° del mes hasta el 1° del mes siguiente."""
         try:
@@ -342,8 +354,8 @@ class GenesysBrowserAutomation:
                     if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
                         try:
                             origin = page.url.split("/directory")[0] if "/directory" in page.url else self.genesys_url.split("/directory")[0]
-                            target_url = f"{origin}/directory/#/analytics/interactions"
-                            logger.info(f"Navegando a la vista de Interacciones ({target_url})...")
+                            target_url = self.construir_url_interacciones_fecha(origin, anio=2026, mes=7)
+                            logger.info(f"Navegando a la vista de Interacciones con fecha pre-filtrada ({target_url})...")
                             page.goto(target_url)
                             time.sleep(2)
                         except Exception:
