@@ -51,4 +51,9 @@ SELECTORS = {
     "format_mp3_option": 'gux-option:has-text("MP3")',
     "confirm_download_btn": "gux-button.recording-download-button",
     "tab_button": "button.gux-tab-button",
+    "date_filter_btn": "button:has(.current-date-display-container)",
+    "date_filter_btn_alt": 'button[aria-label*="cambiar fecha seleccionada"]',
+    "apply_date_btn": "gux-button:has-text('Aplicar'), button:has-text('Aplicar')",
+    "calendar_component": "gux-calendar",
 }
+

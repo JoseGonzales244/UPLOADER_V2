@@ -128,6 +128,52 @@ class GenesysBrowserAutomation:
         except Exception as e:
             logger.debug(f"Error asegurando panel de filtros: {e}")
 
+    def _asegurar_filtro_fecha(self, analytics_frame: Frame, mes_deseado: str = "julio", anio_deseado: str = "2026") -> None:
+        """Verifica el filtro de fecha actual. Si no coincide con el mes/año requerido, despliega el calendario gux-calendar y selecciona desde el 1° del mes hasta el 1° del mes siguiente."""
+        try:
+            btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
+            btn = analytics_frame.locator(btn_selector).first
+            if not btn.is_visible():
+                btn = analytics_frame.locator(SELECTORS.get("date_filter_btn_alt", 'button[aria-label*="cambiar fecha seleccionada"]')).first
+
+            if not btn.is_visible():
+                logger.warning("No se encontró el botón selector de fecha en el panel de filtros.")
+                return
+
+            texto_actual = btn.inner_text().lower()
+            if mes_deseado.lower() in texto_actual and anio_deseado in texto_actual:
+                logger.info(f"Filtro de fecha ya configurado para '{mes_deseado} de {anio_deseado}'. Se omite reaplicación.")
+                return
+
+            logger.info(f"Desplegando selector de fecha para ajustar a '{mes_deseado} de {anio_deseado}'...")
+            btn.click()
+            analytics_frame.wait_for_timeout(1500)
+
+            calendar = analytics_frame.locator(SELECTORS.get("calendar_component", "gux-calendar")).first
+            
+            # En gux-calendar mode="range" number-of-months="2":
+            # El primer día del mes target es el 1° en la primera tabla, el fin es el 1° del siguiente mes
+            dias_uno = analytics_frame.locator("td:has-text('1')")
+            if dias_uno.count() >= 2:
+                # Seleccionar fecha inicio (1° del primer mes mostrado)
+                dias_uno.nth(0).click(force=True)
+                analytics_frame.wait_for_timeout(500)
+                # Seleccionar fecha fin (1° del segundo mes mostrado)
+                dias_uno.nth(1).click(force=True)
+                analytics_frame.wait_for_timeout(500)
+
+            # Clic en Aplicar
+            apply_btn = analytics_frame.locator(SELECTORS.get("apply_date_btn", "gux-button:has-text('Aplicar')")).first
+            if apply_btn.is_visible():
+                apply_btn.click(force=True)
+                analytics_frame.wait_for_timeout(1500)
+                logger.info(f"✓ Filtro de fecha para '{mes_deseado} de {anio_deseado}' aplicado exitosamente.")
+            else:
+                logger.warning("No se localizó el botón 'Aplicar' en el modal de fecha.")
+        except Exception as e:
+            logger.error(f"Error al asegurar el filtro de fecha: {e}")
+
+
     def _limpiar_filtros_si_hay(self, analytics_frame: Frame) -> None:
         try:
             borrar = analytics_frame.locator(SELECTORS["clear_filters_btn"])
@@ -303,10 +349,10 @@ class GenesysBrowserAutomation:
                 try:
                     if idx > 1:
                         page = self._obtener_page_principal(browser)
-                        if page and base_url:
+                        if page:
                             try:
-                                page.goto(f"{base_url}/directory/#/analytics/interactions", wait_until="networkidle")
-                                page.wait_for_timeout(3000)
+                                page.bring_to_front()
+                                page.wait_for_timeout(500)
                             except Exception:
                                 pass
 
@@ -325,6 +371,7 @@ class GenesysBrowserAutomation:
 
                     self._asegurar_panel_filtros_abierto(analytics_frame)
                     self._limpiar_filtros_si_hay(analytics_frame)
+                    self._asegurar_filtro_fecha(analytics_frame, mes_deseado="julio", anio_deseado="2026")
 
                     self._rellenar_filtro_usuario(analytics_frame, sol.reg_ev)
                     self._rellenar_filtro_dnis(analytics_frame, sol.telefonos)
