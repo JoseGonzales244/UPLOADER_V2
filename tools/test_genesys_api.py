@@ -128,7 +128,7 @@ def ejecutar_test_especifico():
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
     reg_ev = "B46108"
 
-    # Prueba 1: GET /api/v2/users con state=any y showDeleted=true
+    # Prueba 1: GET /api/v2/users buscando por apellido "Centeno" o nombre "Eva"
     url_all = "https://api.mypurecloud.com/api/v2/users?pageSize=500&state=any&showDeleted=true&expand=state"
     r_all = requests.get(url_all, headers=headers, verify=False, timeout=15)
     print(f"\n1. GET /api/v2/users (state=any & showDeleted=true) -> Status: {r_all.status_code}")
@@ -136,11 +136,22 @@ def ejecutar_test_especifico():
     if r_all.status_code == 200:
         entities = r_all.json().get("entities", [])
         print(f"   Total usuarios obtenidos en catálogo: {len(entities)}")
-        coincidencias = [u for u in entities if reg_ev.lower() in json.dumps(u).lower()]
-        print(f"   Usuarios coincidentes con '{reg_ev}': {len(coincidencias)}")
-        for u in coincidencias:
-            print(f"   -> ID: {u.get('id')} | Name: {u.get('name')} | State: {u.get('state')} | Email: {u.get('email')}")
-            user_id = u.get('id')
+        
+        # Muestra algunos nombres de muestra para entender la estructura
+        print("\n   [Muestra de 5 usuarios del sistema]:")
+        for sample in entities[:5]:
+            print(f"   - Name: {sample.get('name')} | Username: {sample.get('username')} | Email: {sample.get('email')}")
+
+        # Probar coincidencias con "Centeno", "Eva" o "B46108"
+        terminos = ["b46108", "centeno", "eva"]
+        for t in terminos:
+            coincidencias = [u for u in entities if t in json.dumps(u).lower()]
+            print(f"\n   -> Coincidencias con termino '{t}': {len(coincidencias)}")
+            for u in coincidencias:
+                print(f"      ID: {u.get('id')} | Name: {u.get('name')} | State: {u.get('state')} | Username: {u.get('username')}")
+                if not user_id:
+                    user_id = u.get('id')
+
 
     # Prueba 2: POST /api/v2/users/search buscando en email, username, name y employeeId con state=any
     search_url = "https://api.mypurecloud.com/api/v2/users/search"
