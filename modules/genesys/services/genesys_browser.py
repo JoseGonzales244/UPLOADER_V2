@@ -423,17 +423,21 @@ class GenesysBrowserAutomation:
                 y_next = anio_n + 1 if mes_n == 12 else anio_n
                 intervalo = f"{anio_n:04d}-{mes_n:02d}-01T05:00:00.000Z/{y_next:04d}-{m_next:02d}-01T05:00:00.000Z"
 
-            predicates = [{"dimension": "direction", "value": "inbound"}, {"dimension": "direction", "value": "outbound"}]
+            segment_filters = []
             if sol.telefonos:
-                for tlf in sol.telefonos:
-                    predicates.append({"dimension": "dnis", "value": str(tlf)})
+                dnis_preds = [{"dimension": "dnis", "value": str(tlf).strip()} for tlf in sol.telefonos if str(tlf).strip()]
+                if dnis_preds:
+                    segment_filters.append({"type": "or", "predicates": dnis_preds})
+            
+            if not segment_filters:
+                segment_filters.append({"type": "or", "predicates": [{"dimension": "direction", "value": "inbound"}, {"dimension": "direction", "value": "outbound"}]})
 
             payload = {
                 "order": "desc",
                 "orderBy": "conversationStart",
                 "paging": {"pageSize": 50, "pageNumber": 1},
                 "interval": intervalo,
-                "segmentFilters": [{"type": "or", "predicates": predicates}]
+                "segmentFilters": segment_filters
             }
 
             try:
