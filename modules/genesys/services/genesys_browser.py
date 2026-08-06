@@ -404,16 +404,18 @@ class GenesysBrowserAutomation:
         return False
 
     @staticmethod
-    def _calcular_duracion_conversacion(conv: dict) -> float:
-        """Calcula la duración total en segundos de una conversación usando conversationStart y conversationEnd."""
+    def _duracion_grabacion(rec: dict) -> float:
+        """Calcula la duración total en segundos de un tramo individual de grabación."""
         try:
-            start_str = conv.get("conversationStart")
-            end_str = conv.get("conversationEnd")
-            if start_str and end_str:
+            if "durationMs" in rec and rec["durationMs"]:
+                return float(rec["durationMs"])
+            s = rec.get("startTime") or rec.get("originalRecordingStartTime")
+            e = rec.get("endTime")
+            if s and e:
                 from datetime import datetime
-                t_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
-                t_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-                return (t_end - t_start).total_seconds()
+                t_s = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                t_e = datetime.fromisoformat(e.replace("Z", "+00:00"))
+                return (t_e - t_s).total_seconds()
         except Exception:
             pass
         return 0.0
@@ -476,13 +478,6 @@ class GenesysBrowserAutomation:
                     self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
                     continue
 
-                # Si hay múltiples llamadas con ACEPTA CAMPAÑA, seleccionar la de mayor duración
-                if len(candidatas) > 1:
-                    candidatas.sort(key=self._calcular_duracion_conversacion, reverse=True)
-                    dur_max = self._calcular_duracion_conversacion(candidatas[0])
-                    logger.info(f"Se hallaron {len(candidatas)} llamadas 'ACEPTA CAMPAÑA'. Seleccionando la de mayor duración ({dur_max/60:.1f} min)...")
-                    candidatas = [candidatas[0]]
-
                 nombre_base = sol.nombre_archivo
                 descargas_exitosas = 0
 
@@ -505,6 +500,11 @@ class GenesysBrowserAutomation:
                     if not recs:
                         logger.warning(f"No se obtuvieron grabaciones para {conv_id}")
                         continue
+
+                    # Si una misma conversación contiene múltiples tramos de grabación, seleccionar la más extensa
+                    if len(recs) > 1:
+                        recs.sort(key=self._duracion_grabacion, reverse=True)
+                        logger.info(f"  La llamada posee {len(recs)} tramos de audio. Seleccionando el tramo de mayor duración...")
 
                     rec_id = recs[0].get("id")
                     media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
