@@ -6,7 +6,11 @@ import time
 import urllib.request
 from pathlib import Path
 from typing import List, Optional
+import requests
+import urllib3
 from playwright.sync_api import Frame, Page, sync_playwright
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from modules.genesys.config import CDP_URL, DOWNLOADS_DIR, GENESYS_URL, PROFILE_DIR, SELECTORS, TIMEOUT_DEFAULT, TIMEOUT_DETAILS_LOAD
 from modules.genesys.logger import get_logger
@@ -306,6 +310,175 @@ class GenesysBrowserAutomation:
             return partes[0] * 60 + partes[1]
         return 0
 
+    def _extraer_bearer_token(self, page: Page, timeout_ms: int = 5000) -> Optional[str]:
+        """Escucha las peticiones de red o inspecciona la sesión web para capturar el Bearer Token activo."""
+        token_holder = {"token": None}
+
+        def _capturar_req(req):
+            try:
+                auth = req.headers.get("authorization", "")
+                if auth.startswith("Bearer ") and len(auth) > 20:
+                    token_holder["token"] = auth.replace("Bearer ", "").strip()
+            except Exception:
+                pass
+
+        page.on("request", _capturar_req)
+
+        # Intentar extraer desde almacenamiento local si ya está cargado
+        try:
+            token_storage = page.evaluate("""() => {
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        let k = localStorage.key(i);
+                        let v = localStorage.getItem(k);
+                        if (v && v.includes("Bearer ")) return v.split("Bearer ")[1].split('"')[0].trim();
+                    }
+                } catch(e) {}
+                return null;
+            }""")
+            if token_storage and len(token_storage) > 20:
+                token_holder["token"] = token_storage
+        except Exception:
+            pass
+
+        if not token_holder["token"]:
+            page.wait_for_timeout(timeout_ms)
+
+        return token_holder["token"]
+
+    @staticmethod
+    def _es_conclusion_acepta(conv: dict) -> bool:
+        """Determina si la conversación tiene una conclusión válida de ACEPTA CAMPAÑA (descartando NO ACEPTA)."""
+        wrapups = []
+        for p in conv.get("participants", []):
+            for s in p.get("sessions", []):
+                for seg in s.get("segments", []):
+                    if seg.get("segmentType") == "wrapup":
+                        w_code = str(seg.get("wrapUpCode", "")).upper()
+                        w_name = str(seg.get("wrapUpName", "")).upper()
+                        w_note = str(seg.get("wrapUpNote", "")).upper()
+                        wrapups.extend([w_code, w_name, w_note])
+
+        for w in wrapups:
+            if "NO ACEPTA" in w or "RECHAZA" in w:
+                return False
+
+        for w in wrapups:
+            if any(p in w for p in ["ACEPTA CAMPANA", "ACEPTA CAMPAÑA", "ACEPTA_CAMPANA", "ACEPTA_CAMPAÑA"]):
+                return True
+
+        return False
+
+    def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str) -> bool:
+        """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
+        logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "accept": "*/*"
+        }
+        api_query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
+
+        for idx, sol in enumerate(solicitudes, 1):
+            logger.info(f"--- [API REST {idx}/{len(solicitudes)}] Promotor: {sol.reg_ev} | DNI: {sol.dni} ---")
+            
+            # Formatear el intervalo para el mes correspondiente (por defecto Julio 2026)
+            intervalo = "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z"
+            m = re.search(r'_(\d{4})(\d{2})\d{2}', sol.nombre_archivo)
+            if m:
+                anio_n, mes_n = int(m.group(1)), int(m.group(2))
+                m_next = 1 if mes_n == 12 else mes_n + 1
+                y_next = anio_n + 1 if mes_n == 12 else anio_n
+                intervalo = f"{anio_n:04d}-{mes_n:02d}-01T05:00:00.000Z/{y_next:04d}-{m_next:02d}-01T05:00:00.000Z"
+
+            predicates = [{"dimension": "direction", "value": "inbound"}, {"dimension": "direction", "value": "outbound"}]
+            if sol.telefonos:
+                for tlf in sol.telefonos:
+                    predicates.append({"dimension": "dnis", "value": str(tlf)})
+
+            payload = {
+                "order": "desc",
+                "orderBy": "conversationStart",
+                "paging": {"pageSize": 50, "pageNumber": 1},
+                "interval": intervalo,
+                "segmentFilters": [{"type": "or", "predicates": predicates}]
+            }
+
+            try:
+                resp = requests.post(api_query_url, headers=headers, json=payload, verify=False, timeout=15)
+                if resp.status_code != 200:
+                    logger.warning(f"Error consultando API para DNI {sol.dni}: Status {resp.status_code}")
+                    continue
+
+                conversations = resp.json().get("conversations", [])
+                candidatas = [c for c in conversations if self._es_conclusion_acepta(c)]
+
+                if not candidatas:
+                    logger.warning(f"No se hallaron interacciones 'ACEPTA CAMPAÑA' vía API para DNI {sol.dni}")
+                    self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                    continue
+
+                nombre_base = sol.nombre_archivo
+                for sub_idx, conv in enumerate(candidatas, 1):
+                    conv_id = conv.get("conversationId")
+                    logger.info(f"Procesando conversación API {conv_id} ({sub_idx}/{len(candidatas)})...")
+                    
+                    rec_list_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
+                    rec_resp = requests.get(rec_list_url, headers=headers, verify=False, timeout=15)
+                    if rec_resp.status_code != 200:
+                        continue
+
+                    recs = rec_resp.json()
+                    if not recs:
+                        continue
+
+                    rec_id = recs[0].get("id")
+                    media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
+
+                    download_link = None
+                    for attempt in range(1, 6):
+                        m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
+                        if m_resp.status_code == 200:
+                            m_data = m_resp.json()
+                            m_uris = m_data.get("mediaUris", {})
+                            if "S" in m_uris:
+                                download_link = m_uris["S"].get("mediaUri")
+                            else:
+                                for v in m_uris.values():
+                                    if isinstance(v, dict) and "mediaUri" in v:
+                                        download_link = v.get("mediaUri")
+                                        break
+                            break
+                        elif m_resp.status_code == 202:
+                            time.sleep(2)
+
+                    if not download_link:
+                        logger.warning(f"No se obtuvo el enlace de descarga MP3 para {conv_id}")
+                        continue
+
+                    nombre_mp3 = f"{nombre_base}_P{sub_idx:02d}" if len(candidatas) > 1 else nombre_base
+                    archivo_mp3 = DOWNLOADS_DIR / f"{nombre_mp3}.mp3"
+                    if archivo_mp3.exists():
+                        archivo_mp3.unlink()
+
+                    audio_resp = requests.get(download_link, verify=False, stream=True, timeout=60)
+                    if audio_resp.status_code == 200:
+                        with open(archivo_mp3, "wb") as f:
+                            for chunk in audio_resp.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        logger.info(f"✓ MP3 descargado exitosamente vía API: {archivo_mp3}")
+                    else:
+                        logger.error(f"Error descargando stream MP3: Status {audio_resp.status_code}")
+
+                self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO)
+                logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada vía API.")
+
+            except Exception as e:
+                logger.error(f"Error procesando solicitud API {sol.reg_ev} - DNI {sol.dni}: {e}")
+
+        return True
+
     def procesar_solicitudes(self, solicitudes: List[SolicitudAudio], headless: bool = True):
         """Alias retrocompatible para ejecutar_descargas"""
         return self.ejecutar_descargas(solicitudes, headless=headless)
@@ -409,6 +582,14 @@ class GenesysBrowserAutomation:
             if not page:
                 logger.error("No se encontró sesión activa de Genesys Cloud.")
                 return
+
+            # Intentar extracción automática del Bearer Token y ejecutar vía API REST
+            token = self._extraer_bearer_token(page, timeout_ms=3000)
+            if token:
+                logger.info("🔑 Bearer Token capturado automáticamente de la sesión activa.")
+                if self.ejecutar_descargas_api(solicitudes, token):
+                    logger.info("⚡ Proceso completado exitosamente a alta velocidad vía API REST.")
+                    return
 
             base_url = None
             if "/directory/#/" in page.url:
