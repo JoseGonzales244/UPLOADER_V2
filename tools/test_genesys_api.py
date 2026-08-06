@@ -1,5 +1,9 @@
 import requests
 import json
+import urllib3
+
+# Deshabilitar advertencias de SSL debido al Proxy/Inspección SSL de la red corporativa
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 TOKEN = "Q380dsnrpdyzT8hEhpYbEXdyBCwamAjZwxQytuIMmbAnYJ1KneO4ZqYCsshD28XB4nqhuG0k7zpe46PmUJVjrg"
 URL = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
@@ -33,7 +37,7 @@ payload = {
 }
 
 print("Enviando consulta a la API de Genesys Cloud...")
-resp = requests.post(URL, headers=headers, json=payload)
+resp = requests.post(URL, headers=headers, json=payload, verify=False)
 print(f"Respuesta HTTP Status: {resp.status_code}")
 
 if resp.status_code == 200:
@@ -46,7 +50,7 @@ if resp.status_code == 200:
         conv_id = conv.get("conversationId")
         print(f"\nConsultando grabaciones de la interacción: {conv_id}")
         rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
-        rec_resp = requests.get(rec_url, headers=headers)
+        rec_resp = requests.get(rec_url, headers=headers, verify=False)
         print(f"List Recordings Status: {rec_resp.status_code}")
         
         if rec_resp.status_code == 200:
@@ -56,10 +60,9 @@ if resp.status_code == 200:
                 rec_id = r.get("id")
                 print(f"\nSolicitando URL de descarga MP3 para Recording ID: {rec_id}...")
                 media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
-                media_resp = requests.get(media_url, headers=headers)
-                print(f"Media Download URL Status: {media_resp.status_code}")
+                
                 for attempt in range(1, 6):
-                    media_resp = requests.get(media_url, headers=headers)
+                    media_resp = requests.get(media_url, headers=headers, verify=False)
                     print(f"Intento {attempt} Status: {media_resp.status_code}")
                     if media_resp.status_code == 200:
                         media_data = media_resp.json()
