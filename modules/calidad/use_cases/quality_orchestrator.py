@@ -585,15 +585,52 @@ def run_quality_process_flow(
             os.environ["TERADATA_HOST"] = host
             os.environ["TERADATA_LOGMECH"] = logmech
             
+            downloaded_verint_files = []
+            
+            # 1. Intentar primero por API REST de Verint (ultrarrápida sin navegador)
             try:
-                downloaded_verint_files = download_verint_data(
-                    period=period_str,
-                    headless=True,
-                    progress_callback=progress_callback,
-                    output_dir=INPUT_PROCESO_CALIDAD_DIR
+                if progress_callback:
+                    progress_callback("⚡ Intentando descarga ultrarrápida de Verint vía API REST...", "info")
+                from modules.verint.services.verint_api_client import VerintAPIClient
+                from infrastructure.scrapers.verint_downloader import find_input_csv
+                
+                csv_path = find_input_csv(period_str)
+                anio_p = int(period_str[:4])
+                mes_p = int(period_str[4:6])
+                m_next = 1 if mes_p == 12 else mes_p + 1
+                y_next = anio_p + 1 if mes_p == 12 else anio_p
+                from_iso = f"{anio_p:04d}-{mes_p:02d}-01T00:00:00.000"
+                to_iso = f"{y_next:04d}-{m_next:02d}-01T00:00:00.000"
+                
+                api_client = VerintAPIClient(username=verint_user, password=verint_password)
+                res_file = api_client.export_televentas_period(
+                    from_iso=from_iso,
+                    to_iso=to_iso,
+                    csv_filepath=csv_path,
+                    output_dir=INPUT_PROCESO_CALIDAD_DIR,
+                    poll_interval_seconds=15,
+                    timeout_minutes=15
                 )
-            except Exception as err:
-                raise RuntimeError(f"Fallo crítico al descargar datos de Verint: {err}")
+                if res_file:
+                    downloaded_verint_files = [f.strip() for f in res_file.split(",") if f.strip() and os.path.exists(f.strip())]
+                    if progress_callback:
+                        progress_callback(f"⚡ ¡Descarga vía API de Verint completada exitosamente ({len(downloaded_verint_files)} archivo(s))!", "success")
+            except Exception as api_err:
+                logger.warning(f"Descarga por API de Verint falló ({api_err}). Conmutando a Scraper UI de respaldo...")
+                if progress_callback:
+                    progress_callback("⚠️ Fallo en API REST de Verint. Conmutando a Scraper UI de respaldo...", "warning")
+
+            # 2. Si la API no trajo archivos o falló, fallback al Scraper UI de Playwright (legado)
+            if not downloaded_verint_files:
+                try:
+                    downloaded_verint_files = download_verint_data(
+                        period=period_str,
+                        headless=True,
+                        progress_callback=progress_callback,
+                        output_dir=INPUT_PROCESO_CALIDAD_DIR
+                    )
+                except Exception as err:
+                    raise RuntimeError(f"Fallo crítico al descargar datos de Verint (API y Scraper UI fallaron): {err}")
                 
         if not downloaded_verint_files:
             raise ValueError("No se obtuvieron archivos desde la descarga de Verint.")
