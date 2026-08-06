@@ -403,6 +403,21 @@ class GenesysBrowserAutomation:
 
         return False
 
+    @staticmethod
+    def _calcular_duracion_conversacion(conv: dict) -> float:
+        """Calcula la duración total en segundos de una conversación usando conversationStart y conversationEnd."""
+        try:
+            start_str = conv.get("conversationStart")
+            end_str = conv.get("conversationEnd")
+            if start_str and end_str:
+                from datetime import datetime
+                t_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                t_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                return (t_end - t_start).total_seconds()
+        except Exception:
+            pass
+        return 0.0
+
     def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str) -> bool:
         """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
         logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
@@ -460,6 +475,13 @@ class GenesysBrowserAutomation:
                     self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
                     self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
                     continue
+
+                # Si hay múltiples llamadas con ACEPTA CAMPAÑA, seleccionar la de mayor duración
+                if len(candidatas) > 1:
+                    candidatas.sort(key=self._calcular_duracion_conversacion, reverse=True)
+                    dur_max = self._calcular_duracion_conversacion(candidatas[0])
+                    logger.info(f"Se hallaron {len(candidatas)} llamadas 'ACEPTA CAMPAÑA'. Seleccionando la de mayor duración ({dur_max/60:.1f} min)...")
+                    candidatas = [candidatas[0]]
 
                 nombre_base = sol.nombre_archivo
                 descargas_exitosas = 0
