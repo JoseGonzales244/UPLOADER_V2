@@ -488,7 +488,7 @@ class GenesysBrowserAutomation:
                     media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
 
                     download_link = None
-                    for attempt in range(1, 6):
+                    for attempt in range(1, 16):
                         m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
                         if m_resp.status_code in [200, 202]:
                             try:
@@ -508,6 +508,25 @@ class GenesysBrowserAutomation:
                             except Exception:
                                 pass
                         time.sleep(2)
+
+                    # Si transcodificación directa demoró, intentar Batch Request API como respaldo
+                    if not download_link:
+                        try:
+                            batch_url = "https://api.mypurecloud.com/api/v2/recording/batchrequests"
+                            b_resp = requests.post(batch_url, headers=headers, json={"conversationIds": [conv_id]}, verify=False, timeout=15)
+                            if b_resp.status_code in [200, 202]:
+                                job_id = b_resp.json().get("id")
+                                if job_id:
+                                    for _ in range(1, 8):
+                                        time.sleep(2)
+                                        j_resp = requests.get(f"{batch_url}/{job_id}", headers=headers, verify=False, timeout=15)
+                                        if j_resp.status_code == 200:
+                                            res = j_resp.json().get("results", [])
+                                            if res and res[0].get("mediaResultUrl"):
+                                                download_link = res[0].get("mediaResultUrl")
+                                                break
+                        except Exception as e_b:
+                            logger.warning(f"Fallback Batch API no disponible: {e_b}")
 
                     if not download_link:
                         logger.warning(f"No se obtuvo el enlace de descarga MP3 para {conv_id}")
