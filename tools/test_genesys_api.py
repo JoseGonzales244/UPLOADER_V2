@@ -248,23 +248,37 @@ def ejecutar_test_especifico():
             continue
 
         rec_id = recs[0].get("id")
+        print(f"\nRecording ID encontrado: {rec_id}")
         media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
 
         download_link = None
         for attempt in range(1, 6):
             m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
-            if m_resp.status_code == 200:
-                m_uris = m_resp.json().get("mediaUris", {})
-                if "S" in m_uris:
-                    download_link = m_uris["S"].get("mediaUri")
-                else:
-                    for v in m_uris.values():
-                        if isinstance(v, dict) and "mediaUri" in v:
-                            download_link = v.get("mediaUri")
-                            break
-                break
-            elif m_resp.status_code == 202:
-                time.sleep(2)
+            print(f"Intento descarga {attempt} Status: {m_resp.status_code}")
+            if m_resp.status_code in [200, 202]:
+                try:
+                    m_data = m_resp.json()
+                    print(f"--- JSON devuelto por media_resp (Status {m_resp.status_code}) ---")
+                    print(json.dumps(m_data, indent=2, ensure_ascii=False))
+                    
+                    m_uris = m_data.get("mediaUris", {})
+                    if "S" in m_uris:
+                        download_link = m_uris["S"].get("mediaUri")
+                    elif m_data.get("mediaUri"):
+                        download_link = m_data.get("mediaUri")
+                    else:
+                        for v in m_uris.values():
+                            if isinstance(v, dict) and "mediaUri" in v:
+                                download_link = v.get("mediaUri")
+                                break
+                    if download_link:
+                        break
+                except Exception as e_json:
+                    print(f"Error parseando JSON: {e_json} | Texto: {m_resp.text[:300]}")
+            else:
+                print(f"Error respuesta media_url: {m_resp.text[:300]}")
+                
+            time.sleep(2)
 
         if not download_link:
             print(f"❌ No se generó la URL de descarga para {conv_id}")
