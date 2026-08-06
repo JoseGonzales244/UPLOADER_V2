@@ -420,6 +420,73 @@ class GenesysBrowserAutomation:
             pass
         return 0.0
 
+    def _obtener_user_id_por_matricula(self, token: str, reg_ev: str) -> Optional[str]:
+        """Resuelve el userId GUID de un promotor/ejecutivo (activo o inactivo) en Genesys Cloud."""
+        if not reg_ev or not str(reg_ev).strip():
+            return None
+
+        val = str(reg_ev).strip()
+        if re.match(r'^[0-9a-fA-F-]{36}$', val):
+            return val
+
+        if not hasattr(self, "_user_id_cache"):
+            self._user_id_cache = {}
+
+        if val in self._user_id_cache:
+            return self._user_id_cache[val]
+
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
+
+        # 1. Intentar búsqueda rápida vía POST /users/search (para usuarios activos)
+        try:
+            search_url = "https://api.mypurecloud.com/api/v2/users/search"
+            search_payload = {
+                "query": [
+                    {"fields": ["name", "username", "email"], "type": "CONTAINS", "value": val}
+                ]
+            }
+            resp = requests.post(search_url, headers=headers, json=search_payload, verify=False, timeout=10)
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                if results:
+                    user_id = results[0].get("id")
+                    if user_id:
+                        self._user_id_cache[val] = user_id
+                        logger.info(f"✓ UserId resuelto vía /users/search para '{val}': {user_id}")
+                        return user_id
+        except Exception as e:
+            logger.debug(f"Error en /users/search para '{val}': {e}")
+
+        # 2. Si es un ejecutivo inactivo, /users/search retorna 0 resultados. Consultar GET /users?state=inactive
+        try:
+            logger.info(f"Buscando ejecutivos inactivos en Genesys para '{val}'...")
+            page_num = 1
+            while page_num <= 5:
+                get_url = f"https://api.mypurecloud.com/api/v2/users?state=inactive&pageSize=100&pageNumber={page_num}"
+                resp = requests.get(get_url, headers=headers, verify=False, timeout=10)
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                entities = data.get("entities", [])
+                for u in entities:
+                    u_name = u.get("name", "").upper()
+                    u_username = u.get("username", "").upper()
+                    u_email = u.get("email", "").upper()
+                    target_val = val.upper()
+                    if target_val in u_name or target_val in u_username or target_val in u_email:
+                        user_id = u.get("id")
+                        if user_id:
+                            self._user_id_cache[val] = user_id
+                            logger.info(f"✓ UserId de ejecutivo inactivo localizado para '{val}': {user_id} ({u.get('name')})")
+                            return user_id
+                if page_num >= data.get("pageCount", 1):
+                    break
+                page_num += 1
+        except Exception as e:
+            logger.warning(f"Error consultando usuarios inactivos para '{val}': {e}")
+
+        return None
+
     def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str) -> bool:
         """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
         logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
@@ -446,7 +513,23 @@ class GenesysBrowserAutomation:
                 y_next = anio_n + 1 if mes_n == 12 else anio_n
                 intervalo = f"{anio_n:04d}-{mes_n:02d}-01T05:00:00.000Z/{y_next:04d}-{m_next:02d}-01T05:00:00.000Z"
 
+            user_id = self._obtener_user_id_por_matricula(token, sol.reg_ev) if sol.reg_ev else None
+
             segment_filters = []
+            if user_id:
+                logger.info(f"  Filtro userId GUID aplicado: {user_id} para {sol.reg_ev}")
+                segment_filters.append({
+                    "type": "or",
+                    "predicates": [
+                        {
+                            "type": "dimension",
+                            "dimension": "userId",
+                            "operator": "matches",
+                            "value": user_id
+                        }
+                    ]
+                })
+
             if sol.telefonos:
                 dnis_preds = [{"dimension": "dnis", "value": str(tlf).strip()} for tlf in sol.telefonos if str(tlf).strip()]
                 if dnis_preds:
@@ -458,14 +541,43 @@ class GenesysBrowserAutomation:
             payload = {
                 "order": "desc",
                 "orderBy": "conversationStart",
-                "paging": {"pageSize": 50, "pageNumber": 1},
+                "paging": {"pageSize": 100, "pageNumber": 1},
                 "interval": intervalo,
                 "segmentFilters": segment_filters
             }
 
             try:
                 resp = requests.post(api_query_url, headers=headers, json=payload, verify=False, timeout=15)
-                if resp.status_code != 200:
+                conversations = []
+                if resp.status_code == 200:
+                    conversations = resp.json().get("conversations", [])
+
+                if not conversations and user_id and sol.telefonos:
+                    logger.info(f"  Sin resultados combinados. Reintentando exclusivamente por userId GUID ({user_id})...")
+                    fallback_payload = {
+                        "order": "desc",
+                        "orderBy": "conversationStart",
+                        "paging": {"pageSize": 100, "pageNumber": 1},
+                        "interval": intervalo,
+                        "segmentFilters": [
+                            {
+                                "type": "or",
+                                "predicates": [
+                                    {
+                                        "type": "dimension",
+                                        "dimension": "userId",
+                                        "operator": "matches",
+                                        "value": user_id
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                    resp_fb = requests.post(api_query_url, headers=headers, json=fallback_payload, verify=False, timeout=15)
+                    if resp_fb.status_code == 200:
+                        conversations = resp_fb.json().get("conversations", [])
+
+                if resp.status_code != 200 and not conversations:
                     logger.warning(f"Error consultando API para DNI {sol.dni}: Status {resp.status_code}")
                     continue
 
