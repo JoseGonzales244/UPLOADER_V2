@@ -76,20 +76,24 @@ class GenesysBrowserAutomation:
         logger.warning("Chrome fue ejecutado pero no respondió a tiempo en el puerto CDP.")
         return False
 
-    def _obtener_page_principal(self, browser) -> Optional[Page]:
-        if not browser or not browser.contexts:
+    def _obtener_page_principal(self, browser_or_context) -> Optional[Page]:
+        if not browser_or_context:
             return None
-        for ctx in browser.contexts:
-            for pg in ctx.pages:
+        contexts = getattr(browser_or_context, "contexts", [browser_or_context] if hasattr(browser_or_context, "pages") else [])
+        for ctx in contexts:
+            for pg in getattr(ctx, "pages", []):
                 try:
-                    if "/analytics/interactions" in pg.url or "purecloud" in pg.url or "genesys" in pg.url:
+                    if not pg.is_closed() and "/admin" not in pg.url and ("analytics/interactions" in pg.url or "purecloud" in pg.url or "genesys" in pg.url):
                         return pg
                 except Exception:
                     continue
-        # Retornar la primera pestaña si ninguna coincide
-        for ctx in browser.contexts:
-            if ctx.pages:
-                return ctx.pages[0]
+        for ctx in contexts:
+            for pg in getattr(ctx, "pages", []):
+                try:
+                    if not pg.is_closed() and "/admin" not in pg.url:
+                        return pg
+                except Exception:
+                    continue
         return None
 
     def _localizar_iframe(self, page: Page, key_url: str, max_intentos: int = 10) -> Optional[Frame]:

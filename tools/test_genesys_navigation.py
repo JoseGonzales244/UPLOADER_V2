@@ -130,11 +130,20 @@ def ejecutar_test_navegacion():
 
         # 7. Cerrar pestaña de detalle y regresar a la pestaña principal
         logger.info("Cerrando pestaña secundaria de detalle...")
-        detalle_page.close()
+        if detalle_page and not detalle_page.is_closed():
+            detalle_page.close()
 
-        logger.info("Volviendo a la pestaña de origen (bring_to_front)...")
-        page.bring_to_front()
-        page.wait_for_timeout(1500)
+        logger.info("Recuperando la pestaña de origen activa...")
+        page_principal = automation._obtener_page_principal(browser or context)
+        if page_principal and not page_principal.is_closed():
+            try:
+                page_principal.bring_to_front()
+                page_principal.wait_for_timeout(1500)
+                logger.info("✓ Pestaña de origen enfocada exitosamente.")
+            except Exception as e:
+                logger.warning(f"No se pudo traer la pestaña al frente: {e}")
+        else:
+            logger.warning("No se encontró la pestaña principal activa. Re-evaluando contexto...")
 
         # 8. Validar la persistencia del estado en la página principal
         logger.info("Verificando persistencia del estado de filtros en la página de origen...")
