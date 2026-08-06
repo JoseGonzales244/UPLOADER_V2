@@ -133,7 +133,11 @@ class GenesysBrowserAutomation:
         try:
             btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
             btn = analytics_frame.locator(btn_selector).first
-            if not btn.is_visible():
+            
+            # Esperar a que el botón sea visible (hasta 20 segundos) mientras se hidrata la SPA
+            try:
+                btn.wait_for(state="visible", timeout=20000)
+            except Exception:
                 btn = analytics_frame.locator(SELECTORS.get("date_filter_btn_alt", 'button[aria-label*="cambiar fecha seleccionada"]')).first
 
             if not btn.is_visible():
@@ -229,15 +233,22 @@ class GenesysBrowserAutomation:
             analytics_frame.wait_for_timeout(1200)
         logger.info(f"{len(telefonos)} teléfono(s) ingresados como DNIS.")
 
-    def _esperar_y_contar_filas(self, analytics_frame: Frame, max_reintentos: int = 3) -> int:
-        analytics_frame.wait_for_timeout(2000)
+    def _esperar_y_contar_filas(self, analytics_frame: Frame, max_reintentos: int = 15) -> int:
+        try:
+            analytics_frame.locator(SELECTORS.get("loading_spinner", "gux-page-loading-spinner")).wait_for(state="hidden", timeout=25000)
+        except Exception:
+            pass
+
         filas = analytics_frame.locator(SELECTORS["action_rows"])
         for intento in range(max_reintentos):
-            cantidad = filas.count()
-            logger.info(f"Filas encontradas: {cantidad} (intento {intento + 1}/{max_reintentos})")
-            if cantidad > 0:
-                return cantidad
-            analytics_frame.wait_for_timeout(1000)
+            try:
+                cantidad = filas.count()
+                if cantidad > 0:
+                    logger.info(f"✓ Filas encontradas: {cantidad} (intento {intento + 1}/{max_reintentos})")
+                    return cantidad
+            except Exception:
+                pass
+            analytics_frame.wait_for_timeout(2000)
         return 0
 
     def _convertir_duracion_segundos(self, dur_text: str) -> int:

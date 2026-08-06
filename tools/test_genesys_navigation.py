@@ -86,10 +86,13 @@ def ejecutar_test_navegacion():
 
         # 3. Localizar iframe de analytics
         logger.info("Localizando iframe 'analytics-ui'...")
-        analytics_frame = automation._localizar_iframe(page, SELECTORS["analytics_iframe_url"], max_intentos=15)
+        analytics_frame = automation._localizar_iframe(page, SELECTORS["analytics_iframe_url"], max_intentos=20)
         if not analytics_frame:
             logger.error("❌ No se pudo encontrar el iframe 'analytics-ui'.")
             return
+
+        logger.info("Esperando hidratación completa de componentes Web (5 segundos)...")
+        analytics_frame.wait_for_timeout(5000)
 
         # 4. Verificar y aplicar filtro de fecha
         automation._asegurar_panel_filtros_abierto(analytics_frame)
@@ -97,7 +100,7 @@ def ejecutar_test_navegacion():
 
         # 5. Esperar filas de interacciones
         logger.info("Buscando interacciones disponibles en la lista...")
-        cantidad = automation._esperar_y_contar_filas(analytics_frame, max_reintentos=5)
+        cantidad = automation._esperar_y_contar_filas(analytics_frame, max_reintentos=15)
         if cantidad == 0:
             logger.warning("No hay filas visibles en la tabla actual de interacciones.")
             logger.info("Sugerencia: Ingrese un filtro manual o borre filtros para tener al menos 1 interacción.")
