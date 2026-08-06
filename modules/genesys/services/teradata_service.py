@@ -41,10 +41,10 @@ class TeradataService:
                         dni_zero = str(dni).strip().zfill(8)
 
                         query = f"""
-                            SELECT DISTINCT CODDISCADO
+                            SELECT DISTINCT NUMTELEFONO
                             FROM E_DW_VIEWS.V_CONT_TELEFONO_APICLIENTE
                             WHERE CODDOC = '{dni_zero}'
-                              AND CODDISCADO IS NOT NULL
+                              AND NUMTELEFONO IS NOT NULL
                         """
 
                         try:
