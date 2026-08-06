@@ -342,7 +342,13 @@ class GenesysBrowserAutomation:
             pass
 
         if not token_holder["token"]:
-            page.wait_for_timeout(timeout_ms)
+            try:
+                # Si la página llevaba horas estática, recargar gatilla las peticiones HTTP con Authorization: Bearer
+                logger.info("Solicitando recarga ligera para forzar emisión de Bearer Token...")
+                page.reload(wait_until="domcontentloaded", timeout=10000)
+                page.wait_for_timeout(2000)
+            except Exception:
+                page.wait_for_timeout(timeout_ms)
 
         return token_holder["token"]
 
