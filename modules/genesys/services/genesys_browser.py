@@ -12,10 +12,7 @@ from playwright.sync_api import Frame, Page, sync_playwright
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from modules.genesys.config import (
-    CDP_URL, DOWNLOADS_DIR, GENESYS_URL, ONEDRIVE_SOLICITUDES_DIR, PROFILE_DIR, SELECTORS,
-    TIMEOUT_DEFAULT, TIMEOUT_DETAILS_LOAD, obtener_o_crear_carpeta_destino
-)
+from modules.genesys.config import CDP_URL, DOWNLOADS_DIR, GENESYS_URL, PROFILE_DIR, SELECTORS, TIMEOUT_DEFAULT, TIMEOUT_DETAILS_LOAD
 from modules.genesys.logger import get_logger
 from modules.genesys.models import EstadoRegistro, SolicitudAudio
 from modules.genesys.storage.tracking_store import TrackingStore
@@ -382,12 +379,6 @@ class GenesysBrowserAutomation:
         }
         api_query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
 
-        # Determinar carpeta de destino en OneDrive reutilizando existentes (evitando v2, v3, v4)
-        prefijo_sol = solicitudes[0].prefijo if solicitudes and hasattr(solicitudes[0], 'prefijo') else 'AUDIO'
-        sugerencia_carpeta = f"Solicitud de Audios - Salas {prefijo_sol}" if prefijo_sol != "AUDIO" else "Solicitud de Audios"
-        carpeta_onedrive = obtener_o_crear_carpeta_destino(sugerencia_carpeta)
-        logger.info(f"📁 Destino de respaldo OneDrive (reutilizando carpeta): {carpeta_onedrive}")
-
         for idx, sol in enumerate(solicitudes, 1):
             logger.info(f"--- [API REST {idx}/{len(solicitudes)}] Promotor: {sol.reg_ev} | DNI: {sol.dni} ---")
             
@@ -477,14 +468,6 @@ class GenesysBrowserAutomation:
                             for chunk in audio_resp.iter_content(chunk_size=8192):
                                 f.write(chunk)
                         logger.info(f"✓ MP3 guardado en Downloads: {archivo_mp3}")
-                        
-                        # Copiar automáticamente a OneDrive reutilizando carpeta existente (sin v2, v3)
-                        try:
-                            destino_onedrive = carpeta_onedrive / f"{nombre_mp3}.mp3"
-                            shutil.copy2(archivo_mp3, destino_onedrive)
-                            logger.info(f"✓ MP3 copiado a OneDrive: {destino_onedrive}")
-                        except Exception as e_copy:
-                            logger.warning(f"No se pudo copiar a OneDrive: {e_copy}")
                     else:
                         logger.error(f"Error descargando stream MP3: Status {audio_resp.status_code}")
 
