@@ -311,10 +311,10 @@ def obtener_solicitudes_outlook(asunto_filtro="Solicitud de audio", solo_ultimo=
             cuerpo = getattr(item, 'HTMLBody', '') or getattr(item, 'Body', '') or ''
             regs = []
             if cuerpo:
-                regs = parsear_cuerpo_html(cuerpo, prefijo=prefijo)
+                regs.extend(parsear_cuerpo_html(cuerpo, prefijo=prefijo))
 
-            if not regs and getattr(item, 'Attachments', None) and item.Attachments.Count > 0:
-                regs = parsear_adjunto_excel(item, temp_dir, prefijo=prefijo)
+            if getattr(item, 'Attachments', None) and item.Attachments.Count > 0:
+                regs.extend(parsear_adjunto_excel(item, temp_dir, prefijo=prefijo))
 
             if not regs:
                 print(f"No se encontraron registros parseables en el correo: {subject}")

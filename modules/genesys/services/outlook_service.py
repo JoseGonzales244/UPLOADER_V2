@@ -273,18 +273,27 @@ class OutlookService:
                         cuerpo = getattr(item, "HTMLBody", "") or getattr(item, "Body", "") or ""
                         regs = []
                         if cuerpo:
-                            regs = self.parsear_cuerpo_html(cuerpo, prefijo=prefijo)
+                            regs.extend(self.parsear_cuerpo_html(cuerpo, prefijo=prefijo))
 
-                        if not regs:
-                            regs = self.parsear_adjuntos(item, temp_dir, prefijo=prefijo)
+                        if getattr(item, "Attachments", None) and item.Attachments.Count > 0:
+                            regs.extend(self.parsear_adjuntos(item, temp_dir, prefijo=prefijo))
+
+                        # Deduplicar dentro del correo
+                        regs_unicos = []
+                        seen = set()
+                        for r in regs:
+                            k = r.clave_unica
+                            if k not in seen:
+                                seen.add(k)
+                                regs_unicos.append(r)
 
                         correos_info.append({
                             "index": count,
                             "asunto": subject,
                             "remitente": sender,
                             "fecha": fecha_str,
-                            "solicitudes": regs,
-                            "cant_registros": len(regs)
+                            "solicitudes": regs_unicos,
+                            "cant_registros": len(regs_unicos)
                         })
                     except Exception as e:
                         logger.error(f"Error procesando correo en vista previa: {e}")
@@ -350,10 +359,10 @@ class OutlookService:
                 cuerpo = getattr(item, "HTMLBody", "") or getattr(item, "Body", "") or ""
                 regs = []
                 if cuerpo:
-                    regs = self.parsear_cuerpo_html(cuerpo, prefijo=prefijo)
+                    regs.extend(self.parsear_cuerpo_html(cuerpo, prefijo=prefijo))
 
-                if not regs:
-                    regs = self.parsear_adjuntos(item, temp_dir, prefijo=prefijo)
+                if getattr(item, "Attachments", None) and item.Attachments.Count > 0:
+                    regs.extend(self.parsear_adjuntos(item, temp_dir, prefijo=prefijo))
 
                 todas_las_solicitudes.extend(regs)
 
