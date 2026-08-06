@@ -326,7 +326,10 @@ class GenesysBrowserAutomation:
 
                     if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
                         try:
-                            page.goto(self.genesys_url)
+                            origin = page.url.split("/directory")[0] if "/directory" in page.url else self.genesys_url.split("/directory")[0]
+                            target_url = f"{origin}/directory/#/analytics/interactions"
+                            logger.info(f"Navegando a la vista de Interacciones ({target_url})...")
+                            page.goto(target_url)
                             time.sleep(2)
                         except Exception:
                             pass
