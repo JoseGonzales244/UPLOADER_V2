@@ -1,110 +1,175 @@
 import requests
 import json
 import urllib3
+import os
+import re
+import time
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-# Deshabilitar advertencias de SSL debido al Proxy/Inspección SSL de la red corporativa
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-TOKEN = "Q380dsnrpdyzT8hEhpYbEXdyBCwamAjZwxQytuIMmbAnYJ1KneO4ZqYCsshD28XB4nqhuG0k7zpe46PmUJVjrg"
-URL = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
+DOWNLOADS_DIR = Path.home() / "Downloads"
+CDP_URL = "http://localhost:9222"
 
-headers = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": "application/json",
-    "accept": "*/*"
-}
+def extraer_bearer_token():
+    print("Conectando a Chrome vía CDP para capturar Bearer Token...")
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(CDP_URL)
+            context = browser.contexts[0]
+            page = context.pages[0] if context.pages else context.new_page()
+            
+            token_box = {"token": None}
+            def _on_req(req):
+                auth = req.headers.get("authorization", "")
+                if auth.startswith("Bearer ") and len(auth) > 20:
+                    token_box["token"] = auth.replace("Bearer ", "").strip()
 
-payload = {
-    "order": "desc",
-    "orderBy": "conversationStart",
-    "paging": {
-        "pageSize": 10,
-        "pageNumber": 1
-    },
-    "interval": "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z",
-    "segmentFilters": [
-        {
-            "type": "or",
-            "predicates": [
-                {"dimension": "direction", "value": "inbound"},
-                {"dimension": "direction", "value": "outbound"}
-            ]
-        }
-    ],
-    "conversationFilters": [],
-    "evaluationFilters": [],
-    "surveyFilters": []
-}
+            page.on("request", _on_req)
+            page.wait_for_timeout(2000)
+            
+            if not token_box["token"]:
+                try:
+                    token_js = page.evaluate("""() => {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            let k = localStorage.key(i);
+                            let v = localStorage.getItem(k);
+                            if (v && v.includes("Bearer ")) return v.split("Bearer ")[1].split('"')[0].trim();
+                        }
+                        return null;
+                    }""")
+                    if token_js and len(token_js) > 20:
+                        token_box["token"] = token_js
+                except Exception:
+                    pass
 
-print("Enviando consulta a la API de Genesys Cloud...")
-resp = requests.post(URL, headers=headers, json=payload, verify=False)
-print(f"Respuesta HTTP Status: {resp.status_code}")
+            return token_box["token"]
+        except Exception as e:
+            print(f"Error conectando a Chrome CDP: {e}")
+            return None
 
-if resp.status_code == 200:
-    data = resp.json()
-    conversations = data.get("conversations", [])
-    print(f"[OK] Total conversaciones devueltas: {len(conversations)}")
+def ejecutar_test_especifico():
+    token = extraer_bearer_token()
+    if not token:
+        print("❌ No se pudo capturar el Bearer Token. Asegúrate de tener Chrome abierto con Genesys.")
+        return
+
+    print("✓ Bearer Token capturado correctamente.")
+
+    # 1. Cargar catálogo de wrapup codes
+    print("Cargando catálogo de wrapUp codes de Genesys...")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
+    catalog = {}
+    cat_resp = requests.get("https://api.mypurecloud.com/api/v2/routing/wrapupcodes?pageSize=500", headers=headers, verify=False, timeout=15)
+    if cat_resp.status_code == 200:
+        for e in cat_resp.json().get("entities", []):
+            if "id" in e and "name" in e:
+                catalog[e["id"]] = e["name"]
+        print(f"✓ Catálogo cargado: {len(catalog)} wrapUp codes.")
+
+    # 2. Datos del test específico del usuario
+    reg_ev = "B44255"
+    dni = "09076261"
+    telefonos = ["965774357", "5812697", "995084684"]
+    nombre_archivo = f"TC_{reg_ev}_DNI{dni}_20260715"
+
+    print(f"\n--- Probando consulta API para DNI {dni} (Teléfonos: {telefonos}) ---")
     
-    if conversations:
-        conv = conversations[0]
-        conv_id = conv.get("conversationId")
-        print(f"\nConsultando grabaciones de la interacción: {conv_id}")
-        rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
-        rec_resp = requests.get(rec_url, headers=headers, verify=False)
-        print(f"List Recordings Status: {rec_resp.status_code}")
-        
-        if rec_resp.status_code == 200:
-            recordings = rec_resp.json()
-            print(f"[OK] Grabaciones obtenidas: {len(recordings)}")
-            for r in recordings:
-                rec_id = r.get("id")
-                print(f"\nSolicitando URL de descarga MP3 para Recording ID: {rec_id}...")
-                media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
-                
-                for attempt in range(1, 6):
-                    media_resp = requests.get(media_url, headers=headers, verify=False)
-                    print(f"Intento {attempt} Status: {media_resp.status_code}")
-                    if media_resp.status_code == 200:
-                        media_data = media_resp.json()
-                        media_uris = media_data.get("mediaUris", {})
-                        
-                        # Extraer mediaUri de la clave 'S' o primer valor disponible
-                        download_url = None
-                        if "S" in media_uris:
-                            download_url = media_uris["S"].get("mediaUri")
-                        else:
-                            for k, v in media_uris.items():
-                                if isinstance(v, dict) and "mediaUri" in v:
-                                    download_url = v.get("mediaUri")
-                                    break
+    dnis_preds = [{"dimension": "dnis", "value": tlf} for tlf in telefonos]
+    payload = {
+        "order": "desc",
+        "orderBy": "conversationStart",
+        "paging": {"pageSize": 50, "pageNumber": 1},
+        "interval": "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z",
+        "segmentFilters": [{"type": "or", "predicates": dnis_preds}]
+    }
 
-                        if download_url:
-                            print(f"\n[ÉXITO] URL de descarga directa obtenida:")
-                            print(download_url[:120] + "...")
-                            
-                            output_filename = f"TEST_AUDIO_{conv_id[:8]}.mp3"
-                            print(f"\nDescargando archivo MP3 a '{output_filename}'...")
-                            
-                            audio_resp = requests.get(download_url, verify=False, stream=True)
-                            if audio_resp.status_code == 200:
-                                with open(output_filename, "wb") as f:
-                                    for chunk in audio_resp.iter_content(chunk_size=8192):
-                                        f.write(chunk)
-                                full_path = os.path.abspath(output_filename)
-                                file_size = os.path.getsize(full_path)
-                                print(f"\n[¡ÉXITO TOTAL!] Archivo MP3 descargado y guardado correctamente.")
-                                print(f"Ruta completa en tu laptop: {full_path}")
-                                print(f"Tamaño del archivo: {file_size / 1024:.2f} KB ({file_size} bytes)")
-                            else:
-                                print(f"❌ Error descargando MP3: Status {audio_resp.status_code}")
-                        else:
-                            print("❌ No se encontró el campo 'mediaUri' dentro de 'mediaUris'.")
-                        break
-                    elif media_resp.status_code == 202:
-                        import time
-                        time.sleep(2)
-                    else:
-                        print(f"Error: {media_resp.text[:300]}")
-                        break
-else:
-    print(f"Error en API: {resp.text[:500]}")
+    query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
+    resp = requests.post(query_url, headers=headers, json=payload, verify=False, timeout=15)
+    print(f"Status respuesta consulta: {resp.status_code}")
+
+    if resp.status_code != 200:
+        print(f"❌ Error en API: {resp.text[:300]}")
+        return
+
+    conversations = resp.json().get("conversations", [])
+    print(f"Conversaciones encontradas para esos teléfonos: {len(conversations)}")
+
+    # 3. Filtrar conversaciones ACEPTA CAMPAÑA
+    candidatas = []
+    for c in conversations:
+        conv_id = c.get("conversationId")
+        wrapup_names = []
+        for p in c.get("participants", []):
+            for s in p.get("sessions", []):
+                for seg in s.get("segments", []):
+                    if seg.get("segmentType") == "wrapup":
+                        w_code = seg.get("wrapUpCode", "")
+                        w_name = seg.get("wrapUpName", "")
+                        resolved = catalog.get(w_code, w_name or w_code or "")
+                        wrapup_names.append(resolved)
+
+        es_negativa = any("NO ACEPTA" in str(w).upper() or "RECHAZA" in str(w).upper() for w in wrapup_names)
+        es_acepta = any("ACEPTA" in str(w).upper() for w in wrapup_names)
+
+        if es_acepta and not es_negativa:
+            candidatas.append((c, wrapup_names))
+            print(f"  [VÁLIDA] Conv ID={conv_id} | WrapUp={wrapup_names}")
+        else:
+            print(f"  [DESCARTADA] Conv ID={conv_id} | WrapUp={wrapup_names}")
+
+    print(f"\nTotal llamadas válidas ACEPTA CAMPAÑA: {len(candidatas)}")
+
+    # 4. Descargar MP3 de las llamadas válidas
+    for sub_idx, (conv, wrapups) in enumerate(candidatas, 1):
+        conv_id = conv.get("conversationId")
+        print(f"\nDescargando audio para Conv ID: {conv_id}...")
+        
+        rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
+        rec_resp = requests.get(rec_url, headers=headers, verify=False, timeout=15)
+        if rec_resp.status_code != 200 or not rec_resp.json():
+            print(f"❌ No se obtuvieron grabaciones para {conv_id}")
+            continue
+
+        rec_id = rec_resp.json()[0].get("id")
+        media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
+
+        download_link = None
+        for attempt in range(1, 6):
+            m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
+            if m_resp.status_code == 200:
+                m_uris = m_resp.json().get("mediaUris", {})
+                if "S" in m_uris:
+                    download_link = m_uris["S"].get("mediaUri")
+                else:
+                    for v in m_uris.values():
+                        if isinstance(v, dict) and "mediaUri" in v:
+                            download_link = v.get("mediaUri")
+                            break
+                break
+            elif m_resp.status_code == 202:
+                time.sleep(2)
+
+        if not download_link:
+            print(f"❌ No se generó la URL de descarga para {conv_id}")
+            continue
+
+        nombre_mp3 = f"{nombre_archivo}_P{sub_idx:02d}.mp3" if len(candidatas) > 1 else f"{nombre_archivo}.mp3"
+        archivo_salida = DOWNLOADS_DIR / nombre_mp3
+
+        audio_resp = requests.get(download_link, verify=False, stream=True, timeout=60)
+        if audio_resp.status_code == 200:
+            with open(archivo_salida, "wb") as f:
+                for chunk in audio_resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"==================================================")
+            print(f"  ¡PRUEBA EXITOSA! AUDIO MP3 DESCARGADO    ")
+            print(f"  Ruta: {archivo_salida.resolve()}")
+            print(f"  Tamaño: {os.path.getsize(archivo_salida) / 1024:.2f} KB")
+            print(f"==================================================")
+        else:
+            print(f"❌ Error descargando audio MP3: Status {audio_resp.status_code}")
+
+if __name__ == "__main__":
+    ejecutar_test_especifico()
