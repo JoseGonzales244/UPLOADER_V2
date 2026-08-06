@@ -66,8 +66,35 @@ if resp.status_code == 200:
                     print(f"Intento {attempt} Status: {media_resp.status_code}")
                     if media_resp.status_code == 200:
                         media_data = media_resp.json()
-                        print("\n[OK] Respuesta JSON completa del endpoint de grabación:")
-                        print(json.dumps(media_data, indent=2, ensure_ascii=False))
+                        media_uris = media_data.get("mediaUris", {})
+                        
+                        # Extraer mediaUri de la clave 'S' o primer valor disponible
+                        download_url = None
+                        if "S" in media_uris:
+                            download_url = media_uris["S"].get("mediaUri")
+                        else:
+                            for k, v in media_uris.items():
+                                if isinstance(v, dict) and "mediaUri" in v:
+                                    download_url = v.get("mediaUri")
+                                    break
+
+                        if download_url:
+                            print(f"\n[ÉXITO] URL de descarga directa obtenida:")
+                            print(download_url[:120] + "...")
+                            
+                            output_filename = f"TEST_AUDIO_{conv_id[:8]}.mp3"
+                            print(f"\nDescargando archivo MP3 a '{output_filename}'...")
+                            
+                            audio_resp = requests.get(download_url, verify=False, stream=True)
+                            if audio_resp.status_code == 200:
+                                with open(output_filename, "wb") as f:
+                                    for chunk in audio_resp.iter_content(chunk_size=8192):
+                                        f.write(chunk)
+                                print(f"[¡COMPLETADO!] Archivo MP3 guardado exitosamente: {output_filename}")
+                            else:
+                                print(f"❌ Error descargando MP3: Status {audio_resp.status_code}")
+                        else:
+                            print("❌ No se encontró el campo 'mediaUri' dentro de 'mediaUris'.")
                         break
                     elif media_resp.status_code == 202:
                         import time
