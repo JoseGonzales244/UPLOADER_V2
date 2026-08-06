@@ -53,18 +53,30 @@ def ejecutar_test_navegacion():
             page.goto(GENESYS_URL)
 
         # 2. Verificar sesión de login
+        def _es_url_login(url_str: str) -> bool:
+            u = url_str.lower()
+            return any(d in u for d in ["microsoftonline.com", "login.live.com", "accounts.google.com", "login.windows.net"]) or "/login" in u or "login?" in u
+
         logger.info("Verificando estado de sesión...")
-        if any(k in page.url for k in ["login", "accounts", "sso", "microsoftonline", "auth"]):
+        if _es_url_login(page.url):
             logger.info("🔑 Por favor inicie sesión en la ventana de Chrome abierta...")
             start_time = time.time()
             while time.time() - start_time < 300:
                 if page.is_closed():
                     logger.error("El navegador fue cerrado.")
                     return
-                if "analytics/interactions" in page.url and not any(k in page.url for k in ["login", "sso"]):
+                curr = page.url.lower()
+                if not _es_url_login(curr) and ("purecloud" in curr or "genesys" in curr or "mypurecloud" in curr):
                     logger.info("✓ Sesión iniciada con éxito.")
                     break
                 time.sleep(2)
+
+        if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
+            try:
+                page.goto(GENESYS_URL)
+                time.sleep(2)
+            except Exception:
+                pass
 
         page.bring_to_front()
         page.wait_for_timeout(2000)

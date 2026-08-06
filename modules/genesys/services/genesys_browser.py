@@ -303,8 +303,11 @@ class GenesysBrowserAutomation:
             # 3. Detectar si la página está en pantalla de login de Microsoft / Genesys SSO
             if page:
                 try:
-                    current_url = page.url
-                    if any(k in current_url for k in ["login", "accounts", "sso", "microsoftonline", "auth"]):
+                    def _es_url_login(url_str: str) -> bool:
+                        u = url_str.lower()
+                        return any(d in u for d in ["microsoftonline.com", "login.live.com", "accounts.google.com", "login.windows.net"]) or "/login" in u or "login?" in u
+
+                    if _es_url_login(page.url):
                         logger.info("🔑 Sesión no iniciada o token expirado en Microsoft/Genesys.")
                         logger.info("👉 Por favor complete el inicio de sesión en Chrome. (Tiempo de espera: 5 minutos)...")
                         start_time = time.time()
@@ -313,13 +316,20 @@ class GenesysBrowserAutomation:
                                 logger.warning("Navegador cerrado por el usuario.")
                                 return
                             try:
-                                if "analytics/interactions" in page.url or "purecloud" in page.url:
-                                    if not any(k in page.url for k in ["login", "sso", "microsoftonline"]):
-                                        logger.info("✅ Login completado exitosamente. Sesión persistida.")
-                                        break
+                                curr = page.url.lower()
+                                if not _es_url_login(curr) and ("purecloud" in curr or "genesys" in curr or "mypurecloud" in curr):
+                                    logger.info("✅ Login completado exitosamente. Sesión persistida.")
+                                    break
                             except Exception:
                                 pass
                             time.sleep(2)
+
+                    if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
+                        try:
+                            page.goto(self.genesys_url)
+                            time.sleep(2)
+                        except Exception:
+                            pass
                 except Exception as e:
                     logger.debug(f"Error verificando redirección de login: {e}")
 
