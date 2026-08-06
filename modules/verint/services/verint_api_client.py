@@ -486,7 +486,88 @@ class VerintAPIClient:
                         
             time.sleep(poll_interval_seconds)
             
-        raise TimeoutError(f"El reporte '{report_name}' excedió el tiempo límite de {timeout_minutes} minutos en servidor.")
+    def get_interaction_transcription_api(self, call_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene la transcripción JSON completa de una llamada por CONID (call_id) vía API REST directa.
+        Retorna la estructura deserializada con WordsSequences (Hablantes Agent/Customer, Timestamps y Texto).
+        """
+        if not self.speech_session_id:
+            self.init_speech_session(instance_id=247115)
+
+        qdi_xml = f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <QueryType>Session</QueryType>
+  <DataSource>Unified</DataSource>
+  <Direction>Full</Direction>
+  <Fields>
+    <Field xsi:type="QDIFieldExtended">
+      <Values>
+        <Value>{call_id}</Value>
+      </Values>
+      <SessionName>
+        <FieldID>5</FieldID>
+        <Name>CUSTOM_DATA_STRING</Name>
+      </SessionName>
+      <Operator>contains</Operator>
+      <FieldRelation>Segment</FieldRelation>
+    </Field>
+  </Fields>
+</QDI>"""
+
+        self.set_filter_as_search(qdi_xml, instance_id=247115)
+        contacts_res = self.get_contacts_result_set(limit=5, page=1)
+        data_obj = contacts_res.get("Data", {})
+        contacts_list = data_obj.get("Contacts", []) if isinstance(data_obj, dict) else []
+
+        if not contacts_list:
+            logger.warning(f"No se hallaron contactos en Verint para CONID='{call_id}'")
+            return None
+
+        contact = contacts_list[0]
+        db_sid = contact.get("DbsId", 247)
+        sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
+        channel_val = contact.get("Channel", 0) or contact.get("ChannelId", 0) or 258758270
+        start_time_val = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-07-16T22:04:48.977Z"
+
+        url = f"{self.base_url}/SpeechAnalytics/Services/Transcription/TranscriptionService.svc/GetInteractionTranscription"
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "x-requested-with": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers["xsrfToken"] = self.xsrf_token
+            headers["impact360authtoken"] = self.xsrf_token
+
+        payload = {
+            "instanceContext": {
+                "InstanceId": 247115,
+                "ApplicationId": "c6b76d91-5291-4928-f3ec-b97a8d2921b3"
+            },
+            "channel": channel_val,
+            "module": 999502,
+            "startTime": start_time_val,
+            "localDate": start_time_val[:10] + "T00:00:00.000Z",
+            "categoriesIds": [],
+            "queryTerms": "",
+            "editCategory": None,
+            "language": "es-ES",
+            "transactionId": "2157019040984375478048370989227333246",
+            "docId": None,
+            "isDocumentMarkingLayersRequeire": False,
+            "isRedactionDisabled": False,
+            "hideTranscriptionWrapperViewOn": False,
+            "isOutOfSpeechContext": False,
+            "dbSid": db_sid,
+            "sid": sid_val,
+            "redactionStatus": 0
+        }
+
+        res = self.session.post(url, json=payload, headers=headers)
+        if res.status_code == 200:
+            return res.json()
+        else:
+            logger.error(f"Error HTTP {res.status_code} al consultar GetInteractionTranscription: {res.text[:200]}")
+            return None
 
     def close(self):
         self.session.close()
