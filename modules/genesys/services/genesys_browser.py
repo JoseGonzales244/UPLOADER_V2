@@ -475,19 +475,24 @@ class GenesysBrowserAutomation:
                     download_link = None
                     for attempt in range(1, 6):
                         m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
-                        if m_resp.status_code == 200:
-                            m_data = m_resp.json()
-                            m_uris = m_data.get("mediaUris", {})
-                            if "S" in m_uris:
-                                download_link = m_uris["S"].get("mediaUri")
-                            else:
-                                for v in m_uris.values():
-                                    if isinstance(v, dict) and "mediaUri" in v:
-                                        download_link = v.get("mediaUri")
-                                        break
-                            break
-                        elif m_resp.status_code == 202:
-                            time.sleep(2)
+                        if m_resp.status_code in [200, 202]:
+                            try:
+                                m_data = m_resp.json()
+                                m_uris = m_data.get("mediaUris", {})
+                                if "S" in m_uris:
+                                    download_link = m_uris["S"].get("mediaUri")
+                                elif m_data.get("mediaUri"):
+                                    download_link = m_data.get("mediaUri")
+                                else:
+                                    for v in m_uris.values():
+                                        if isinstance(v, dict) and "mediaUri" in v:
+                                            download_link = v.get("mediaUri")
+                                            break
+                                if download_link:
+                                    break
+                            except Exception:
+                                pass
+                        time.sleep(2)
 
                     if not download_link:
                         logger.warning(f"No se obtuvo el enlace de descarga MP3 para {conv_id}")
