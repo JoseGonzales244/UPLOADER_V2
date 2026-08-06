@@ -39,8 +39,15 @@ class TeradataService:
 
                     for dni in dnis_faltantes:
                         dni_zero = str(dni).strip().zfill(8)
-                        
-                        query = f"""
+
+                        query_apicliente = f"""
+                            SELECT DISTINCT CODDISCADO
+                            FROM E_DW_VIEWS.V_CONT_TELEFONO_APICLIENTE
+                            WHERE CODDOC = '{dni_zero}'
+                              AND CODDISCADO IS NOT NULL
+                        """
+
+                        query_feedback = f"""
                             WITH ultimas_gestiones AS (
                                 SELECT DISTINCT GESTION
                                 FROM E_DW_VIEWS.V_FEEDBACK_TELEVENTAS
@@ -53,7 +60,7 @@ class TeradataService:
                               AND GESTION IN (SELECT GESTION FROM ultimas_gestiones)
                             ORDER BY NUM_TELEFONO
                         """
-                        
+
                         query_fallback = f"""
                             SELECT DISTINCT NUM_TELEFONO
                             FROM E_DW_VIEWS.V_FEEDBACK_TELEVENTAS
@@ -68,14 +75,40 @@ class TeradataService:
                                 logmech=TERADATA_LOGMECH,
                             ) as con:
                                 cur = con.cursor()
-                                cur.execute(query)
-                                telefonos = [str(r[0]).strip() for r in cur.fetchall() if r[0]]
                                 
+                                # 1. Intentar vista API Cliente (Vista principal y más actualizada)
+                                cur.execute(query_apicliente)
+                                raw_rows = cur.fetchall()
+                                telefonos = []
+                                for r in raw_rows:
+                                    if r[0]:
+                                        clean_num = re.sub(r"\D", "", str(r[0]))
+                                        if len(clean_num) >= 7:
+                                            telefonos.append(clean_num)
+
+                                # 2. Fallback a últimas gestiones de Feedback Televentas
+                                if not telefonos:
+                                    cur.execute(query_feedback)
+                                    raw_rows = cur.fetchall()
+                                    for r in raw_rows:
+                                        if r[0]:
+                                            clean_num = re.sub(r"\D", "", str(r[0]))
+                                            if len(clean_num) >= 7:
+                                                telefonos.append(clean_num)
+
+                                # 3. Fallback general a Feedback Televentas
                                 if not telefonos:
                                     cur.execute(query_fallback)
-                                    telefonos = [str(r[0]).strip() for r in cur.fetchall() if r[0]]
-                                    
+                                    raw_rows = cur.fetchall()
+                                    for r in raw_rows:
+                                        if r[0]:
+                                            clean_num = re.sub(r"\D", "", str(r[0]))
+                                            if len(clean_num) >= 7:
+                                                telefonos.append(clean_num)
+
                                 if telefonos:
+                                    # Deduplicar preservando orden
+                                    telefonos = list(dict.fromkeys(telefonos))
                                     cache[str(dni).strip()] = telefonos
                                     cache[dni_zero] = telefonos
                         except Exception as e:
