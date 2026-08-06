@@ -21,7 +21,7 @@ def auto_lanzar_chrome():
     try:
         req = urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=1)
         if req.status == 200:
-            print("✓ Chrome ya está escuchando en puerto CDP 9222.")
+            print("[OK] Chrome ya escucha en puerto CDP 9222.")
             return True
     except Exception:
         pass
@@ -34,7 +34,7 @@ def auto_lanzar_chrome():
     ]
     chrome_cmd = next((p for p in chrome_paths if p and os.path.exists(p)), None)
     if not chrome_cmd:
-        print("❌ No se encontró el ejecutable de Chrome en rutas estándar.")
+        print("[ERROR] No se encontro ejecutable de Chrome.")
         return False
 
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,7 +47,7 @@ def auto_lanzar_chrome():
         GENESYS_URL
     ]
 
-    print("🚀 Auto-iniciando Chrome con perfil persistente corporativo...")
+    print("[INFO] Auto-iniciando Chrome...")
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
@@ -59,7 +59,7 @@ def auto_lanzar_chrome():
         try:
             req = urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=1)
             if req.status == 200:
-                print("✓ Chrome auto-iniciado y listo.")
+                print("[OK] Chrome auto-iniciado y listo.")
                 return True
         except Exception:
             time.sleep(0.5)
@@ -68,10 +68,10 @@ def auto_lanzar_chrome():
 
 def extraer_bearer_token():
     if not auto_lanzar_chrome():
-        print("❌ No se pudo auto-iniciar ni conectar a Chrome.")
+        print("[ERROR] No se pudo conectar a Chrome.")
         return None
 
-    print("Conectando a Chrome vía CDP para capturar Bearer Token...")
+    print("Conectando a Chrome via CDP...")
     with sync_playwright() as p:
         try:
             browser = p.chromium.connect_over_cdp(CDP_URL)
@@ -85,7 +85,7 @@ def extraer_bearer_token():
                         break
 
             if not page:
-                print("❌ No se encontró una página abierta en Chrome.")
+                print("[ERROR] No hay pagina abierta.")
                 return None
 
             token_box = {"token": None}
@@ -114,191 +114,80 @@ def extraer_bearer_token():
 
             return token_box["token"]
         except Exception as e:
-            print(f"Error capturando token de Chrome: {e}")
+            print(f"Error capturando token: {e}")
             return None
 
 def ejecutar_test_especifico():
-    print("=== Test Completo 100% Automatizado de Genesys API ===")
+    print("=== Test de Busqueda API para Usuario B46108 ===")
     token = extraer_bearer_token()
     if not token:
-        print("❌ No se pudo capturar el Bearer Token. Verifica que tu sesión esté iniciada.")
+        print("[ERROR] No se pudo capturar Bearer Token.")
         return
 
-    print("🔑 Bearer Token capturado exitosamente.")
-
-    # 1. Cargar catálogo de wrapup codes
-    print("Cargando catálogo de wrapUp codes de Genesys...")
+    print("Bearer Token capturado exitosamente.")
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
-    catalog = {}
-    cat_resp = requests.get("https://api.mypurecloud.com/api/v2/routing/wrapupcodes?pageSize=500", headers=headers, verify=False, timeout=15)
-    if cat_resp.status_code == 200:
-        for e in cat_resp.json().get("entities", []):
-            if "id" in e and "name" in e:
-                catalog[e["id"]] = e["name"]
-        print(f"✓ Catálogo cargado: {len(catalog)} wrapUp codes.")
+    reg_ev = "B46108"
 
-    # 2. Datos del test específico
-    reg_ev = "B44255"
-    dni = "09076261"
-    telefonos = ["965774357", "5812697", "995084684"]
-    nombre_archivo = f"TC_{reg_ev}_DNI{dni}_20260715"
+    url_def = f"https://api.mypurecloud.com/api/v2/users?pageSize=10&username={reg_ev}"
+    r_def = requests.get(url_def, headers=headers, verify=False, timeout=15)
+    print(f"\n1. GET /api/v2/users sin filtro -> Status: {r_def.status_code}")
+    if r_def.status_code == 200:
+        res = r_def.json().get("entities", [])
+        print(f"   Usuarios encontrados: {len(res)}")
 
-    print(f"\n--- Consultando API para DNI {dni} (Teléfonos: {telefonos}) ---")
-    dnis_preds = [{"dimension": "dnis", "value": tlf} for tlf in telefonos]
-    payload = {
-        "order": "desc",
-        "orderBy": "conversationStart",
-        "paging": {"pageSize": 50, "pageNumber": 1},
-        "interval": "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z",
-        "segmentFilters": [{"type": "or", "predicates": dnis_preds}]
+    search_url = "https://api.mypurecloud.com/api/v2/users/search"
+    search_payload = {
+        "query": [
+            {"fields": ["username", "name"], "type": "CONTAINS", "value": reg_ev},
+            {"fields": ["state"], "type": "EXACT", "value": "any"}
+        ]
     }
+    r_search = requests.post(search_url, headers=headers, json=search_payload, verify=False, timeout=15)
+    print(f"\n2. POST /api/v2/users/search (state=any) -> Status: {r_search.status_code}")
+    user_id = None
+    if r_search.status_code == 200:
+        results = r_search.json().get("results", [])
+        print(f"   Usuarios encontrados: {len(results)}")
+        for u in results:
+            print(f"   -> ID: {u.get('id')} | Name: {u.get('name')} | State: {u.get('state')}")
+            user_id = u.get('id')
 
-    query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
-    resp = requests.post(query_url, headers=headers, json=payload, verify=False, timeout=15)
-    print(f"Status respuesta consulta: {resp.status_code}")
+    if not user_id:
+        search_payload_gen = {
+            "query": [
+                {"fields": ["name", "username"], "type": "CONTAINS", "value": reg_ev}
+            ]
+        }
+        r_gen = requests.post(search_url, headers=headers, json=search_payload_gen, verify=False, timeout=15)
+        print(f"\n3. POST /api/v2/users/search sin filtro state -> Status: {r_gen.status_code}")
+        if r_gen.status_code == 200:
+            print(f"   Usuarios encontrados: {len(r_gen.json().get('results', []))}")
 
-    if resp.status_code != 200:
-        print(f"❌ Error en API: {resp.text[:300]}")
-        return
-
-    conversations = resp.json().get("conversations", [])
-    print(f"Conversaciones encontradas para esos teléfonos: {len(conversations)}")
-
-    # 3. Filtrar conversaciones ACEPTA CAMPAÑA
-    candidatas = []
-    for c in conversations:
-        conv_id = c.get("conversationId")
-        wrapup_names = []
-        for p in c.get("participants", []):
-            for s in p.get("sessions", []):
-                for seg in s.get("segments", []):
-                    if seg.get("segmentType") == "wrapup":
-                        w_code = seg.get("wrapUpCode", "")
-                        w_name = seg.get("wrapUpName", "")
-                        resolved = catalog.get(w_code, w_name or w_code or "")
-                        wrapup_names.append(resolved)
-
-        es_negativa = any("NO ACEPTA" in str(w).upper() or "RECHAZA" in str(w).upper() for w in wrapup_names)
-        es_acepta = any("ACEPTA" in str(w).upper() for w in wrapup_names)
-
-        if es_acepta and not es_negativa:
-            candidatas.append((c, wrapup_names))
-            print(f"  [VÁLIDA] Conv ID={conv_id} | WrapUp={wrapup_names}")
-        else:
-            print(f"  [DESCARTADA] Conv ID={conv_id} | WrapUp={wrapup_names}")
-
-    print(f"\nTotal llamadas válidas ACEPTA CAMPAÑA: {len(candidatas)}")
-
-    # 4. Descargar MP3 de las llamadas válidas
-    for sub_idx, (conv, wrapups) in enumerate(candidatas, 1):
-        conv_id = conv.get("conversationId")
-        # Probar Método 1: GET /api/v2/conversations/{conv_id}/recordings
-        rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
-        rec_resp = requests.get(rec_url, headers=headers, verify=False, timeout=15)
-        print(f"Método 1 (/recordings) Status: {rec_resp.status_code}")
-        
-        recs = []
-        if rec_resp.status_code == 200 and rec_resp.json():
-            recs = rec_resp.json()
-            print(f"  -> {len(recs)} grabación(es) obtenida(s) con Método 1")
-        else:
-            print(f"  -> Respuesta Método 1: {rec_resp.text[:250]}")
-
-        # Probar Método 2: GET /api/v2/conversations/{conv_id}/recordingmetadata
-        if not recs:
-            meta_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordingmetadata"
-            meta_resp = requests.get(meta_url, headers=headers, verify=False, timeout=15)
-            print(f"Método 2 (/recordingmetadata) Status: {meta_resp.status_code}")
-            if meta_resp.status_code == 200 and meta_resp.json():
-                recs = meta_resp.json()
-                print(f"  -> {len(recs)} grabación(es) obtenida(s) con Método 2")
-            else:
-                print(f"  -> Respuesta Método 2: {meta_resp.text[:250]}")
-
-        # Probar Método 3: POST /api/v2/recording/batchrequests (Batch API)
-        if not recs:
-            print("Método 3: Probando Batch Request API (/api/v2/recording/batchrequests)...")
-            batch_url = "https://api.mypurecloud.com/api/v2/recording/batchrequests"
-            batch_payload = {"conversationIds": [conv_id]}
-            batch_resp = requests.post(batch_url, headers=headers, json=batch_payload, verify=False, timeout=15)
-            print(f"  -> Status Batch POST: {batch_resp.status_code}")
-            print(f"  -> Respuesta Batch: {batch_resp.text[:300]}")
-            
-            if batch_resp.status_code in [200, 202]:
-                batch_job = batch_resp.json()
-                job_id = batch_job.get("id")
-                if job_id:
-                    print(f"  -> Consultando estado del Batch Job {job_id}...")
-                    for b_att in range(1, 6):
-                        time.sleep(2)
-                        job_url = f"https://api.mypurecloud.com/api/v2/recording/batchrequests/{job_id}"
-                        job_resp = requests.get(job_url, headers=headers, verify=False, timeout=15)
-                        print(f"     Status Intento {b_att}: {job_resp.status_code}")
-                        if job_resp.status_code == 200:
-                            job_data = job_resp.json()
-                            print(f"     Estado Job: {job_data.get('state')}")
-                            results = job_data.get("results", [])
-                            if results:
-                                recs = results
-                                print(f"     -> {len(results)} grabación(es) obtenida(s) vía Batch Request!")
-                                break
-
-        if not recs:
-            print(f"❌ No se obtuvieron grabaciones para {conv_id} mediante ninguno de los 3 métodos.")
-            continue
-
-        rec_id = recs[0].get("id")
-        print(f"\nRecording ID encontrado: {rec_id}")
-        media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
-
-        download_link = None
-        for attempt in range(1, 6):
-            m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
-            print(f"Intento descarga {attempt} Status: {m_resp.status_code}")
-            if m_resp.status_code in [200, 202]:
-                try:
-                    m_data = m_resp.json()
-                    print(f"--- JSON devuelto por media_resp (Status {m_resp.status_code}) ---")
-                    print(json.dumps(m_data, indent=2, ensure_ascii=False))
-                    
-                    m_uris = m_data.get("mediaUris", {})
-                    if "S" in m_uris:
-                        download_link = m_uris["S"].get("mediaUri")
-                    elif m_data.get("mediaUri"):
-                        download_link = m_data.get("mediaUri")
-                    else:
-                        for v in m_uris.values():
-                            if isinstance(v, dict) and "mediaUri" in v:
-                                download_link = v.get("mediaUri")
-                                break
-                    if download_link:
-                        break
-                except Exception as e_json:
-                    print(f"Error parseando JSON: {e_json} | Texto: {m_resp.text[:300]}")
-            else:
-                print(f"Error respuesta media_url: {m_resp.text[:300]}")
-                
-            time.sleep(2)
-
-        if not download_link:
-            print(f"❌ No se generó la URL de descarga para {conv_id}")
-            continue
-
-        nombre_mp3 = f"{nombre_archivo}_P{sub_idx:02d}.mp3" if len(candidatas) > 1 else f"{nombre_archivo}.mp3"
-        archivo_salida = DOWNLOADS_DIR / nombre_mp3
-
-        audio_resp = requests.get(download_link, verify=False, stream=True, timeout=60)
-        if audio_resp.status_code == 200:
-            with open(archivo_salida, "wb") as f:
-                for chunk in audio_resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            print(f"==================================================")
-            print(f"  ¡PRUEBA EXITOSA! AUDIO MP3 DESCARGADO    ")
-            print(f"  Ruta: {archivo_salida.resolve()}")
-            print(f"  Tamaño: {os.path.getsize(archivo_salida) / 1024:.2f} KB")
-            print(f"==================================================")
-        else:
-            print(f"❌ Error descargando audio MP3: Status {audio_resp.status_code}")
+    if user_id:
+        print(f"\n4. Consultando conversaciones para userId: {user_id} en Julio 2026...")
+        conv_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
+        conv_payload = {
+            "order": "desc",
+            "orderBy": "conversationStart",
+            "paging": {"pageSize": 20, "pageNumber": 1},
+            "interval": "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z",
+            "userFilters": [
+                {
+                    "type": "or",
+                    "predicates": [
+                        {"type": "dimension", "dimension": "userId", "value": user_id}
+                    ]
+                }
+            ]
+        }
+        r_conv = requests.post(conv_url, headers=headers, json=conv_payload, verify=False, timeout=15)
+        print(f"   Status consulta conversaciones: {r_conv.status_code}")
+        if r_conv.status_code == 200:
+            convs = r_conv.json().get("conversations", [])
+            print(f"   EXITO: Conversaciones encontradas para B46108: {len(convs)}")
+            for c in convs[:3]:
+                print(f"   - Conv ID: {c.get('conversationId')} | Start: {c.get('conversationStart')}")
 
 if __name__ == "__main__":
     ejecutar_test_especifico()
+
