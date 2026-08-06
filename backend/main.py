@@ -335,16 +335,25 @@ def _run_audios_task(req: AudioRequest):
     
     try:
         from modules.genesys.services.genesys_browser import GenesysBrowserAutomation
+        from modules.genesys.services.teradata_service import TeradataService
         from modules.genesys.models import SolicitudAudio
         
         solicitudes = [
             SolicitudAudio(reg_ev=item.reg_ev, dni=item.dni, nombre_archivo=item.nombre_archivo, prefijo=item.prefijo)
             for item in req.solicitudes
         ]
-        
-        send_progress_update(f"🎧 Iniciando descarga de {len(solicitudes)} audios en Genesys...", "info", progress=0.1)
+
+        send_progress_update("🔍 Consultando teléfonos para los DNI en Teradata/Caché...", "info", progress=0.05)
+        td_svc = TeradataService()
+        solicitudes_enriquecidas = td_svc.enriquecer_solicitudes(solicitudes)
+
+        if not solicitudes_enriquecidas:
+            send_progress_update("⚠️ Ningún DNI cuenta con teléfono de gestión en Teradata/Caché.", "warning", progress=1.0)
+            return
+
+        send_progress_update(f"🎧 Iniciando descarga de {len(solicitudes_enriquecidas)} audios en Genesys...", "info", progress=0.1)
         bot = GenesysBrowserAutomation()
-        res = bot.ejecutar_descargas(solicitudes)
+        res = bot.ejecutar_descargas(solicitudes_enriquecidas)
         send_progress_update("🎉 ¡Proceso de descarga de audios completado!", "success", progress=1.0)
     except Exception as e:
         logger.error(f"Error en descarga de audios: {e}")
