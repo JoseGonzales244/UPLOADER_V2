@@ -462,17 +462,26 @@ class GenesysBrowserAutomation:
                     continue
 
                 nombre_base = sol.nombre_archivo
+                descargas_exitosas = 0
+
                 for sub_idx, conv in enumerate(candidatas, 1):
                     conv_id = conv.get("conversationId")
                     logger.info(f"Procesando conversación API {conv_id} ({sub_idx}/{len(candidatas)})...")
                     
+                    recs = []
                     rec_list_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
                     rec_resp = requests.get(rec_list_url, headers=headers, verify=False, timeout=15)
-                    if rec_resp.status_code != 200:
-                        continue
+                    if rec_resp.status_code == 200 and rec_resp.json():
+                        recs = rec_resp.json()
 
-                    recs = rec_resp.json()
                     if not recs:
+                        meta_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordingmetadata"
+                        meta_resp = requests.get(meta_url, headers=headers, verify=False, timeout=15)
+                        if meta_resp.status_code == 200 and meta_resp.json():
+                            recs = meta_resp.json()
+
+                    if not recs:
+                        logger.warning(f"No se obtuvieron grabaciones para {conv_id}")
                         continue
 
                     rec_id = recs[0].get("id")
@@ -514,12 +523,18 @@ class GenesysBrowserAutomation:
                         with open(archivo_mp3, "wb") as f:
                             for chunk in audio_resp.iter_content(chunk_size=8192):
                                 f.write(chunk)
+                        descargas_exitosas += 1
                         logger.info(f"✓ MP3 guardado en Downloads: {archivo_mp3}")
                     else:
                         logger.error(f"Error descargando stream MP3: Status {audio_resp.status_code}")
 
-                self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO)
-                logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada vía API.")
+                if descargas_exitosas > 0:
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO)
+                    logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada ({descargas_exitosas} MP3 descargado(s)).")
+                else:
+                    self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                    logger.warning(f"No se lograron descargar archivos MP3 físicos para DNI {sol.dni}")
 
             except Exception as e:
                 logger.error(f"Error procesando solicitud API {sol.reg_ev} - DNI {sol.dni}: {e}")
