@@ -66,8 +66,8 @@ if resp.status_code == 200:
                     print(f"Intento {attempt} Status: {media_resp.status_code}")
                     if media_resp.status_code == 200:
                         media_data = media_resp.json()
-                        media_uri = media_data.get("mediaUri")
-                        print(f"\n[ÉXITO] URL directa de descarga del MP3 obtenida:\n{media_uri}")
+                        print("\n[OK] Respuesta JSON completa del endpoint de grabación:")
+                        print(json.dumps(media_data, indent=2, ensure_ascii=False))
                         break
                     elif media_resp.status_code == 202:
                         import time
