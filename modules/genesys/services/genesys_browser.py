@@ -346,25 +346,53 @@ class GenesysBrowserAutomation:
 
         return token_holder["token"]
 
+    def _obtener_catalogo_wrapups(self, token: str) -> dict:
+        """Consulta una sola vez el catálogo de wrapUp codes para traducir UUIDs a nombres legibles."""
+        if hasattr(self, "_wrapup_catalog") and self._wrapup_catalog:
+            return self._wrapup_catalog
+
+        catalog = {}
+        try:
+            url = "https://api.mypurecloud.com/api/v2/routing/wrapupcodes?pageSize=500"
+            headers = {"Authorization": f"Bearer {token}", "accept": "*/*"}
+            resp = requests.get(url, headers=headers, verify=False, timeout=15)
+            if resp.status_code == 200:
+                entities = resp.json().get("entities", [])
+                for e in entities:
+                    if "id" in e and "name" in e:
+                        catalog[e["id"]] = e["name"]
+                logger.info(f"✓ Catálogo de {len(catalog)} wrapUp codes cargado exitosamente.")
+        except Exception as e:
+            logger.warning(f"No se pudo cargar el catálogo de wrapUp codes: {e}")
+
+        self._wrapup_catalog = catalog
+        return catalog
+
     @staticmethod
-    def _es_conclusion_acepta(conv: dict) -> bool:
-        """Determina si la conversación tiene una conclusión válida de ACEPTA CAMPAÑA (descartando NO ACEPTA)."""
-        wrapups = []
+    def _es_conclusion_acepta(conv: dict, catalog: dict = None) -> bool:
+        """Determina si la conversación tiene una conclusión válida de ACEPTA CAMPAÑA (descartando NO ACEPTA) mediante nombres resueltos."""
+        catalog = catalog or {}
+        wrapup_names = []
+
         for p in conv.get("participants", []):
             for s in p.get("sessions", []):
                 for seg in s.get("segments", []):
                     if seg.get("segmentType") == "wrapup":
-                        w_code = str(seg.get("wrapUpCode", "")).upper()
-                        w_name = str(seg.get("wrapUpName", "")).upper()
-                        w_note = str(seg.get("wrapUpNote", "")).upper()
-                        wrapups.extend([w_code, w_name, w_note])
+                        w_code = seg.get("wrapUpCode", "")
+                        w_name = seg.get("wrapUpName", "")
+                        w_note = seg.get("wrapUpNote", "")
 
-        for w in wrapups:
-            if "NO ACEPTA" in w or "RECHAZA" in w:
+                        resolved_name = catalog.get(w_code, w_name or w_code or "")
+                        wrapup_names.extend([resolved_name, w_note])
+
+        for w in wrapup_names:
+            w_str = str(w).upper()
+            if "NO ACEPTA" in w_str or "RECHAZA" in w_str:
                 return False
 
-        for w in wrapups:
-            if any(p in w for p in ["ACEPTA CAMPANA", "ACEPTA CAMPAÑA", "ACEPTA_CAMPANA", "ACEPTA_CAMPAÑA"]):
+        for w in wrapup_names:
+            w_str = str(w).upper()
+            if "ACEPTA" in w_str:
                 return True
 
         return False
@@ -372,6 +400,10 @@ class GenesysBrowserAutomation:
     def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str) -> bool:
         """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
         logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
+        
+        # Cargar catálogo de traducción de UUIDs a nombres de wrapup
+        wrapup_catalog = self._obtener_catalogo_wrapups(token)
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -411,7 +443,7 @@ class GenesysBrowserAutomation:
                     continue
 
                 conversations = resp.json().get("conversations", [])
-                candidatas = [c for c in conversations if self._es_conclusion_acepta(c)]
+                candidatas = [c for c in conversations if self._es_conclusion_acepta(c, wrapup_catalog)]
 
                 if not candidatas:
                     logger.warning(f"No se hallaron interacciones 'ACEPTA CAMPAÑA' vía API para DNI {sol.dni}")
