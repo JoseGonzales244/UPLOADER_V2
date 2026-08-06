@@ -233,8 +233,8 @@ class OutlookService:
 
         try:
             messages = inbox.Items
-            messages.Sort("[ReceivedTime]", True)
-
+            
+            # Aplicar filtro de búsqueda si es posible
             filt = f'@SQL="urn:schemas:httpmail:subject" LIKE \'%{self.asunto_filtro}%\''
             try:
                 filtered_messages = messages.Restrict(filt)
@@ -243,37 +243,49 @@ class OutlookService:
             except Exception:
                 pass
 
-            count = 0
+            # Recopilar todos los correos que coincidan con el asunto
+            candidatos = []
+            for item in messages:
+                try:
+                    subject = getattr(item, "Subject", "") or ""
+                    if self.asunto_filtro.lower() in subject.lower():
+                        received_time = getattr(item, "ReceivedTime", None)
+                        candidatos.append((item, subject, received_time))
+                except Exception:
+                    continue
+
+            # Ordenar en Python por ReceivedTime descendente (el más reciente primero)
+            candidatos.sort(
+                key=lambda x: x[2].timestamp() if hasattr(x[2], 'timestamp') and x[2] else 0,
+                reverse=True
+            )
+
+            # Tomar solo los 'limit' más recientes
+            candidatos_recientes = candidatos[:limit]
+
             with tempfile.TemporaryDirectory() as temp_dir:
-                for item in messages:
+                for count, (item, subject, received_time) in enumerate(candidatos_recientes, 1):
                     try:
-                        subject = getattr(item, "Subject", "") or ""
-                        if self.asunto_filtro.lower() in subject.lower():
-                            sender = getattr(item, "SenderName", "Desconocido") or "Desconocido"
-                            received_time = getattr(item, "ReceivedTime", None)
-                            fecha_str = str(received_time)[:19] if received_time else "Sin fecha"
-                            prefijo = _determinar_prefijo_asunto(subject)
+                        sender = getattr(item, "SenderName", "Desconocido") or "Desconocido"
+                        fecha_str = str(received_time)[:19] if received_time else "Sin fecha"
+                        prefijo = _determinar_prefijo_asunto(subject)
 
-                            cuerpo = getattr(item, "HTMLBody", "") or getattr(item, "Body", "") or ""
-                            regs = []
-                            if cuerpo:
-                                regs = self.parsear_cuerpo_html(cuerpo, prefijo=prefijo)
+                        cuerpo = getattr(item, "HTMLBody", "") or getattr(item, "Body", "") or ""
+                        regs = []
+                        if cuerpo:
+                            regs = self.parsear_cuerpo_html(cuerpo, prefijo=prefijo)
 
-                            if not regs:
-                                regs = self.parsear_adjuntos(item, temp_dir, prefijo=prefijo)
+                        if not regs:
+                            regs = self.parsear_adjuntos(item, temp_dir, prefijo=prefijo)
 
-                            correos_info.append({
-                                "index": count + 1,
-                                "asunto": subject,
-                                "remitente": sender,
-                                "fecha": fecha_str,
-                                "solicitudes": regs,
-                                "cant_registros": len(regs)
-                            })
-
-                            count += 1
-                            if count >= limit:
-                                break
+                        correos_info.append({
+                            "index": count,
+                            "asunto": subject,
+                            "remitente": sender,
+                            "fecha": fecha_str,
+                            "solicitudes": regs,
+                            "cant_registros": len(regs)
+                        })
                     except Exception as e:
                         logger.error(f"Error procesando correo en vista previa: {e}")
                         continue
@@ -286,48 +298,52 @@ class OutlookService:
         try:
             import win32com.client
         except ImportError:
-            raise ImportError("Se requiere pywin32. Instalar com: pip install pywin32")
+            raise ImportError("Se requiere pywin32. Instalar con: pip install pywin32")
 
         logger.info("Conectando a Outlook Desktop MAPI...")
         outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
         inbox = outlook.GetDefaultFolder(6)
 
-        correos_encontrados = []
+        candidatos = []
 
         try:
             messages = inbox.Items
-            messages.Sort("[ReceivedTime]", True)
 
-            # Aplicar Restrict si es posible
             filt = f'@SQL="urn:schemas:httpmail:subject" LIKE \'%{self.asunto_filtro}%\''
             try:
                 filtered_messages = messages.Restrict(filt)
                 if filtered_messages.Count > 0:
                     messages = filtered_messages
             except Exception:
-                pass  # Fallback a iterar messages ordenados
+                pass
 
             for item in messages:
                 try:
                     subject = getattr(item, "Subject", "") or ""
                     if self.asunto_filtro.lower() in subject.lower():
                         received_time = getattr(item, "ReceivedTime", None)
-                        correos_encontrados.append((item, subject, received_time))
-                        if solo_ultimo and len(correos_encontrados) >= 1:
-                            break
+                        candidatos.append((item, subject, received_time))
                 except Exception:
                     continue
         except Exception as e:
             logger.error(f"Error accediendo a la bandeja de entrada: {e}")
 
-        if not correos_encontrados:
+        if not candidatos:
             logger.warning(f"No se encontraron correos con asunto '{self.asunto_filtro}'")
             return []
+
+        # Ordenar por ReceivedTime descendente en Python (garantiza el más reciente primero)
+        candidatos.sort(
+            key=lambda x: x[2].timestamp() if hasattr(x[2], 'timestamp') and x[2] else 0,
+            reverse=True
+        )
+
+        correos_a_procesar = candidatos[:1] if solo_ultimo else candidatos
 
         todas_las_solicitudes: List[SolicitudAudio] = []
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            for idx, (item, subject, _) in enumerate(correos_encontrados, 1):
+            for idx, (item, subject, _) in enumerate(correos_a_procesar, 1):
                 logger.info(f"Procesando correo ({idx}): '{subject}'")
                 prefijo = _determinar_prefijo_asunto(subject)
 

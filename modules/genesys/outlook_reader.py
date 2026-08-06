@@ -288,9 +288,15 @@ def obtener_solicitudes_outlook(asunto_filtro="Solicitud de audio", solo_ultimo=
         print(f"No se encontraron correos con asunto '{asunto_filtro}'")
         return []
 
-    # Si solo_ultimo=True, procesar solo el último; si False, procesar todos
+    # Ordenar globalmente por fecha de recepción descendente (el más reciente primero)
+    correos_encontrados.sort(
+        key=lambda x: x[3].timestamp() if hasattr(x[3], 'timestamp') and x[3] else 0,
+        reverse=True
+    )
+
+    # Si solo_ultimo=True, procesar solo el último (más reciente); si False, procesar todos
     if solo_ultimo:
-        correos_a_procesar = [correos_encontrados[0]]  # El primero es el más reciente (ordenado por ReceivedTime DESC)
+        correos_a_procesar = [correos_encontrados[0]]
     else:
         correos_a_procesar = correos_encontrados
 
