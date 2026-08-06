@@ -548,39 +548,11 @@ class GenesysBrowserAutomation:
 
             try:
                 resp = requests.post(api_query_url, headers=headers, json=payload, verify=False, timeout=15)
-                conversations = []
-                if resp.status_code == 200:
-                    conversations = resp.json().get("conversations", [])
-
-                if not conversations and user_id and sol.telefonos:
-                    logger.info(f"  Sin resultados combinados. Reintentando exclusivamente por userId GUID ({user_id})...")
-                    fallback_payload = {
-                        "order": "desc",
-                        "orderBy": "conversationStart",
-                        "paging": {"pageSize": 100, "pageNumber": 1},
-                        "interval": intervalo,
-                        "segmentFilters": [
-                            {
-                                "type": "or",
-                                "predicates": [
-                                    {
-                                        "type": "dimension",
-                                        "dimension": "userId",
-                                        "operator": "matches",
-                                        "value": user_id
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                    resp_fb = requests.post(api_query_url, headers=headers, json=fallback_payload, verify=False, timeout=15)
-                    if resp_fb.status_code == 200:
-                        conversations = resp_fb.json().get("conversations", [])
-
-                if resp.status_code != 200 and not conversations:
+                if resp.status_code != 200:
                     logger.warning(f"Error consultando API para DNI {sol.dni}: Status {resp.status_code}")
                     continue
 
+                conversations = resp.json().get("conversations", [])
                 candidatas = [c for c in conversations if self._es_conclusion_acepta(c, wrapup_catalog)]
 
                 if not candidatas:
