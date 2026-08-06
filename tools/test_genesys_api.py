@@ -118,7 +118,7 @@ def extraer_bearer_token():
             return None
 
 def ejecutar_test_especifico():
-    print("=== Test de Busqueda API para Usuario B46108 ===")
+    print("=== Test con Conversation ID 289b9afe-d517-480d-8cf6-5028e1429ee4 ===")
     token = extraer_bearer_token()
     if not token:
         print("[ERROR] No se pudo capturar Bearer Token.")
@@ -126,54 +126,40 @@ def ejecutar_test_especifico():
 
     print("Bearer Token capturado exitosamente.")
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
-    reg_ev = "B46108"
+    conv_id = "289b9afe-d517-480d-8cf6-5028e1429ee4"
 
-    # Prueba 1: GET /api/v2/users buscando por apellido "Centeno" o nombre "Eva"
-    url_all = "https://api.mypurecloud.com/api/v2/users?pageSize=500&state=any&showDeleted=true&expand=state"
-    r_all = requests.get(url_all, headers=headers, verify=False, timeout=15)
-    print(f"\n1. GET /api/v2/users (state=any & showDeleted=true) -> Status: {r_all.status_code}")
+    # 1. Obtener detalles de la conversación especifica
+    url_details = f"https://api.mypurecloud.com/api/v2/analytics/conversations/{conv_id}/details"
+    r_det = requests.get(url_details, headers=headers, verify=False, timeout=15)
+    print(f"\n1. GET /api/v2/analytics/conversations/{conv_id}/details -> Status: {r_det.status_code}")
+    
     user_id = None
-    if r_all.status_code == 200:
-        entities = r_all.json().get("entities", [])
-        print(f"   Total usuarios obtenidos en catálogo: {len(entities)}")
-        
-        # Muestra algunos nombres de muestra para entender la estructura
-        print("\n   [Muestra de 5 usuarios del sistema]:")
-        for sample in entities[:5]:
-            print(f"   - Name: {sample.get('name')} | Username: {sample.get('username')} | Email: {sample.get('email')}")
+    if r_det.status_code == 200:
+        participants = r_det.json().get("participants", [])
+        print(f"   Participantes en la llamada: {len(participants)}")
+        for p in participants:
+            p_user_id = p.get("userId")
+            p_purpose = p.get("purpose")
+            print(f"   - Participant Purpose: {p_purpose} | userId: {p_user_id}")
+            if p_user_id:
+                user_id = p_user_id
 
-        # Probar coincidencias con "Centeno", "Eva" o "B46108"
-        terminos = ["b46108", "centeno", "eva"]
-        for t in terminos:
-            coincidencias = [u for u in entities if t in json.dumps(u).lower()]
-            print(f"\n   -> Coincidencias con termino '{t}': {len(coincidencias)}")
-            for u in coincidencias:
-                print(f"      ID: {u.get('id')} | Name: {u.get('name')} | State: {u.get('state')} | Username: {u.get('username')}")
-                if not user_id:
-                    user_id = u.get('id')
-
-
-    # Prueba 2: POST /api/v2/users/search buscando en email, username, name y employeeId con state=any
-    search_url = "https://api.mypurecloud.com/api/v2/users/search"
-    search_payload = {
-        "query": [
-            {"fields": ["username", "name", "email", "employeeId"], "type": "CONTAINS", "value": reg_ev},
-            {"fields": ["state"], "type": "EXACT", "value": "any"}
-        ]
-    }
-    r_search = requests.post(search_url, headers=headers, json=search_payload, verify=False, timeout=15)
-    print(f"\n2. POST /api/v2/users/search en multiples campos (state=any) -> Status: {r_search.status_code}")
-    if r_search.status_code == 200:
-        results = r_search.json().get("results", [])
-        print(f"   Usuarios encontrados: {len(results)}")
-        for u in results:
-            print(f"   -> ID: {u.get('id')} | Name: {u.get('name')} | State: {u.get('state')} | Email: {u.get('email')}")
-            if not user_id:
-                user_id = u.get('id')
-
-    # Prueba 3: Consultar conversaciones del userId si fue ubicado
+    # 2. Consultar nombre de usuario usando el userId encontrado
     if user_id:
-        print(f"\n3. Consultando conversaciones para userId: {user_id} en Julio 2026...")
+        url_usr = f"https://api.mypurecloud.com/api/v2/users/{user_id}"
+        r_usr = requests.get(url_usr, headers=headers, verify=False, timeout=15)
+        print(f"\n2. GET /api/v2/users/{user_id} -> Status: {r_usr.status_code}")
+        if r_usr.status_code == 200:
+            u_data = r_usr.json()
+            print(f"   [DATOS EXACTOS DE B46108 EN GENESYS]:")
+            print(f"   -> ID GUID: {u_data.get('id')}")
+            print(f"   -> Name: {u_data.get('name')}")
+            print(f"   -> Username: {u_data.get('username')}")
+            print(f"   -> State: {u_data.get('state')}")
+
+    # 3. Probar la búsqueda en /analytics/conversations/details/query usando el userId GUID exacto
+    if user_id:
+        print(f"\n3. Consultando /analytics/conversations/details/query con userId GUID {user_id}...")
         conv_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
         conv_payload = {
             "order": "desc",
@@ -190,14 +176,14 @@ def ejecutar_test_especifico():
             ]
         }
         r_conv = requests.post(conv_url, headers=headers, json=conv_payload, verify=False, timeout=15)
-        print(f"   Status consulta conversaciones: {r_conv.status_code}")
+        print(f"   Status respuesta consulta: {r_conv.status_code}")
         if r_conv.status_code == 200:
             convs = r_conv.json().get("conversations", [])
-            print(f"   EXITO: Conversaciones encontradas para B46108: {len(convs)}")
-            for c in convs[:3]:
+            print(f"   ¡EXITO TOTAL! Conversaciones recuperadas para el usuario inactivo: {len(convs)}")
+            for c in convs[:5]:
                 print(f"   - Conv ID: {c.get('conversationId')} | Start: {c.get('conversationStart')}")
-
 
 if __name__ == "__main__":
     ejecutar_test_especifico()
+)
 
