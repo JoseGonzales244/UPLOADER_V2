@@ -116,19 +116,33 @@ class GenesysBrowserAutomation:
             pass
 
     def _regresar_a_pestana_interacciones(self, page: Page) -> None:
-        """Hace clic en la pestaña interna 'Interacciones' del header SPA de Genesys para regresar a la lista con filtros intactos."""
+        """Busca todas las pestañas internas de Genesys y hace clic en la que corresponde a 'Interacciones' (excluyendo Domicilio)."""
         try:
-            tab_btn = page.locator(SELECTORS["interactions_tab_btn"]).first
-            if not tab_btn.is_visible():
-                tab_btn = page.locator('button.gux-tab-button:has-text("Interacciones")').first
+            tab_candidates = page.locator('button.gux-tab-button, gux-tab-button, [role="tab"]')
+            total_tabs = tab_candidates.count()
+            logger.info(f"Buscando pestaña 'Interacciones' entre {total_tabs} pestaña(s) detectada(s)...")
 
-            if tab_btn.is_visible():
-                logger.info("Haciendo clic en la pestaña interna 'Interacciones' de la SPA...")
-                tab_btn.click(force=True)
-                page.wait_for_timeout(1500)
-                logger.info("✓ Retornado exitosamente a la vista de Interacciones.")
+            target_tab = None
+            for i in range(total_tabs):
+                btn = tab_candidates.nth(i)
+                try:
+                    text = btn.inner_text().strip().lower()
+                    if "interaccion" in text and "domicilio" not in text:
+                        target_tab = btn
+                        break
+                except Exception:
+                    continue
+
+            if not target_tab or target_tab.count() == 0:
+                target_tab = page.locator('button.gux-tab-button:has-text("Interacciones"):not(:has-text("Domicilio"))').first
+
+            if target_tab and target_tab.count() > 0:
+                logger.info("Haciendo clic en la pestaña interna 'Interacciones'...")
+                target_tab.click(force=True)
+                page.wait_for_timeout(2000)
+                logger.info("✓ Retornado exitosamente a la vista principal de Interacciones.")
             else:
-                logger.warning("No se localizó el botón de la pestaña interna 'Interacciones'.")
+                logger.warning("No se localizó el botón específico de la pestaña 'Interacciones'.")
         except Exception as e:
             logger.error(f"Error regresando a la pestaña Interacciones: {e}")
 

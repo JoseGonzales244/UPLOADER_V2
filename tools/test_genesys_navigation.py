@@ -134,10 +134,18 @@ def ejecutar_test_navegacion():
 
         # 8. Validar la persistencia del estado en la página principal
         logger.info("Verificando persistencia del estado de filtros en la página de origen...")
-        btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
-        btn = analytics_frame.locator(btn_selector).first
+        analytics_frame = automation._localizar_iframe(page, SELECTORS["analytics_iframe_url"], max_intentos=10)
         
-        texto_fecha = btn.inner_text().strip() if btn.is_visible() else "NO VISIBLE"
+        texto_fecha = "NO VISIBLE"
+        if analytics_frame:
+            btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
+            btn = analytics_frame.locator(btn_selector).first
+            try:
+                if btn.count() > 0 and btn.is_visible():
+                    texto_fecha = btn.inner_text().strip()
+            except Exception:
+                pass
+
         logger.info(f"Estado actual del botón de fecha: '{texto_fecha}'")
 
         if "julio de 2026" in texto_fecha.lower():
