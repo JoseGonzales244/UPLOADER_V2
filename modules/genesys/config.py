@@ -8,6 +8,32 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.resolve()
 DOWNLOADS_DIR = Path.home() / "Downloads"
 
+# Ruta OneDrive de destino corporativo
+USER_PROFILE = os.environ.get("USERPROFILE", str(Path.home()))
+ONEDRIVE_SOLICITUDES_DIR = Path(USER_PROFILE) / "OneDrive - Interbank" / "1. EXPERIENCIA DE COMPRA" / "GESTIÓN 2026" / "SOLICITUD DE AUDIOS"
+
+def obtener_o_crear_carpeta_destino(nombre_sugerido: str = "Solicitud de Audios - General") -> Path:
+    """Busca una carpeta existente en OneDrive que coincida con el nombre para reutilizarla (evita v2, v3, v4)."""
+    if not ONEDRIVE_SOLICITUDES_DIR.exists():
+        try:
+            ONEDRIVE_SOLICITUDES_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return DOWNLOADS_DIR
+
+    sug_clean = nombre_sugerido.strip().lower()
+    
+    # Buscar si ya existe una carpeta que contenga las palabras clave principales
+    for carpeta in ONEDRIVE_SOLICITUDES_DIR.iterdir():
+        if carpeta.is_dir():
+            c_name = carpeta.name.strip().lower()
+            if c_name == sug_clean or sug_clean in c_name or c_name in sug_clean:
+                return carpeta
+
+    # Si no existe, crear la carpeta sugerida limpia (sin sufijos v2/v3)
+    target = ONEDRIVE_SOLICITUDES_DIR / nombre_sugerido
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
 # Archivos de persistencia
 TRACKING_FILE = BASE_DIR / "tracking.json"
 TELEFONOS_CACHE_FILE = BASE_DIR / "telefonos_cache.json"
