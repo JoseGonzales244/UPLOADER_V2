@@ -344,7 +344,7 @@ def _run_audios_task(req: AudioRequest):
         
         send_progress_update(f"🎧 Iniciando descarga de {len(solicitudes)} audios en Genesys...", "info", progress=0.1)
         bot = GenesysBrowserAutomation()
-        res = bot.procesar_solicitudes(solicitudes)
+        res = bot.ejecutar_descargas(solicitudes)
         send_progress_update("🎉 ¡Proceso de descarga de audios completado!", "success", progress=1.0)
     except Exception as e:
         logger.error(f"Error en descarga de audios: {e}")

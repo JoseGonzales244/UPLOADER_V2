@@ -202,6 +202,10 @@ class GenesysBrowserAutomation:
             return partes[0] * 60 + partes[1]
         return 0
 
+    def procesar_solicitudes(self, solicitudes: List[SolicitudAudio], headless: bool = True):
+        """Alias retrocompatible para ejecutar_descargas"""
+        return self.ejecutar_descargas(solicitudes, headless=headless)
+
     def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True) -> None:
         solicitudes = self.tracking_store.filtrar_no_procesados(solicitudes)
         if not solicitudes:
