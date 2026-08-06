@@ -581,7 +581,6 @@ class GenesysBrowserAutomation:
                     logger.warning(f"Error consultando API para DNI {sol.dni}: Status {resp.status_code}")
                     continue
 
-                conversations = resp.json().get("conversations", [])
                 candidatas = [c for c in conversations if self._es_conclusion_acepta(c, wrapup_catalog)]
 
                 if not candidatas:
@@ -618,30 +617,48 @@ class GenesysBrowserAutomation:
                         recs.sort(key=self._duracion_grabacion, reverse=True)
                         logger.info(f"  La llamada posee {len(recs)} tramos de audio. Seleccionando el tramo de mayor duración...")
 
-                    rec_id = recs[0].get("id")
-                    media_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true"
+                    rec_target = recs[0]
+                    rec_id = rec_target.get("id")
 
-                    download_link = None
-                    for attempt in range(1, 16):
-                        m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
-                        if m_resp.status_code in [200, 202]:
-                            try:
-                                m_data = m_resp.json()
-                                m_uris = m_data.get("mediaUris", {})
-                                if "S" in m_uris:
-                                    download_link = m_uris["S"].get("mediaUri")
-                                elif m_data.get("mediaUri"):
-                                    download_link = m_data.get("mediaUri")
-                                else:
-                                    for v in m_uris.values():
-                                        if isinstance(v, dict) and "mediaUri" in v:
-                                            download_link = v.get("mediaUri")
+                    # Verificar si la grabación ya tiene una URL directa en metadatos
+                    download_link = rec_target.get("mediaUri")
+                    if not download_link and rec_target.get("mediaUris"):
+                        for m_v in rec_target.get("mediaUris", {}).values():
+                            if isinstance(m_v, dict) and m_v.get("mediaUri"):
+                                download_link = m_v.get("mediaUri")
+                                break
+
+                    # Probar URLs con formato MP3, WAV y genérico
+                    if not download_link:
+                        format_urls = [
+                            f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true",
+                            f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?download=true",
+                            f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=WAV&download=true"
+                        ]
+
+                        for media_url in format_urls:
+                            for attempt in range(1, 6):
+                                m_resp = requests.get(media_url, headers=headers, verify=False, timeout=15)
+                                if m_resp.status_code in [200, 202]:
+                                    try:
+                                        m_data = m_resp.json()
+                                        m_uris = m_data.get("mediaUris", {})
+                                        if "S" in m_uris:
+                                            download_link = m_uris["S"].get("mediaUri")
+                                        elif m_data.get("mediaUri"):
+                                            download_link = m_data.get("mediaUri")
+                                        else:
+                                            for v in m_uris.values():
+                                                if isinstance(v, dict) and "mediaUri" in v:
+                                                    download_link = v.get("mediaUri")
+                                                    break
+                                        if download_link:
                                             break
-                                if download_link:
-                                    break
-                            except Exception:
-                                pass
-                        time.sleep(2)
+                                    except Exception:
+                                        pass
+                                time.sleep(1.5)
+                            if download_link:
+                                break
 
                     # Si transcodificación directa demoró, intentar Batch Request API como respaldo
                     if not download_link:
