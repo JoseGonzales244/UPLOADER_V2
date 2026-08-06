@@ -9,7 +9,7 @@ import logging
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
-from core.interfaces.llm_provider import ILLMProvider
+from domain.interfaces.llm_provider import ILLMProvider
 
 load_dotenv()
 
@@ -43,7 +43,8 @@ class GeminiClient(ILLMProvider):
         self,
         prompt: str,
         model_name: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: float = 0.0,
+        top_p: float = 1.0,
         response_json: bool = True,
         max_retries: int = 6,
         initial_delay: float = 6.0
@@ -58,6 +59,7 @@ class GeminiClient(ILLMProvider):
             try:
                 config = types.GenerateContentConfig(
                     temperature=temperature,
+                    top_p=top_p,
                     response_mime_type="application/json" if response_json else "text/plain"
                 )
                 res = self.client.models.generate_content(

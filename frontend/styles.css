@@ -1,0 +1,178 @@
+/* ==========================================================================
+   Plataforma Calidad Televentas - Interbank
+   Custom Design System & Visual Identity
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap');
+
+:root {
+  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Brand Color Tokens */
+  --ib-green-primary: #00A859;
+  --ib-green-hover: #008F4C;
+  --ib-green-glow: rgba(0, 168, 89, 0.25);
+  
+  --ib-navy-deep: #070A12;
+  --ib-navy-panel: #0E1424;
+  --ib-navy-card: #151D33;
+  --ib-navy-border: #222E4E;
+  
+  --ib-text-bright: #F8FAFC;
+  --ib-text-main: #CBD5E1;
+  --ib-text-muted: #64748B;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--ib-navy-deep);
+  color: var(--ib-text-main);
+  background-image: 
+    radial-gradient(at 15% 15%, rgba(0, 168, 89, 0.08) 0px, transparent 40%),
+    radial-gradient(at 85% 85%, rgba(14, 165, 233, 0.06) 0px, transparent 40%);
+  background-attachment: fixed;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-code {
+  font-family: var(--font-mono);
+}
+
+/* Glassmorphism Cards & Panels */
+.ib-card {
+  background: rgba(14, 20, 36, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--ib-navy-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-radius: 1rem;
+}
+
+.ib-card-interactive {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ib-card-interactive:hover {
+  border-color: rgba(0, 168, 89, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(0, 168, 89, 0.15);
+}
+
+.sidebar-panel {
+  background: var(--ib-navy-panel);
+  border-right: 1px solid var(--ib-navy-border);
+}
+
+/* Primary Button Styling */
+.btn-primary-ib {
+  background: linear-gradient(135deg, #00A859 0%, #008F4C 100%);
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 4px 14px 0 rgba(0, 168, 89, 0.39);
+  transition: all 0.2s ease;
+}
+
+.btn-primary-ib:hover:not(:disabled) {
+  background: linear-gradient(135deg, #05C46B 0%, #00A859 100%);
+  box-shadow: 0 6px 20px 0 rgba(0, 168, 89, 0.55);
+  transform: translateY(-1px);
+}
+
+.btn-primary-ib:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px 0 rgba(0, 168, 89, 0.4);
+}
+
+.btn-secondary-ib {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid var(--ib-navy-border);
+  color: #F8FAFC;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary-ib:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: #475569;
+}
+
+/* Stepper Custom Bar */
+.stepper-line-track {
+  position: absolute;
+  top: 20px;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: #1E293B;
+  z-index: 1;
+}
+
+.stepper-progress-fill {
+  position: absolute;
+  top: 20px;
+  left: 10%;
+  height: 3px;
+  background: linear-gradient(90deg, #3B82F6 0%, #00A859 100%);
+  z-index: 1;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Toast Notifications Container */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-item {
+  pointer-events: auto;
+  min-width: 320px;
+  max-width: 420px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #FFF;
+  font-size: 0.8125rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.2s ease;
+}
+
+.toast-item.toast-success { border-left: 4px solid #10B981; }
+.toast-item.toast-error { border-left: 4px solid #EF4444; }
+.toast-item.toast-warning { border-left: 4px solid #F59E0B; }
+.toast-item.toast-info { border-left: 4px solid #3B82F6; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+::-webkit-scrollbar-thumb {
+  background: #222E4E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00A859;
+}

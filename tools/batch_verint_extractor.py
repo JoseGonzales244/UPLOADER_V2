@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 # Asegurar importación de módulos del proyecto
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.verint_transcript_extractor import (
+from modules.transcripciones.extractors.verint_transcript_extractor import (
     initialize_verint_session,
     extract_single_transcript_in_session,
     get_pending_calls_from_teradata
@@ -50,16 +50,24 @@ def run_batch_extraction(
     failed_count = 0
     failed_calls = []
 
+    # Pre-cargar IDs de llamadas existentes en un conjunto para búsqueda O(1)
+    existing_call_ids = set()
+    if os.path.exists(output_dir):
+        for f in os.listdir(output_dir):
+            if f.endswith(".txt"):
+                # Extraer call_id al final del nombre de archivo o sufijo
+                parts = f.replace(".txt", "").split("_")
+                existing_call_ids.add(parts[-1])
+
     try:
         # 2. Recorrer la lista de llamadas 1 por 1 dentro de la misma sesión abierta
         for idx, item in enumerate(call_items, 1):
             call_id = item.get('call_id')
             metadata = item.get('metadata', {})
             
-            # Omitir si la llamada ya fue procesada y existe su archivo .txt
-            existing_files = [f for f in os.listdir(output_dir) if f.endswith(f"{call_id}.txt")] if os.path.exists(output_dir) else []
-            if existing_files:
-                logger.info(f"[SKIP {idx}/{len(call_items)}] La llamada {call_id} ya fue procesada anteriormente ({existing_files[0]}). Omitiendo...")
+            # Omitir si la llamada ya fue procesada y existe su archivo .txt (Búsqueda O(1))
+            if str(call_id) in existing_call_ids:
+                logger.info(f"[SKIP {idx}/{len(call_items)}] La llamada {call_id} ya fue procesada anteriormente. Omitiendo...")
                 successful_count += 1
                 continue
 
@@ -75,6 +83,7 @@ def run_batch_extraction(
                 if txt_path and os.path.exists(txt_path):
                     logger.info(f"[SUCCESS {idx}/{len(call_items)}] Guardado: {txt_path}")
                     successful_count += 1
+                    existing_call_ids.add(str(call_id))
                 else:
                     logger.error(f"[FAILED {idx}/{len(call_items)}] No se pudo exportar TXT para {call_id}")
                     failed_count += 1

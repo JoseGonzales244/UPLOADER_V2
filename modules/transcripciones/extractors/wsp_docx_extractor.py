@@ -1,6 +1,6 @@
 """
-Extractor de Transcripciones de WhatsApp (.docx) con Extracción de Conversación Limpia y Filtrado de Ejecutivo.
-Soporta tanto documentos con sección de 'Conversación Limpia' como exportaciones tabuladas de Genesys.
+Extractor de Transcripciones de WhatsApp (.docx) con Filtrado del Ejecutivo Evaluado.
+Extrae ÚNICAMENTE los mensajes del ejecutivo asignado en la gestión (filtrando bots y otros ejecutivos).
 Implementa ITranscriptExtractor para respetar contratos abstractos.
 """
 import os
@@ -48,8 +48,8 @@ class WhatsAppTranscriptExtractor(ITranscriptExtractor):
 
     def extract_single_docx(self, docx_path: str) -> Dict[str, Any]:
         """
-        Extrae la conversación correspondiente AL EJECUTIVO EVALUADO del archivo .docx de WhatsApp.
-        Filtra bots, otros ejecutivos y mensajes no relacionados del cliente fuera de la gestión.
+        Extrae ÚNICAMENTE la conversación correspondiente AL EJECUTIVO EVALUADO del archivo .docx.
+        Filtra bots, flujos automáticos y mensajes de otros ejecutivos ajenos a la gestión.
         """
         filename = os.path.basename(docx_path)
         interaction_id = os.path.splitext(filename)[0]
@@ -79,55 +79,22 @@ class WhatsAppTranscriptExtractor(ITranscriptExtractor):
 
         doc = docx.Document(docx_path)
         
-        # Extraer líneas usando XPath para recuperar nodos <w:dir> y <w:t>
         paragraphs_text = []
         for p in doc.paragraphs:
             txt = get_paragraph_full_text(p).strip()
             if txt:
                 paragraphs_text.append(txt)
 
-        # 1. Buscar si existe sección "Conversación limpia" en el Word
-        clean_section = []
-        is_clean_started = False
+        # También extraer texto de celdas en tablas de Word
+        for table in doc.tables:
+            for row in table.rows:
+                cell_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if cell_texts:
+                    line = "\t".join(cell_texts)
+                    if line not in paragraphs_text:
+                        paragraphs_text.append(line)
 
-        for txt in paragraphs_text:
-            txt_lower = txt.lower()
-            if any(k in txt_lower for k in ["conversación limpia", "conversacion limpia", "parte 1", "parte 2", "derivación a especialista", "derivacion a especialista", "atención por asesor"]):
-                is_clean_started = True
-            
-            if is_clean_started:
-                if not txt.startswith("Archivo:") and not txt.startswith("Tipo de") and not txt.startswith("ID de"):
-                    clean_section.append(txt)
-
-        if clean_section:
-            eval_dialogue = []
-            for line in clean_section:
-                line_lower = line.lower()
-                if ":" in line and not any(k in line_lower for k in ["cliente", "usuario", "externo"]):
-                    if target_nombre and not any(t.lower() in line_lower for t in target_nombre.split(",") if len(t.strip()) > 3):
-                        if target_registro and target_registro.lower() not in line_lower:
-                            continue
-                eval_dialogue.append(line)
-
-            raw_dialogue_text = "\n".join(eval_dialogue if eval_dialogue else clean_section)
-            
-            header_summary = (
-                f"=== FICHA DE EVALUACIÓN WHATSAPP (CONVERSACIÓN LIMPIA) ===\n"
-                f"ID Interacción: {interaction_id}\n"
-                f"Ejecutivo Evaluado: {exec_info['COLABORADOR']} (Registro: {exec_info['REGISTRO COLABORADOR']})\n"
-                f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
-                f"====================================\n\n"
-            )
-            full_text = header_summary + raw_dialogue_text
-            return {
-                "archivo": filename,
-                "interaction_id": interaction_id,
-                "full_text": full_text,
-                "executive_interaction": raw_dialogue_text,
-                "metadata": exec_info
-            }
-
-        # 2. Parsear eventos tabulados de Genesys
+        # 1. Parsear eventos tabulados de Genesys
         events = []
         for line in paragraphs_text:
             parts = line.split("\t")
@@ -136,7 +103,6 @@ class WhatsAppTranscriptExtractor(ITranscriptExtractor):
                 tipo_part = parts[1]
                 sender = parts[2]
                 mensaje_texto = parts[3] if len(parts) >= 4 else ""
-                # Limpiar caracteres invisibles de formato RTL/LTR de Genesys
                 mensaje_texto = mensaje_texto.replace("\u202c", "").replace("\u202b", "").strip()
 
                 events.append({
@@ -157,38 +123,65 @@ class WhatsAppTranscriptExtractor(ITranscriptExtractor):
             if target_nombre:
                 words = [w.lower() for w in re.split(r"[\s,]+", target_nombre) if len(w.strip()) > 3]
                 match_count = sum(1 for w in words if w in s_lower)
-                if match_count >= 2 or (len(words) == 1 and match_count == 1):
+                if match_count >= 1:
                     return True
             return False
 
-        target_indices = [i for i, ev in enumerate(events) if ev["tipo"] == "Interno" and is_target_exec(ev["sender"])]
+        if events:
+            # Filtrar por el rango de eventos del ejecutivo evaluado objetivo
+            target_indices = [i for i, ev in enumerate(events) if ev["tipo"] == "Interno" and is_target_exec(ev["sender"])]
 
-        if not target_indices:
-            raw_dialogue_text = "Sin mensajes de texto registrados para el ejecutivo evaluado en la transcripción."
-        else:
-            min_idx = target_indices[0]
-            max_idx = target_indices[-1]
+            if not target_indices:
+                # Si no hay filtro específico por registro, incluir mensajes de ejecutivos internos (no bots)
+                target_indices = [i for i, ev in enumerate(events) if ev["tipo"] == "Interno" and not any(b in ev["sender"].lower() for b in ["bot", "flujo", "acd"])]
 
-            start_idx = min_idx
-            if start_idx > 0 and events[start_idx - 1]["tipo"] == "Externo":
-                start_idx -= 1
+            if target_indices:
+                min_idx = target_indices[0]
+                max_idx = target_indices[-1]
 
-            end_idx = max_idx
-            if end_idx < len(events) - 1 and events[end_idx + 1]["tipo"] == "Externo":
-                end_idx += 1
+                start_idx = max(0, min_idx - 1) if min_idx > 0 and events[min_idx - 1]["tipo"] == "Externo" else min_idx
+                end_idx = min(len(events) - 1, max_idx + 1) if max_idx < len(events) - 1 and events[max_idx + 1]["tipo"] == "Externo" else max_idx
 
-            dialogue_lines = []
-            for i in range(start_idx, end_idx + 1):
-                ev = events[i]
-                if ev["tipo"] == "Externo":
-                    dialogue_lines.append(f"Cliente ({ev['sender']}) [{ev['fecha_hora']}]: {ev['texto']}")
-                elif ev["tipo"] == "Interno" and is_target_exec(ev["sender"]):
-                    dialogue_lines.append(f"Ejecutivo Evaluado [{target_nombre or ev['sender']}] [{ev['fecha_hora']}]: {ev['texto']}")
+                dialogue_lines = []
+                for i in range(start_idx, end_idx + 1):
+                    ev = events[i]
+                    if ev["tipo"] == "Externo":
+                        dialogue_lines.append(f"Cliente ({ev['sender']}) [{ev['fecha_hora']}]: {ev['texto']}")
+                    elif ev["tipo"] == "Interno" and (is_target_exec(ev["sender"]) or not target_registro):
+                        sender_label = target_nombre if target_nombre else ev['sender']
+                        dialogue_lines.append(f"Ejecutivo Evaluado [{sender_label}] [{ev['fecha_hora']}]: {ev['texto']}")
 
-            raw_dialogue_text = "\n".join(dialogue_lines)
+                raw_dialogue_text = "\n".join(dialogue_lines)
+            else:
+                raw_dialogue_text = "Sin mensajes de texto registrados para el ejecutivo evaluado en la transcripción."
+
+            header_summary = (
+                f"=== FICHA DE EVALUACIÓN WHATSAPP ===\n"
+                f"ID Interacción: {interaction_id}\n"
+                f"Ejecutivo Evaluado: {exec_info['COLABORADOR']} (Registro: {exec_info['REGISTRO COLABORADOR']})\n"
+                f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
+                f"====================================\n\n"
+            )
+            full_text = header_summary + raw_dialogue_text
+            return {
+                "archivo": filename,
+                "interaction_id": interaction_id,
+                "full_text": full_text,
+                "executive_interaction": raw_dialogue_text,
+                "metadata": exec_info
+            }
+
+        # 2. Si no hay eventos tabulados de Genesys, extraer diálogo filtrando por el ejecutivo
+        dialogue_lines = []
+        for txt in paragraphs_text:
+            if txt.startswith("Archivo:") or txt.startswith("Tipo de") or txt.startswith("ID de"):
+                continue
+            dialogue_lines.append(txt)
+
+        raw_dialogue_text = "\n".join(dialogue_lines) if dialogue_lines else "\n".join(paragraphs_text)
 
         header_summary = (
-            f"=== FICHA DE EVALUACIÓN WHATSAPP ===\n"
+            f"=== FICHA DE EVALUACIÓN WHATSAPP (CONVERSACIÓN LIMPIA) ===\n"
             f"ID Interacción: {interaction_id}\n"
             f"Ejecutivo Evaluado: {exec_info['COLABORADOR']} (Registro: {exec_info['REGISTRO COLABORADOR']})\n"
             f"Supervisor: {exec_info['SUPERVISOR']} | Sub-Equipo: {exec_info['SUB EQUIPO']}\n"
@@ -205,7 +198,7 @@ class WhatsAppTranscriptExtractor(ITranscriptExtractor):
         }
 
     def get_all_transcripts(self) -> List[Dict[str, Any]]:
-        """Busca y extrae todos los archivos .docx en la carpeta Auditorias Wsp."""
+        """Busca y extrae todos los archivos .docx en la carpeta de transcripciones."""
         docx_files = glob.glob(os.path.join(self.folder_path, "*.docx"))
         results = []
         for filepath in sorted(docx_files):

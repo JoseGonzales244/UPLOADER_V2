@@ -7,7 +7,7 @@
   },
   "verint_settings": {
     "verint_url": "https://wfo.mt5.verintcloudservices.com/wfo/control/signin",
-    "input_csv_template": "EV_{PERIODO}.csv",
+    "input_csv_template": "data/input/proceso_calidad/EV_{PERIODO}.csv",
     "project_name": "Televentas",
     "filter_name": "Filtro_Calidad"
   },

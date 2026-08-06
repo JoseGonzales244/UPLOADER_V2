@@ -4,89 +4,92 @@
 -- carga la tabla de detalle y ejecuta las curvas de ajuste y topes.
 -- =====================================================================
 
--- Quitar espacios en blanco en códigos de categoría y producto en la tabla volátil
-UPDATE VT_EXP_CALIDAD_PESOS_SA SET CATEGORIA = TRIM(CATEGORIA);
-UPDATE VT_EXP_CALIDAD_PESOS_SA SET PRODUCTO = TRIM(PRODUCTO);
+-- 1. Cruce en memoria con la Maestra de Pesos SA, limpieza de espacios y cálculo de puntajes para FLAG=0
+CREATE VOLATILE TABLE VT_EXP_CALIDAD_PESOS_SA_PROCESSED AS (
+    SELECT
+        s.PERIODO,
+        TRIM(s.PRODUCTO) AS PRODUCTO,
+        s.REG_EV,
+        TRIM(s.CATEGORIA) AS CATEGORIA,
+        COALESCE(s.OBTENIDO, 0.0) AS OBTENIDO,
+        s.NEVALUACION,
+        m.ESPERADO,
+        m.PESO_CATEGORIA,
+        m.PESO_GRUPO,
+        CASE
+            WHEN m.FLAG = 0 THEN
+                CASE
+                    WHEN m.ESPERADO IS NULL OR m.ESPERADO = 0 THEN 0.0
+                    WHEN COALESCE(s.OBTENIDO, 0.0) >= m.ESPERADO THEN m.PESO_CATEGORIA
+                    ELSE (COALESCE(s.OBTENIDO, 0.0) / m.ESPERADO) * m.PESO_CATEGORIA
+                END
+            ELSE CAST(NULL AS FLOAT)
+        END AS PUNTAJE,
+        m.FLAG,
+        TRIM(m.GRUPO_CATEGORIA) AS GRUPO_CATEGORIA,
+        s.CODIGO
+    FROM VT_EXP_CALIDAD_PESOS_SA s
+    INNER JOIN DLAB_GEC.M_EXP_MAESTRA_PESOS_SA m
+        ON TRIM(s.CATEGORIA) = TRIM(m.CATEGORIA)
+       AND TRIM(s.PRODUCTO)  = TRIM(m.PRODUCTO)
+) WITH DATA PRIMARY INDEX (PERIODO, PRODUCTO, REG_EV, NEVALUACION) ON COMMIT PRESERVE ROWS;
 
--- Actualizar categorías desde la Tabla Maestra
-UPDATE t_pesos
-FROM   VT_EXP_CALIDAD_PESOS_SA      AS t_pesos,
-       DLAB_GEC.M_EXP_MAESTRA_PESOS_SA      AS t_maestra
-SET
-    PESO_CATEGORIA = t_maestra.PESO_CATEGORIA,
-    PESO_GRUPO     = t_maestra.PESO_GRUPO,
-    ESPERADO       = t_maestra.ESPERADO,
-    FLAG           = t_maestra.FLAG,
-    GRUPO_CATEGORIA = TRIM(t_maestra.GRUPO_CATEGORIA)
-WHERE TRIM(t_pesos.CATEGORIA) = TRIM(t_maestra.CATEGORIA)
-  AND TRIM(t_pesos.PRODUCTO)  = TRIM(t_maestra.PRODUCTO);
 
--- Excluir categorías que no cruzan con la maestra
-DELETE FROM VT_EXP_CALIDAD_PESOS_SA
-WHERE GRUPO_CATEGORIA IS NULL;
-
--- Llenar valores nulos en la columna de obtenido
-UPDATE VT_EXP_CALIDAD_PESOS_SA
-SET OBTENIDO =
-    CASE
-        WHEN OBTENIDO IS NULL THEN 0.0
-        ELSE OBTENIDO
-    END;
-
--- Calcular puntajes para categorías de detalle (FLAG = 0)
-UPDATE t_pesos
-FROM   VT_EXP_CALIDAD_PESOS_SA AS t_pesos
-SET
-PUNTAJE =
-    CASE
-        WHEN t_pesos.ESPERADO IS NULL OR t_pesos.ESPERADO = 0 THEN 0.0
-        WHEN t_pesos.OBTENIDO IS NULL THEN 0.0
-        WHEN t_pesos.OBTENIDO >= t_pesos.ESPERADO THEN t_pesos.PESO_CATEGORIA
-        ELSE (t_pesos.OBTENIDO / t_pesos.ESPERADO) * t_pesos.PESO_CATEGORIA
-    END
-WHERE t_pesos.FLAG = 0;
-
--- Calcular factores para categorías a nivel de grupo (FLAG = 1)
--- (Se usa tabla volátil en lugar de tabla temporal física en base de datos)
+-- 2. Calcular factores para categorías a nivel de grupo (FLAG = 1)
 CREATE VOLATILE TABLE VT_FACTORES_GRUPO AS (
     SELECT
-        TRIM(PRODUCTO)        AS PRODUCTO,
-        TRIM(GRUPO_CATEGORIA) AS GRUPO_CATEGORIA,
+        PRODUCTO,
+        GRUPO_CATEGORIA,
         CASE
             WHEN SUM(CASE WHEN OBTENIDO IS NULL THEN 1 ELSE 0 END) > 0 THEN 0.90
             WHEN SUM(CASE WHEN OBTENIDO < ESPERADO THEN 1 ELSE 0 END) > 0 THEN 0.95
             WHEN SUM(CASE WHEN OBTENIDO >= ESPERADO THEN 1 ELSE 0 END) > 0 THEN 1.00
             ELSE NULL
         END AS FACTOR
-    FROM VT_EXP_CALIDAD_PESOS_SA
+    FROM VT_EXP_CALIDAD_PESOS_SA_PROCESSED
     WHERE FLAG = 1
     GROUP BY 1,2
 ) WITH DATA PRIMARY INDEX (PRODUCTO, GRUPO_CATEGORIA) ON COMMIT PRESERVE ROWS;
 
--- Actualizar puntaje de grupos aplicando el factor
-UPDATE t_pesos
-FROM   VT_EXP_CALIDAD_PESOS_SA AS t_pesos,
-       VT_FACTORES_GRUPO    AS t_fact
-SET
-PUNTAJE = 
-    CASE 
-        WHEN t_fact.FACTOR IS NOT NULL
-            THEN t_fact.FACTOR * t_pesos.PESO_CATEGORIA
-        ELSE t_pesos.PUNTAJE
-    END
-WHERE t_pesos.FLAG = 1
-  AND TRIM(t_pesos.PRODUCTO)        = t_fact.PRODUCTO
-  AND TRIM(t_pesos.GRUPO_CATEGORIA) = t_fact.GRUPO_CATEGORIA;
 
--- Eliminar tabla volátil de factores
+-- 3. Generar dataset final integrando factores de grupo
+CREATE VOLATILE TABLE VT_EXP_CALIDAD_PESOS_SA_FINAL AS (
+    SELECT
+        p.PERIODO,
+        p.PRODUCTO,
+        p.REG_EV,
+        p.CATEGORIA,
+        p.OBTENIDO,
+        p.NEVALUACION,
+        p.ESPERADO,
+        p.PESO_CATEGORIA,
+        p.PESO_GRUPO,
+        CASE
+            WHEN p.FLAG = 1 AND f.FACTOR IS NOT NULL THEN f.FACTOR * p.PESO_CATEGORIA
+            ELSE p.PUNTAJE
+        END AS PUNTAJE,
+        p.FLAG,
+        p.GRUPO_CATEGORIA,
+        p.CODIGO
+    FROM VT_EXP_CALIDAD_PESOS_SA_PROCESSED p
+    LEFT JOIN VT_FACTORES_GRUPO f
+        ON p.PRODUCTO = f.PRODUCTO
+       AND p.GRUPO_CATEGORIA = f.GRUPO_CATEGORIA
+) WITH DATA PRIMARY INDEX (PERIODO, PRODUCTO, REG_EV, NEVALUACION) ON COMMIT PRESERVE ROWS;
+
+
+-- Eliminar tablas volátiles intermedias
 DROP TABLE VT_FACTORES_GRUPO;
+DROP TABLE VT_EXP_CALIDAD_PESOS_SA_PROCESSED;
 
 -- Limpiar tabla física de detalle de Speech Analytics
 DELETE FROM DLAB_GEC.M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS ALL;
 
--- Poblar la tabla de detalle desde la tabla volátil
+-- Poblar la tabla de detalle desde la tabla volátil final
 INSERT INTO DLAB_GEC.M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS
-SELECT * FROM VT_EXP_CALIDAD_PESOS_SA;
+SELECT * FROM VT_EXP_CALIDAD_PESOS_SA_FINAL;
+
+DROP TABLE VT_EXP_CALIDAD_PESOS_SA_FINAL;
 
 
 -- Aplicar suavizado de curvas para categorías de campañas tipo mixto

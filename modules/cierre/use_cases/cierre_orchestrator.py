@@ -10,9 +10,9 @@ import datetime
 import logging
 import teradatasql
 
-from core.database import load_credentials, connect_teradata
-from core.logging_config import setup_logging
-from core.sql_executor import get_friendly_script_name
+from infrastructure.database.database import load_credentials, connect_teradata
+from infrastructure.system.logging_config import setup_logging
+from infrastructure.database.sql_executor import get_friendly_script_name
 
 logger = setup_logging("modules.cierre.orchestrator", log_prefix="cierre")
 
@@ -154,7 +154,7 @@ def run_cierre_process_flow(
                 try:
                     cursor.execute(stmt)
                 except Exception as stmt_err:
-                    from core.sql_executor import SQLScriptExecutionError
+                    from infrastructure.database.sql_executor import SQLScriptExecutionError
                     raise SQLScriptExecutionError(script_name, stmt_idx, stmt, stmt_err)
                     
             if progress_callback:

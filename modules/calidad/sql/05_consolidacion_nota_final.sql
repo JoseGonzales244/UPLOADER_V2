@@ -114,7 +114,48 @@ CREATE VOLATILE TABLE VT_ALL AS (
 */
 
 
--- 8. Aplicar límites finales e insertar en tabla productiva: PC máx 0.4, SA máx 0.6, Nota Final máx 1.0
+-- 8. Normalización de notas intermedias en tabla volátil
+CREATE VOLATILE TABLE VT_BASE_PC_NORM AS (
+    SELECT
+        t_all.CODIGO,
+        t_all.PERIODO,
+        t_all.REG_EJECUTIVO,
+        t_all.NUM_EVALUACION,
+        t_all.SUB_EQUIPO,
+        
+        -- Normalización para NOTA_PC
+        CASE
+            WHEN t_all.SUB_EQUIPO = 'SELECT' THEN
+                CASE
+                    WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
+                    WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
+                    ELSE t_all.NOTA_PC_RAW
+                END
+            ELSE
+                CASE
+                    WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
+                    WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
+                    WHEN t_all.NOTA_PC_RAW > 0.4   THEN 0.4
+                    ELSE t_all.NOTA_PC_RAW
+                END
+        END AS NOTA_PC,
+
+        -- Normalización para NOTA_SA
+        CASE
+            WHEN t_all.SUB_EQUIPO = 'SELECT' THEN 0.0
+            ELSE
+                CASE
+                    WHEN t_all.NOTA_SA_RAW IS NULL THEN 0.0
+                    WHEN t_all.NOTA_SA_RAW < 0.0   THEN 0.0
+                    WHEN t_all.NOTA_SA_RAW > 0.6   THEN 0.6
+                    ELSE t_all.NOTA_SA_RAW
+                END
+        END AS NOTA_SA
+    FROM VT_BASE_PC AS t_all
+) WITH DATA PRIMARY INDEX (CODIGO, NUM_EVALUACION) ON COMMIT PRESERVE ROWS;
+
+
+-- 9. Aplicar límites finales e insertar en tabla productiva: PC máx 0.4, SA máx 0.6, Nota Final máx 1.0
 INSERT INTO DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL
 (
     CODIGO,
@@ -127,112 +168,27 @@ INSERT INTO DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL
     SUB_EQUIPO
 )
 SELECT
-    t_all.CODIGO,
-    t_all.PERIODO,
-    t_all.REG_EJECUTIVO,
-    t_all.NUM_EVALUACION,
-
-    -- Normalización para NOTA_PC
+    n.CODIGO,
+    n.PERIODO,
+    n.REG_EJECUTIVO,
+    n.NUM_EVALUACION,
+    n.NOTA_PC,
+    n.NOTA_SA,
     CASE
-        WHEN t_all.SUB_EQUIPO = 'SELECT' THEN
-        	CASE
-                WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-                WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-                ELSE t_all.NOTA_PC_RAW
-            END
-        ELSE
-            CASE
-                WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-                WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-                WHEN t_all.NOTA_PC_RAW > 0.4   THEN 0.4
-                ELSE t_all.NOTA_PC_RAW
-            END
-    END AS NOTA_PC,
-
-    -- Normalización para NOTA_SA
-    CASE
-        WHEN t_all.SUB_EQUIPO = 'SELECT' THEN 0.0
-        ELSE
-            CASE
-                WHEN t_all.NOTA_SA_RAW IS NULL THEN 0.0
-                WHEN t_all.NOTA_SA_RAW < 0.0   THEN 0.0
-                WHEN t_all.NOTA_SA_RAW > 0.6   THEN 0.6
-                ELSE t_all.NOTA_SA_RAW
-            END
-    END AS NOTA_SA,
-
-    -- Normalización para NOTA_FINAL
-    CASE
-        WHEN (
-            -- Cálculo idéntico de NOTA_PC
-            CASE
-                WHEN t_all.SUB_EQUIPO = 'SELECT' THEN
-		        	CASE
-		                WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-		                WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-		                ELSE t_all.NOTA_PC_RAW
-		            END
-                ELSE
-                    CASE
-                        WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-                        WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-                        WHEN t_all.NOTA_PC_RAW > 0.4   THEN 0.4
-                        ELSE t_all.NOTA_PC_RAW
-                    END
-            END
-            +
-            -- Cálculo idéntico de NOTA_SA
-            CASE
-                WHEN t_all.SUB_EQUIPO = 'SELECT' THEN 0.0
-                ELSE
-                    CASE
-                        WHEN t_all.NOTA_SA_RAW IS NULL THEN 0.0
-                        WHEN t_all.NOTA_SA_RAW < 0.0   THEN 0.0
-                        WHEN t_all.NOTA_SA_RAW > 0.6   THEN 0.6
-                        ELSE t_all.NOTA_SA_RAW
-                    END
-            END
-        ) > 1.0 THEN 1.0
-        ELSE (
-            CASE
-                WHEN t_all.SUB_EQUIPO = 'SELECT' THEN
-		        	CASE
-		                WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-		                WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-		                ELSE t_all.NOTA_PC_RAW
-		            END
-                ELSE
-                    CASE
-                        WHEN t_all.NOTA_PC_RAW IS NULL THEN 0.0
-                        WHEN t_all.NOTA_PC_RAW < 0.0   THEN 0.0
-                        WHEN t_all.NOTA_PC_RAW > 0.4   THEN 0.4
-                        ELSE t_all.NOTA_PC_RAW
-                    END
-            END
-            +
-            CASE
-                WHEN t_all.SUB_EQUIPO = 'SELECT' THEN 0.0
-                ELSE
-                    CASE
-                        WHEN t_all.NOTA_SA_RAW IS NULL THEN 0.0
-                        WHEN t_all.NOTA_SA_RAW < 0.0   THEN 0.0
-                        WHEN t_all.NOTA_SA_RAW > 0.6   THEN 0.6
-                        ELSE t_all.NOTA_SA_RAW
-                    END
-            END
-        )
+        WHEN (n.NOTA_PC + n.NOTA_SA) > 1.0 THEN 1.0
+        ELSE (n.NOTA_PC + n.NOTA_SA)
     END AS NOTA_FINAL,
+    n.SUB_EQUIPO
+FROM VT_BASE_PC_NORM AS n;
 
-    t_all.SUB_EQUIPO
-FROM VT_BASE_PC AS t_all;
 
-
--- 9. Dropeo de tablas volátiles para limpiar spool
+-- 10. Dropeo de tablas volátiles para limpiar spool
 DROP TABLE VT_EXEC;
 DROP TABLE VT_PC;
 DROP TABLE VT_SA_CAT;
 DROP TABLE VT_SA;
 DROP TABLE VT_BASE_PC;
+DROP TABLE VT_BASE_PC_NORM;
 -- DROP TABLE VT_BASE_GER;
 -- DROP TABLE VT_ALL;
 

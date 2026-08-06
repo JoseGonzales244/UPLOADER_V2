@@ -11,23 +11,23 @@ import datetime
 
 import textwrap
 
-from core.readers import read_excel_file, read_csv_file, read_unicode_text_file
-from core.cleaners import clean_dataframe, sanitize_identifier
-from core.database import load_credentials, connect_teradata, load_to_teradata
-from core.logging_config import logger, setup_logging
+from infrastructure.parsers.readers import read_excel_file, read_csv_file, read_unicode_text_file
+from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier
+from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
+from infrastructure.system.logging_config import logger, setup_logging
 from ui.components import render_sidebar, render_column_editor
 
-from core.Insight_downloader import download_insight_data
-from core.verint_downloader import download_verint_data
-from core.sql_executor import SQLScriptExecutionError
-from core.orchestrator import run_orchestration_flow
-from core.quality_process_orchestrator import run_quality_process_flow
+from infrastructure.scrapers.insight_downloader import download_insight_data
+from infrastructure.scrapers.verint_downloader import download_verint_data
+from infrastructure.database.sql_executor import SQLScriptExecutionError
+from modules.consumo.use_cases.consumo_orchestrator import run_orchestration_flow
+from modules.calidad.use_cases.quality_orchestrator import run_quality_process_flow
 
-from genesys_bot.services.outlook_service import OutlookService
-from genesys_bot.services.teradata_service import TeradataService
-from genesys_bot.services.genesys_browser import GenesysBrowserAutomation
-from genesys_bot.models import SolicitudAudio
-from genesys_bot.config import DOWNLOADS_DIR
+from modules.genesys.services.outlook_service import OutlookService
+from modules.genesys.services.teradata_service import TeradataService
+from modules.genesys.services.genesys_browser import GenesysBrowserAutomation
+from modules.genesys.models import SolicitudAudio
+from modules.genesys.config import DOWNLOADS_DIR
 
 # Initialize Session State
 if 'df' not in st.session_state:

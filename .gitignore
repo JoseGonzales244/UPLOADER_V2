@@ -19,7 +19,6 @@ Auditorias Wsp/
 *.docx
 *.doc
 openspec/
-data/
 logs/
 *.log
 
@@ -31,7 +30,7 @@ logs/
 # Archivos de entrada o datos temporales pesados/sensibles
 *.xlsx
 *.csv
-!EV_202607.csv
+!data/input/proceso_calidad/*.csv
 
 # VS Code y SO
 .vscode/

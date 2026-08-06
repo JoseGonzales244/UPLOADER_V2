@@ -29,13 +29,13 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from core.logging_config import setup_logging
-from core.orchestrator import run_orchestration_flow
-from core.quality_process_orchestrator import run_quality_process_flow
-from core.readers import read_excel_file, read_csv_file, read_unicode_text_file
-from core.cleaners import clean_dataframe, sanitize_identifier, suggest_sql_type
-from core.database import load_credentials, connect_teradata, load_to_teradata
-from core.health_check import run_preflight_health_check
+from infrastructure.system.logging_config import setup_logging
+from modules.consumo.use_cases.consumo_orchestrator import run_orchestration_flow
+from modules.calidad.use_cases.quality_orchestrator import run_quality_process_flow
+from infrastructure.parsers.readers import read_excel_file, read_csv_file, read_unicode_text_file
+from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier, suggest_sql_type
+from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
+from infrastructure.system.health_check import run_preflight_health_check
 from modules.cierre.use_cases.cierre_orchestrator import run_cierre_process_flow
 from ui.components import load_templates
 
@@ -320,7 +320,7 @@ def start_calidad(req: CalidadRequest, background_tasks: BackgroundTasks):
 def fetch_outlook_emails():
     """Consulta los últimos 3 correos de solicitud de audios en Outlook Desktop"""
     try:
-        from genesys_bot.services.outlook_service import OutlookService
+        from modules.genesys.services.outlook_service import OutlookService
         svc = OutlookService()
         correos = svc.obtener_ultimos_correos(limit=3)
         return {"status": "ok", "correos": correos}
@@ -334,8 +334,8 @@ def _run_audios_task(req: AudioRequest):
     process_state["progress"] = 0.0
     
     try:
-        from genesys_bot.services.genesys_browser import GenesysBrowserAutomation
-        from genesys_bot.models import SolicitudAudio
+        from modules.genesys.services.genesys_browser import GenesysBrowserAutomation
+        from modules.genesys.models import SolicitudAudio
         
         solicitudes = [
             SolicitudAudio(reg_ev=item.reg_ev, dni=item.dni, nombre_archivo=item.nombre_archivo, prefijo=item.prefijo)

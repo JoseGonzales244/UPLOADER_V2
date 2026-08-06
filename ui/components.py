@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import pandas as pd
-from core.cleaners import suggest_sql_type, sanitize_identifier
+from infrastructure.parsers.cleaners import suggest_sql_type, sanitize_identifier
 
 def load_templates() -> dict:
     """Carga las plantillas de mapping Excel→Teradata desde config/plantillas.json."""
@@ -82,7 +82,7 @@ def render_sidebar():
     st.sidebar.markdown("<h3 style='color: #E2E8F0; font-size: 1rem; margin-bottom: 10px;'>🩺 Diagnóstico de Entorno</h3>", unsafe_allow_html=True)
     
     if st.sidebar.button("🔍 Verificar Entorno", key="btn_run_health_check", width="stretch"):
-        from core.health_check import run_preflight_health_check
+        from infrastructure.system.health_check import run_preflight_health_check
         st.session_state.health_status = run_preflight_health_check()
 
     health = st.session_state.get("health_status", None)

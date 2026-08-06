@@ -8,12 +8,12 @@ import polars as pl
 import teradatasql
 from pathlib import Path
 
-from core.Insight_downloader import download_insight_data
-from core.verint_downloader import download_verint_data
-from core.readers import read_excel_file
-from core.cleaners import clean_dataframe, sanitize_identifier
-from core.database import load_credentials, connect_teradata, load_to_teradata
-from core.sql_executor import get_friendly_script_name
+from infrastructure.scrapers.insight_downloader import download_insight_data
+from infrastructure.scrapers.verint_downloader import download_verint_data
+from infrastructure.parsers.readers import read_excel_file
+from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier
+from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
+from infrastructure.database.sql_executor import get_friendly_script_name
 from ui.components import load_templates
 
 logger = logging.getLogger(__name__)
@@ -780,7 +780,7 @@ def run_quality_process_flow(
                     try:
                         cursor.execute(stmt_str)
                     except Exception as stmt_err:
-                        from core.sql_executor import SQLScriptExecutionError
+                        from infrastructure.database.sql_executor import SQLScriptExecutionError
                         raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_str, stmt_err)
                 
                 if progress_callback:
@@ -886,7 +886,7 @@ def run_quality_process_flow(
                 try:
                     cursor.execute(stmt_str)
                 except Exception as stmt_err:
-                    from core.sql_executor import SQLScriptExecutionError
+                    from infrastructure.database.sql_executor import SQLScriptExecutionError
                     raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_str, stmt_err)
                     
             if progress_callback:
@@ -900,7 +900,7 @@ def run_quality_process_flow(
                 progress_callback("🎉 ¡Proceso NTD (Fase 5) completado exitosamente!", "success")
                 
             try:
-                from core.notifier import notify_desktop
+                from infrastructure.system.notifier import notify_desktop
                 notify_desktop(
                     title="Uploader V2 - Calidad",
                     message="¡Proceso NTD completado exitosamente!",
