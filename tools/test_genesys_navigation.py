@@ -111,39 +111,26 @@ def ejecutar_test_navegacion():
         filas = analytics_frame.locator(SELECTORS["action_rows"])
         filas.first.click(force=True)
 
-        logger.info("Esperando apertura de pestaña secundaria de detalles (/admin)...")
-        detalle_page = None
+        logger.info("Esperando apertura de la vista de detalles (/admin)...")
+        detalle_encontrado = False
         for _ in range(15):
-            admin_pages = [pg for pg in page.context.pages if "/admin" in pg.url]
-            if admin_pages:
-                detalle_page = admin_pages[-1]
+            if "/admin" in page.url or any("/admin" in pg.url for pg in page.context.pages):
+                detalle_encontrado = True
                 break
             page.wait_for_timeout(1000)
 
-        if not detalle_page:
-            logger.error("❌ No se detectó la apertura de la pestaña de detalle.")
+        if not detalle_encontrado:
+            logger.error("❌ No se detectó la navegación a la vista de detalle.")
             return
 
-        logger.info(f"✓ Pestaña de detalle detectada: {detalle_page.url}")
-        logger.info("Permaneciendo 3 segundos en la pestaña de detalles...")
+        logger.info(f"✓ Vista de detalle detectada en URL: {page.url}")
+        logger.info("Permaneciendo 3 segundos en la vista de detalles...")
         page.wait_for_timeout(3000)
 
-        # 7. Cerrar pestaña de detalle y regresar a la pestaña principal
-        logger.info("Cerrando pestaña secundaria de detalle...")
-        if detalle_page and not detalle_page.is_closed():
-            detalle_page.close()
-
-        logger.info("Recuperando la pestaña de origen activa...")
-        page_principal = automation._obtener_page_principal(browser or context)
-        if page_principal and not page_principal.is_closed():
-            try:
-                page_principal.bring_to_front()
-                page_principal.wait_for_timeout(1500)
-                logger.info("✓ Pestaña de origen enfocada exitosamente.")
-            except Exception as e:
-                logger.warning(f"No se pudo traer la pestaña al frente: {e}")
-        else:
-            logger.warning("No se encontró la pestaña principal activa. Re-evaluando contexto...")
+        # 7. Regresar a la pestaña de Interacciones mediante el botón interno de la SPA
+        logger.info("Retornando a la vista principal mediante la pestaña interna 'Interacciones'...")
+        automation._regresar_a_pestana_interacciones(page)
+        page.wait_for_timeout(2000)
 
         # 8. Validar la persistencia del estado en la página principal
         logger.info("Verificando persistencia del estado de filtros en la página de origen...")

@@ -115,6 +115,23 @@ class GenesysBrowserAutomation:
         except Exception:
             pass
 
+    def _regresar_a_pestana_interacciones(self, page: Page) -> None:
+        """Hace clic en la pestaña interna 'Interacciones' del header SPA de Genesys para regresar a la lista con filtros intactos."""
+        try:
+            tab_btn = page.locator(SELECTORS["interactions_tab_btn"]).first
+            if not tab_btn.is_visible():
+                tab_btn = page.locator('button.gux-tab-button:has-text("Interacciones")').first
+
+            if tab_btn.is_visible():
+                logger.info("Haciendo clic en la pestaña interna 'Interacciones' de la SPA...")
+                tab_btn.click(force=True)
+                page.wait_for_timeout(1500)
+                logger.info("✓ Retornado exitosamente a la vista de Interacciones.")
+            else:
+                logger.warning("No se localizó el botón de la pestaña interna 'Interacciones'.")
+        except Exception as e:
+            logger.error(f"Error regresando a la pestaña Interacciones: {e}")
+
     def _asegurar_panel_filtros_abierto(self, analytics_frame: Frame) -> None:
         try:
             toggle_btn = analytics_frame.locator(SELECTORS["toggle_filters_btn"])
