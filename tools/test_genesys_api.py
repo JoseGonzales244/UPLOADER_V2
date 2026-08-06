@@ -90,7 +90,11 @@ if resp.status_code == 200:
                                 with open(output_filename, "wb") as f:
                                     for chunk in audio_resp.iter_content(chunk_size=8192):
                                         f.write(chunk)
-                                print(f"[¡COMPLETADO!] Archivo MP3 guardado exitosamente: {output_filename}")
+                                full_path = os.path.abspath(output_filename)
+                                file_size = os.path.getsize(full_path)
+                                print(f"\n[¡ÉXITO TOTAL!] Archivo MP3 descargado y guardado correctamente.")
+                                print(f"Ruta completa en tu laptop: {full_path}")
+                                print(f"Tamaño del archivo: {file_size / 1024:.2f} KB ({file_size} bytes)")
                             else:
                                 print(f"❌ Error descargando MP3: Status {audio_resp.status_code}")
                         else:
