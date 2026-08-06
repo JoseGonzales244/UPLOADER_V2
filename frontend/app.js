@@ -466,6 +466,18 @@ function App() {
     }
   };
 
+  const handleStopProcess = async () => {
+    try {
+      const res = await fetch('/api/orchestrate/stop', { method: 'POST' });
+      const data = await res.json();
+      showToast(data.message || 'Solicitud de parada enviada', 'warning');
+      setIsRunning(false);
+      setCurrentProcess('');
+    } catch (err) {
+      showToast('Error al detener el proceso: ' + err.message, 'error');
+    }
+  };
+
   const filteredLogs = logs.filter((log) => {
     if (logFilter === 'all') return true;
     return log.type === logFilter;
@@ -491,7 +503,11 @@ function App() {
         h('div', { class: 'flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900/90 border border-slate-700/80 shadow-inner' },
           h('span', { class: `w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-amber-400 animate-pulse shadow-sm shadow-amber-400' : 'bg-emerald-400 shadow-sm shadow-emerald-400'}` }),
           h('span', { class: 'text-slate-200' }, isRunning ? `Ejecutando: ${currentProcess}` : 'Sistema listo')
-        )
+        ),
+        isRunning && h('button', {
+          onClick: handleStopProcess,
+          class: 'px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-950/50 flex items-center gap-1.5 transition cursor-pointer active:scale-95'
+        }, '🛑 Detener Proceso')
       )
     ),
 

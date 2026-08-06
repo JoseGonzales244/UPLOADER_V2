@@ -85,7 +85,17 @@ async def startup_event():
     global main_loop
     main_loop = asyncio.get_running_loop()
 
-# Estado global de ejecución
+# Estado global de ejecución y cancelación
+stop_requested = False
+
+def is_stop_requested() -> bool:
+    global stop_requested
+    return stop_requested
+
+def reset_stop_requested():
+    global stop_requested
+    stop_requested = False
+
 process_state = {
     "running": False,
     "current_process": None,
@@ -94,6 +104,16 @@ process_state = {
     "message": "Sistema listo.",
     "status": "idle"
 }
+
+@app.post("/api/orchestrate/stop")
+def stop_process():
+    """Detiene cualquier proceso activo en segundo plano"""
+    global stop_requested
+    stop_requested = True
+    process_state["running"] = False
+    process_state["current_process"] = None
+    send_progress_update("🛑 Solicitud de cancelación enviada. Deteniendo proceso activo...", "warning", progress=0.0)
+    return {"status": "ok", "message": "Proceso detenido correctamente."}
 
 def send_progress_update(message: str, type_str: str = "info", progress: Optional[float] = None, phase: Optional[int] = None):
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
@@ -209,6 +229,7 @@ async def websocket_logs(websocket: WebSocket):
 
 # --- FLUSO CONSUMO ---
 def _run_consumo_task(req: ConsumoRequest):
+    reset_stop_requested()
     process_state["running"] = True
     process_state["current_process"] = "PBI Base Consumo"
     process_state["progress"] = 0.0
@@ -256,6 +277,7 @@ def start_consumo(req: ConsumoRequest, background_tasks: BackgroundTasks):
 
 # --- FLUJO CALIDAD & CIERRE ---
 def _run_calidad_task(req: CalidadRequest):
+    reset_stop_requested()
     process_state["running"] = True
     process_state["current_process"] = "Cierre Mensual (01 Auditoría + 02 KRI)" if req.solo_cierre else "PBI Evaluaciones Calidad"
     process_state["progress"] = 0.0
@@ -329,6 +351,7 @@ def fetch_outlook_emails():
         return {"status": "error", "message": str(e), "correos": []}
 
 def _run_audios_task(req: AudioRequest):
+    reset_stop_requested()
     process_state["running"] = True
     process_state["current_process"] = "Solicitud de Audios (Genesys)"
     process_state["progress"] = 0.0
@@ -353,8 +376,11 @@ def _run_audios_task(req: AudioRequest):
 
         send_progress_update(f"🎧 Iniciando descarga de {len(solicitudes_enriquecidas)} audios en Genesys...", "info", progress=0.1)
         bot = GenesysBrowserAutomation()
-        res = bot.ejecutar_descargas(solicitudes_enriquecidas)
-        send_progress_update("🎉 ¡Proceso de descarga de audios completado!", "success", progress=1.0)
+        res = bot.ejecutar_descargas(solicitudes_enriquecidas, stop_checker=is_stop_requested)
+        if is_stop_requested():
+            send_progress_update("🛑 Descarga de audios cancelada por el usuario.", "warning", progress=0.0)
+        else:
+            send_progress_update("🎉 ¡Proceso de descarga de audios completado!", "success", progress=1.0)
     except Exception as e:
         logger.error(f"Error en descarga de audios: {e}")
         send_progress_update(f"❌ Error en proceso de audios: {e}", "error")
@@ -439,6 +465,7 @@ def _run_upload_task(
     selections: list
 ):
     try:
+        reset_stop_requested()
         process_state["running"] = True
         process_state["current_process"] = f"Ingesta Teradata: {teradata_table}"
         send_progress_update("🛠️ Leyendo archivo para ingesta...", "info", progress=0.1)

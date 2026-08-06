@@ -487,7 +487,7 @@ class GenesysBrowserAutomation:
 
         return None
 
-    def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str) -> bool:
+    def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str, stop_checker=None) -> bool:
         """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
         logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
         
@@ -502,6 +502,10 @@ class GenesysBrowserAutomation:
         api_query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
 
         for idx, sol in enumerate(solicitudes, 1):
+            if stop_checker and stop_checker():
+                logger.warning("🛑 Proceso detenido por el usuario.")
+                return False
+
             logger.info(f"--- [API REST {idx}/{len(solicitudes)}] Promotor: {sol.reg_ev} | DNI: {sol.dni} ---")
             
             # Formatear el intervalo para el mes correspondiente (por defecto Julio 2026)
@@ -687,7 +691,7 @@ class GenesysBrowserAutomation:
         """Alias retrocompatible para ejecutar_descargas"""
         return self.ejecutar_descargas(solicitudes, headless=headless)
 
-    def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True) -> None:
+    def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True, stop_checker=None) -> None:
         solicitudes = self.tracking_store.filtrar_no_procesados(solicitudes)
         if not solicitudes:
             logger.info("No hay solicitudes pendientes por procesar.")
@@ -747,6 +751,9 @@ class GenesysBrowserAutomation:
                         logger.info("👉 Por favor complete el inicio de sesión en Chrome. (Tiempo de espera: 5 minutos)...")
                         start_time = time.time()
                         while time.time() - start_time < 300:
+                            if stop_checker and stop_checker():
+                                logger.warning("🛑 Cancelado durante espera de login.")
+                                return
                             if page.is_closed():
                                 logger.warning("Navegador cerrado por el usuario.")
                                 return
@@ -791,7 +798,7 @@ class GenesysBrowserAutomation:
             token = self._extraer_bearer_token(page, timeout_ms=3000)
             if token:
                 logger.info("🔑 Bearer Token capturado automáticamente de la sesión activa.")
-                if self.ejecutar_descargas_api(solicitudes, token):
+                if self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker):
                     logger.info("⚡ Proceso completado exitosamente a alta velocidad vía API REST.")
                     return
 
@@ -800,6 +807,9 @@ class GenesysBrowserAutomation:
                 base_url = page.url.split("/directory/#/")[0]
 
             for idx, sol in enumerate(solicitudes, 1):
+                if stop_checker and stop_checker():
+                    logger.warning("🛑 Proceso detenido por el usuario.")
+                    break
                 logger.info(f"--- Registro {idx}/{len(solicitudes)}: Promotor {sol.reg_ev} | DNI {sol.dni} ---")
                 detalle_page = None
                 try:
