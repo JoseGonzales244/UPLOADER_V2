@@ -196,7 +196,27 @@ def ejecutar_test_especifico():
 
         rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
         rec_resp = requests.get(rec_url, headers=headers, verify=False, timeout=15)
-        if rec_resp.status_code != 200 or not rec_resp.json():
+        print(f"Status /recordings: {rec_resp.status_code}")
+        
+        recs = []
+        if rec_resp.status_code == 200:
+            recs = rec_resp.json()
+            print(f"Total grabaciones devueltas por /recordings: {len(recs)}")
+        else:
+            print(f"Respuesta /recordings: {rec_resp.text[:300]}")
+
+        # Si /recordings devolvió 0 o error, probar /recordingmetadata
+        if not recs:
+            meta_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordingmetadata"
+            meta_resp = requests.get(meta_url, headers=headers, verify=False, timeout=15)
+            print(f"Status /recordingmetadata: {meta_resp.status_code}")
+            if meta_resp.status_code == 200:
+                recs = meta_resp.json()
+                print(f"Total grabaciones devueltas por /recordingmetadata: {len(recs)}")
+            else:
+                print(f"Respuesta /recordingmetadata: {meta_resp.text[:300]}")
+
+        if not recs:
             print(f"❌ No se obtuvieron grabaciones para {conv_id}")
             continue
 
