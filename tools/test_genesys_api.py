@@ -3,7 +3,10 @@ import json
 import urllib3
 import os
 import re
+import shutil
+import subprocess
 import time
+import urllib.request
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -11,15 +14,80 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DOWNLOADS_DIR = Path.home() / "Downloads"
 CDP_URL = "http://localhost:9222"
+GENESYS_URL = "https://apps.mypurecloud.com/directory/#/analytics/interactions"
+PROFILE_DIR = Path(__file__).parent.parent / "modules" / "genesys" / ".chrome_genesys_profile"
+
+def auto_lanzar_chrome():
+    try:
+        req = urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=1)
+        if req.status == 200:
+            print("✓ Chrome ya está escuchando en puerto CDP 9222.")
+            return True
+    except Exception:
+        pass
+
+    chrome_paths = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
+        shutil.which("chrome") or ""
+    ]
+    chrome_cmd = next((p for p in chrome_paths if p and os.path.exists(p)), None)
+    if not chrome_cmd:
+        print("❌ No se encontró el ejecutable de Chrome en rutas estándar.")
+        return False
+
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        chrome_cmd,
+        "--remote-debugging-port=9222",
+        f"--user-data-dir={PROFILE_DIR.resolve()}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        GENESYS_URL
+    ]
+
+    print("🚀 Auto-iniciando Chrome con perfil persistente corporativo...")
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Error ejecutando Chrome: {e}")
+        return False
+
+    start = time.time()
+    while time.time() - start < 12:
+        try:
+            req = urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=1)
+            if req.status == 200:
+                print("✓ Chrome auto-iniciado y listo.")
+                return True
+        except Exception:
+            time.sleep(0.5)
+
+    return False
 
 def extraer_bearer_token():
+    if not auto_lanzar_chrome():
+        print("❌ No se pudo auto-iniciar ni conectar a Chrome.")
+        return None
+
     print("Conectando a Chrome vía CDP para capturar Bearer Token...")
     with sync_playwright() as p:
         try:
             browser = p.chromium.connect_over_cdp(CDP_URL)
-            context = browser.contexts[0]
-            page = context.pages[0] if context.pages else context.new_page()
-            
+            context = browser.contexts[0] if browser.contexts else None
+            page = context.pages[0] if (context and context.pages) else browser.new_page() if hasattr(browser, "new_page") else None
+
+            if not page:
+                for ctx in browser.contexts:
+                    if ctx.pages:
+                        page = ctx.pages[0]
+                        break
+
+            if not page:
+                print("❌ No se encontró una página abierta en Chrome.")
+                return None
+
             token_box = {"token": None}
             def _on_req(req):
                 auth = req.headers.get("authorization", "")
@@ -27,8 +95,8 @@ def extraer_bearer_token():
                     token_box["token"] = auth.replace("Bearer ", "").strip()
 
             page.on("request", _on_req)
-            page.wait_for_timeout(2000)
-            
+            page.wait_for_timeout(2500)
+
             if not token_box["token"]:
                 try:
                     token_js = page.evaluate("""() => {
@@ -46,16 +114,17 @@ def extraer_bearer_token():
 
             return token_box["token"]
         except Exception as e:
-            print(f"Error conectando a Chrome CDP: {e}")
+            print(f"Error capturando token de Chrome: {e}")
             return None
 
 def ejecutar_test_especifico():
+    print("=== Test Completo 100% Automatizado de Genesys API ===")
     token = extraer_bearer_token()
     if not token:
-        print("❌ No se pudo capturar el Bearer Token. Asegúrate de tener Chrome abierto con Genesys.")
+        print("❌ No se pudo capturar el Bearer Token. Verifica que tu sesión esté iniciada.")
         return
 
-    print("✓ Bearer Token capturado correctamente.")
+    print("🔑 Bearer Token capturado exitosamente.")
 
     # 1. Cargar catálogo de wrapup codes
     print("Cargando catálogo de wrapUp codes de Genesys...")
@@ -68,14 +137,13 @@ def ejecutar_test_especifico():
                 catalog[e["id"]] = e["name"]
         print(f"✓ Catálogo cargado: {len(catalog)} wrapUp codes.")
 
-    # 2. Datos del test específico del usuario
+    # 2. Datos del test específico
     reg_ev = "B44255"
     dni = "09076261"
     telefonos = ["965774357", "5812697", "995084684"]
     nombre_archivo = f"TC_{reg_ev}_DNI{dni}_20260715"
 
-    print(f"\n--- Probando consulta API para DNI {dni} (Teléfonos: {telefonos}) ---")
-    
+    print(f"\n--- Consultando API para DNI {dni} (Teléfonos: {telefonos}) ---")
     dnis_preds = [{"dimension": "dnis", "value": tlf} for tlf in telefonos]
     payload = {
         "order": "desc",
@@ -125,7 +193,7 @@ def ejecutar_test_especifico():
     for sub_idx, (conv, wrapups) in enumerate(candidatas, 1):
         conv_id = conv.get("conversationId")
         print(f"\nDescargando audio para Conv ID: {conv_id}...")
-        
+
         rec_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
         rec_resp = requests.get(rec_url, headers=headers, verify=False, timeout=15)
         if rec_resp.status_code != 200 or not rec_resp.json():
