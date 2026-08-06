@@ -173,9 +173,9 @@ def ejecutar_test_especifico():
             for res in results:
                 print(f"   - Match ID: {res.get('id')} | Name: {res.get('name')} | State: {res.get('state')}")
 
-    # 3. Probar la búsqueda en /analytics/conversations/details/query con segmentFilters y userId
+    # 3. Probar la búsqueda en /analytics/conversations/details/query con la sintaxis exacta de Genesys
     if user_id:
-        print(f"\n3. Consultando /analytics/conversations/details/query usando segmentFilters con userId {user_id}...")
+        print(f"\n3. Consultando /analytics/conversations/details/query para userId {user_id}...")
         conv_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
         conv_payload = {
             "order": "desc",
@@ -186,7 +186,12 @@ def ejecutar_test_especifico():
                 {
                     "type": "or",
                     "predicates": [
-                        {"dimension": "userId", "value": user_id}
+                        {
+                            "type": "dimension",
+                            "dimension": "userId",
+                            "operator": "matches",
+                            "value": user_id
+                        }
                     ]
                 }
             ]
@@ -195,14 +200,15 @@ def ejecutar_test_especifico():
         print(f"   Status respuesta consulta: {r_conv.status_code}")
         if r_conv.status_code == 200:
             convs = r_conv.json().get("conversations", [])
-            print(f"   ¡EXITO TOTAL! Conversaciones recuperadas para la ejecutiva inactiva: {len(convs)}")
+            print(f"   ¡EXITO TOTAL! Conversaciones recuperadas para la ejecutiva inactiva {user_id}: {len(convs)}")
             for c in convs[:5]:
                 print(f"   - Conv ID: {c.get('conversationId')} | Start: {c.get('conversationStart')}")
         else:
-            print(f"   Error consulta: {r_conv.text[:300]}")
+            print(f"   Detalle error {r_conv.status_code}: {r_conv.text}")
 
 if __name__ == "__main__":
     ejecutar_test_especifico()
+
 
 )
 
