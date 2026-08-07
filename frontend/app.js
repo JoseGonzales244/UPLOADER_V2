@@ -106,12 +106,8 @@ function App() {
 
   const getDefaultPeriod = () => {
     const d = new Date();
-    let year = d.getFullYear();
-    let month = d.getMonth();
-    if (month === 0) {
-      month = 12;
-      year -= 1;
-    }
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
     return `${year}${String(month).padStart(2, '0')}`;
   };
 
