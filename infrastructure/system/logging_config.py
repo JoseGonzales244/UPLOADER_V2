@@ -38,8 +38,8 @@ def setup_logging(
     target_dir = Path(log_dir) if log_dir is not None else LOG_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    log_file = target_dir / f"{log_prefix}_{timestamp}.log"
+    date_str = datetime.now().strftime("%Y%m%d")
+    log_file = target_dir / f"{log_prefix}_{date_str}.log"
 
     logger = logging.getLogger(name)
     for handler in list(logger.handlers):
