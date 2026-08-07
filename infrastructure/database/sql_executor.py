@@ -182,7 +182,7 @@ def run_post_load_transformations(con, period_str, clear_consent=False, progress
     params = get_period_params(period_str)
 
     # Target SQL scripts in correct dependency order
-    opt_sql_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'modules', 'consumo', 'sql')
+    opt_sql_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'modules', 'consumo', 'sql')
 
     scripts = [
         "VENTAS_DN.sql",
@@ -240,7 +240,7 @@ def run_selection_transformation(period_str, progress_callback=None):
     Executes the selection SQL script using the secondary read-only connection.
     """
     params = get_period_params(period_str)
-    opt_sql_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'modules', 'consumo', 'sql')
+    opt_sql_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'modules', 'consumo', 'sql')
 
     # --- EJECUCIÓN DEL SCRIPT SECUNDARIO CON CONEXIÓN SEPARADA ---
     sec_user = os.getenv("TERADATA_USER_SELECT")
