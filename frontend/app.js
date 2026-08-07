@@ -154,12 +154,18 @@ function App() {
               const newText = data.message;
               const newType = data.type || 'info';
 
+              const getSig = (txt) => {
+                if (!txt || !txt.includes('Procesando paso')) return null;
+                const m = txt.match(/([a-zA-Z0-9_]+\.sql)/i) || txt.match(/^(.*?)[—\-]/);
+                return m ? m[1].toLowerCase() : txt;
+              };
+
               if (prev.length > 0) {
                 const lastLog = prev[prev.length - 1];
-                const matchNew = newText.match(/^(⚙️\s*.*?)\s*—\s*Procesando paso/);
-                const matchLast = lastLog.text.match(/^(⚙️\s*.*?)\s*—\s*Procesando paso/);
+                const sigNew = getSig(newText);
+                const sigLast = getSig(lastLog.text);
 
-                if (matchNew && matchLast && matchNew[1] === matchLast[1]) {
+                if (sigNew && sigLast && sigNew === sigLast) {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     time: newTime,
