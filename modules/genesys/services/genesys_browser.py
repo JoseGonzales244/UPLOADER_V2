@@ -487,7 +487,7 @@ class GenesysBrowserAutomation:
 
         return None
 
-    def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str, stop_checker=None) -> bool:
+    def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str, stop_checker=None, period_str: str = None) -> bool:
         """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
         logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
         
@@ -501,6 +501,18 @@ class GenesysBrowserAutomation:
         }
         api_query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
 
+        def parse_period_dates(p_str):
+            if p_str and len(p_str) == 6 and p_str.isdigit():
+                y, m = int(p_str[:4]), int(p_str[4:])
+            else:
+                d = datetime.datetime.now()
+                y, m = d.year, d.month
+            m_next = 1 if m == 12 else m + 1
+            y_next = y + 1 if m == 12 else y
+            return f"{y:04d}-{m:02d}-01T05:00:00.000Z/{y_next:04d}-{m_next:02d}-01T05:00:00.000Z"
+
+        default_intervalo = parse_period_dates(period_str)
+
         for idx, sol in enumerate(solicitudes, 1):
             if stop_checker and stop_checker():
                 logger.warning("🛑 Proceso detenido por el usuario.")
@@ -508,8 +520,8 @@ class GenesysBrowserAutomation:
 
             logger.info(f"--- [API REST {idx}/{len(solicitudes)}] Promotor: {sol.reg_ev} | DNI: {sol.dni} ---")
             
-            # Formatear el intervalo para el mes correspondiente (por defecto Julio 2026)
-            intervalo = "2026-07-01T05:00:00.000Z/2026-08-01T05:00:00.000Z"
+            # Formatear el intervalo para el mes correspondiente
+            intervalo = default_intervalo
             m = re.search(r'_(\d{4})(\d{2})\d{2}', sol.nombre_archivo)
             if m:
                 anio_n, mes_n = int(m.group(1)), int(m.group(2))
@@ -691,13 +703,28 @@ class GenesysBrowserAutomation:
         """Alias retrocompatible para ejecutar_descargas"""
         return self.ejecutar_descargas(solicitudes, headless=headless)
 
-    def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True, stop_checker=None) -> None:
+    def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True, stop_checker=None, period_str: str = None) -> None:
         solicitudes = self.tracking_store.filtrar_no_procesados(solicitudes)
         if not solicitudes:
             logger.info("No hay solicitudes pendientes por procesar.")
             return
 
-        logger.info(f"Iniciando descargas en Genesys Cloud para {len(solicitudes)} registro(s)...")
+        MESES_MAP = {
+            1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+            5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+            9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+        }
+        if period_str and len(period_str) == 6 and period_str.isdigit():
+            target_year = int(period_str[:4])
+            target_month_num = int(period_str[4:])
+        else:
+            d = datetime.datetime.now()
+            target_year = d.year
+            target_month_num = d.month
+
+        target_month_name = MESES_MAP.get(target_month_num, "agosto")
+
+        logger.info(f"Iniciando descargas en Genesys Cloud para {len(solicitudes)} registro(s) [Período: {target_year}-{target_month_num:02d} ({target_month_name})]...")
 
         with sync_playwright() as p:
             browser = None
@@ -769,7 +796,7 @@ class GenesysBrowserAutomation:
                     if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
                         try:
                             origin = page.url.split("/directory")[0] if "/directory" in page.url else self.genesys_url.split("/directory")[0]
-                            target_url = self.construir_url_interacciones_fecha(origin, anio=2026, mes=7)
+                            target_url = self.construir_url_interacciones_fecha(origin, anio=target_year, mes=target_month_num)
                             logger.info(f"Navegando a la vista de Interacciones con fecha pre-filtrada ({target_url})...")
                             page.goto(target_url)
                             time.sleep(2)
@@ -798,7 +825,7 @@ class GenesysBrowserAutomation:
             token = self._extraer_bearer_token(page, timeout_ms=3000)
             if token:
                 logger.info("🔑 Bearer Token capturado automáticamente de la sesión activa.")
-                if self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker):
+                if self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker, period_str=period_str):
                     logger.info("⚡ Proceso completado exitosamente a alta velocidad vía API REST.")
                     return
 
@@ -837,7 +864,7 @@ class GenesysBrowserAutomation:
 
                     self._asegurar_panel_filtros_abierto(analytics_frame)
                     self._limpiar_filtros_si_hay(analytics_frame)
-                    self._asegurar_filtro_fecha(analytics_frame, mes_deseado="julio", anio_deseado="2026")
+                    self._asegurar_filtro_fecha(analytics_frame, mes_deseado=target_month_name, anio_deseado=str(target_year))
 
                     self._rellenar_filtro_usuario(analytics_frame, sol.reg_ev)
                     self._rellenar_filtro_dnis(analytics_frame, sol.telefonos)

@@ -112,6 +112,7 @@ function App() {
   };
 
   const [periodoConsumo, setPeriodoConsumo] = useState(getDefaultPeriod());
+  const [periodoAudios, setPeriodoAudios] = useState(getDefaultPeriod());
   const [clearConsent, setClearConsent] = useState(false);
   const [consumoPhases, setConsumoPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
   const [startScriptConsumo, setStartScriptConsumo] = useState('Todo');
@@ -403,7 +404,10 @@ function App() {
       const res = await fetch('/api/audios/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ solicitudes: reqList })
+        body: JSON.stringify({
+          solicitudes: reqList,
+          periodo: periodoAudios
+        })
       });
       if (!res.ok) {
         const data = await res.json();
@@ -729,6 +733,19 @@ function App() {
         activeTab === 'audios' && h('div', { class: 'ib-card p-6 space-y-6' },
           h('h2', { class: 'text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2.5 font-display' },
             '🎧 Solicitud y Descarga de Audios de Genesys'
+          ),
+          h('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+            h('div', null,
+              h('label', { class: 'block text-xs text-slate-400 mb-1 font-medium' }, 'Período de Búsqueda Genesys (YYYYMM)'),
+              h('input', {
+                type: 'text',
+                value: periodoAudios,
+                disabled: isRunning,
+                onChange: (e) => setPeriodoAudios(e.target.value),
+                placeholder: 'Ej: 202608',
+                class: 'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono-code focus:border-emerald-500 outline-none'
+              })
+            )
           ),
           h('div', { class: 'flex gap-6' },
             h('label', { class: 'flex items-center gap-2.5 text-xs font-semibold text-white cursor-pointer select-none' },

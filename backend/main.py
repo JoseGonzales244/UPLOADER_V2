@@ -175,6 +175,7 @@ class AudioItem(BaseModel):
 
 class AudioRequest(BaseModel):
     solicitudes: List[AudioItem]
+    periodo: Optional[str] = None
 
 @app.get("/api/health")
 def health_check():
@@ -378,7 +379,7 @@ def _run_audios_task(req: AudioRequest):
 
         send_progress_update(f"🎧 Iniciando descarga de {len(solicitudes_enriquecidas)} audios en Genesys...", "info", progress=0.1)
         bot = GenesysBrowserAutomation()
-        res = bot.ejecutar_descargas(solicitudes_enriquecidas, stop_checker=is_stop_requested)
+        res = bot.ejecutar_descargas(solicitudes_enriquecidas, stop_checker=is_stop_requested, period_str=req.periodo)
         if is_stop_requested():
             send_progress_update("🛑 Descarga de audios cancelada por el usuario.", "warning", progress=0.0)
         else:
