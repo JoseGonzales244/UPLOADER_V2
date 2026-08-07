@@ -151,7 +151,8 @@ def run_orchestration_flow(
                     username=insight_user,
                     password=insight_password,
                     progress_callback=progress_callback,
-                    output_dir=INPUT_BASE_CONSUMO_DIR
+                    output_dir=INPUT_BASE_CONSUMO_DIR,
+                    period_str=period_str
                 )
                 downloaded_files[insumo_key] = local_path
                 logger.info(f"Downloaded Insight insumo '{q_name}' successfully: {local_path}")

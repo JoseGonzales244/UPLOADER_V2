@@ -507,7 +507,8 @@ def run_quality_process_flow(
                     username=insight_user,
                     password=insight_password,
                     progress_callback=progress_callback,
-                    output_dir=INPUT_PROCESO_CALIDAD_DIR
+                    output_dir=INPUT_PROCESO_CALIDAD_DIR,
+                    period_str=period_str
                 )
             except Exception as err:
                 raise RuntimeError(f"Fallo crítico al descargar evaluaciones de Insight: {err}")

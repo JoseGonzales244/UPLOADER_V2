@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import urllib3
 from pathlib import Path
 import datetime
+import re
 
 # Suppress only the InsecureRequestWarning from urllib3 for verify=False requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -25,7 +26,89 @@ def _request_with_retry(session, method, url, max_retries=3, backoff_factor=2, p
     # Final direct attempt
     return session.request(method, url, **kwargs)
 
-def download_insight_data(query_name="EVALUATIONS", username=None, password=None, progress_callback=None, output_dir=None):
+def _inject_period_to_query(query_name, query_sql, period_str):
+    if not period_str or len(period_str) != 6 or not period_str.isdigit():
+        return query_sql
+        
+    year_curr = period_str[:4]
+    month_curr = period_str[4:]
+    
+    m_int = int(month_curr)
+    y_int = int(year_curr)
+    if m_int == 1:
+        year_prev = str(y_int - 1)
+        month_prev = "12"
+    else:
+        year_prev = str(y_int)
+        month_prev = f"{m_int - 1:02d}"
+
+    q_upper = query_name.upper()
+
+    if q_upper == "EVALUATIONS":
+        query_sql = re.sub(
+            r"(YEAR\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{4}\s*\)",
+            r"\g<1>" + year_curr + ")",
+            query_sql,
+            flags=re.IGNORECASE
+        )
+        query_sql = re.sub(
+            r"(MONTH\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{1,2}\s*\)",
+            r"\g<1>" + month_curr + ")",
+            query_sql,
+            flags=re.IGNORECASE
+        )
+
+    elif q_upper == "CONV_ATTRIBUTES":
+        query_sql = re.sub(
+            r"(YEAR\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*participantStartTime\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{4}",
+            r"\g<1>" + year_prev,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+        query_sql = re.sub(
+            r"(MONTH\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*participantStartTime\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{1,2}",
+            r"\g<1>" + month_prev,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+        query_sql = re.sub(
+            r"(YEAR\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*SESSIONSTARTTIME\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{4}",
+            r"\g<1>" + year_curr,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+        query_sql = re.sub(
+            r"(MONTH\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*SESSIONSTARTTIME\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{1,2}",
+            r"\g<1>" + month_curr,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+
+    elif q_upper == "TRAFICO_GENESYS":
+        query_sql = re.sub(
+            r"(YEAR\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*A\.conversationStartTime\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{4}",
+            r"\g<1>" + year_curr,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+        query_sql = re.sub(
+            r"(MONTH\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*A\.conversationStartTime\s*\)\s*,\s*112\s*\)\s*\)\s*=\s*)\d{1,2}",
+            r"\g<1>" + month_curr,
+            query_sql,
+            flags=re.IGNORECASE
+        )
+
+    # Patrón universal YYYYMM para IVR_VENTAS, DERIVA_BT, CLOUD_MARCA_TRANSF, BT_TRANSFERENCIA
+    query_sql = re.sub(
+        r"(LEFT\s*\(\s*CONVERT\s*\(\s*varchar\s*,\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*SESSIONSTARTTIME\s*\)\s*,\s*112\s*\)\s*,\s*6\s*\)\s*=\s*)\d{6}",
+        r"\g<1>" + period_str,
+        query_sql,
+        flags=re.IGNORECASE
+    )
+
+    return query_sql
+
+def download_insight_data(query_name="EVALUATIONS", username=None, password=None, progress_callback=None, output_dir=None, period_str=None):
     """
     Downloads Insight evaluations data and saves it.
     """
@@ -71,7 +154,6 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         
     queries = resp.json().get("data", [])
     
-    # cambia aquí el nombre que quieras ejecutar
     NOMBRE_QUERY = query_name
     query_sql = None
     area_id_used = "GCI_PRD_Insight_TLVentas" 
@@ -85,6 +167,11 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
     if not query_sql:
         raise Exception(f"No se encontró la consulta con nombre '{NOMBRE_QUERY}'")
         
+    if period_str:
+        query_sql = _inject_period_to_query(query_name, query_sql, period_str)
+        if progress_callback:
+            progress_callback(f"Periodo '{period_str}' inyectado dinámicamente en consulta '{NOMBRE_QUERY}'.")
+
     if progress_callback:
         progress_callback(f"Ejecutando consulta '{NOMBRE_QUERY}' en el área '{area_id_used}'...")
         
