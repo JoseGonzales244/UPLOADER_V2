@@ -120,7 +120,7 @@ function App() {
   const [calidadPhases, setCalidadPhases] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true });
   const [startScriptCalidad, setStartScriptCalidad] = useState('Todo');
   const [soloCierre, setSoloCierre] = useState(false);
-  const [cierreScripts, setCierreScripts] = useState({ s1: true, s2: true });
+  const [cierreScripts, setCierreScripts] = useState({ s1: true, s2: true, s3: true });
 
   const logConsoleRef = useRef(null);
 
@@ -470,7 +470,8 @@ function App() {
           start_script: startScriptCalidad === 'Todo' ? null : startScriptCalidad,
           solo_cierre: soloCierre,
           run_cierre_01: cierreScripts.s1,
-          run_cierre_02: cierreScripts.s2
+          run_cierre_02: cierreScripts.s2,
+          run_cierre_03: cierreScripts.s3
         })
       });
       if (!res.ok) {
@@ -1037,7 +1038,7 @@ function App() {
               )
             : h('div', { class: 'p-4 bg-blue-950/40 border border-blue-800/60 rounded-xl space-y-3 text-xs' },
                 h('p', { class: 'font-bold text-blue-300 font-display' }, '🔒 Scripts de Cierre Mensual:'),
-                h('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-3' },
+                h('div', { class: 'grid grid-cols-1 md:grid-cols-3 gap-3' },
                   h('label', { class: 'flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 cursor-pointer' },
                     h('input', {
                       type: 'checkbox',
@@ -1062,6 +1063,19 @@ function App() {
                     h('div', null,
                       h('span', { class: 'font-bold text-white block' }, '2. 02_kri_resumen_total.sql'),
                       h('span', { class: 'text-slate-400 text-[11px]' }, 'Resumen de Métricas KRI')
+                    )
+                  ),
+                  h('label', { class: 'flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 cursor-pointer' },
+                    h('input', {
+                      type: 'checkbox',
+                      checked: cierreScripts.s3,
+                      disabled: isRunning,
+                      onChange: (e) => setCierreScripts({ ...cierreScripts, s3: e.target.checked }),
+                      class: 'accent-blue-500 rounded w-4 h-4'
+                    }),
+                    h('div', null,
+                      h('span', { class: 'font-bold text-white block' }, '3. 03_consolidado_notas_cierre.sql'),
+                      h('span', { class: 'text-slate-400 text-[11px]' }, 'Consolidado Notas Cierre')
                     )
                   )
                 )

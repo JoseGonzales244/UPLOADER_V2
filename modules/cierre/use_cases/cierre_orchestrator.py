@@ -84,6 +84,7 @@ def run_cierre_process_flow(
     td_password: str = None,
     run_cierre_01: bool = True,
     run_cierre_02: bool = True,
+    run_cierre_03: bool = True,
     progress_callback=None
 ):
     """
@@ -97,9 +98,11 @@ def run_cierre_process_flow(
         cierre_scripts.append("modules/cierre/sql/01_auditoria_y_cierre.sql")
     if run_cierre_02:
         cierre_scripts.append("modules/cierre/sql/02_kri_resumen_total.sql")
+    if run_cierre_03:
+        cierre_scripts.append("modules/cierre/sql/03_consolidado_notas_cierre.sql")
         
     if not cierre_scripts:
-        raise ValueError("Debe seleccionar al menos un script de cierre a ejecutar (01 Auditoría o 02 KRI).")
+        raise ValueError("Debe seleccionar al menos un script de cierre a ejecutar.")
         
     logger.info(f"=== INICIANDO PROCESO DE CIERRE MENSUAL PARA PERÍODO CERRADO {periodo_cerrado} ({len(cierre_scripts)} script(s) seleccionados) ===")
     if progress_callback:
