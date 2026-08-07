@@ -149,14 +149,32 @@ function App() {
             if (data.progress !== undefined) setProgress(data.progress * 100);
             if (data.phase !== undefined) setCurrentPhase(data.phase);
 
-            setLogs((prev) => [
-              ...prev.slice(-499),
-              {
-                time: data.timestamp || new Date().toLocaleTimeString(),
-                text: data.message,
-                type: data.type || 'info'
+            setLogs((prev) => {
+              const newTime = data.timestamp || new Date().toLocaleTimeString();
+              const newText = data.message;
+              const newType = data.type || 'info';
+
+              if (prev.length > 0) {
+                const lastLog = prev[prev.length - 1];
+                const matchNew = newText.match(/^(⚙️\s*.*?)\s*—\s*Procesando paso/);
+                const matchLast = lastLog.text.match(/^(⚙️\s*.*?)\s*—\s*Procesando paso/);
+
+                if (matchNew && matchLast && matchNew[1] === matchLast[1]) {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    time: newTime,
+                    text: newText,
+                    type: newType
+                  };
+                  return updated;
+                }
               }
-            ]);
+
+              return [
+                ...prev.slice(-499),
+                { time: newTime, text: newText, type: newType }
+              ];
+            });
           }
         } catch (err) {
           console.error('Error procesando mensaje WS:', err);
