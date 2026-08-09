@@ -21,6 +21,20 @@ from ui.components import load_templates
 # Configurar logger técnico para el proceso de Consumo
 logger = setup_logging("modules.consumo.consumo_orchestrator", log_prefix="consumo")
 
+POWER_BI_DIR = r"C:\Users\b47756\OneDrive - Interbank\Televentas\POWER BI"
+
+
+def _write_powerbi_timestamp_file(filename: str) -> None:
+    """Escribe la hora actual en el archivo de conector correspondiente de Power BI."""
+    try:
+        os.makedirs(POWER_BI_DIR, exist_ok=True)
+        target_path = os.path.join(POWER_BI_DIR, filename)
+        with open(target_path, "w", encoding="utf-8") as fh:
+            fh.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        logger.info(f"Timestamp escrito en {target_path}")
+    except Exception as err:
+        logger.warning(f"No se pudo escribir timestamp en '{filename}': {err}")
+
 # Insumos configuration mapping
 INSUMOS_CONFIG = {
     "TRAFICO_GENESYS": {
@@ -405,7 +419,9 @@ def run_orchestration_flow(
         logger.info(f"=== PROCESO DE CONSUMO COMPLETADO EXITOSAMENTE PARA EL PERÍODO {period_str} ===")
         if progress_callback:
             progress_callback(msg_ok, "success")
-        
+
+        _write_powerbi_timestamp_file("conector_base_consumo.txt")
+
         # Enviar notificación nativa de escritorio
         try:
             from infrastructure.system.notifier import notify_desktop

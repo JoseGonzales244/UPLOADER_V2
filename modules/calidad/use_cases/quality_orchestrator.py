@@ -18,6 +18,20 @@ from ui.components import load_templates
 
 logger = logging.getLogger(__name__)
 
+POWER_BI_DIR = r"C:\Users\b47756\OneDrive - Interbank\Televentas\POWER BI"
+
+
+def _write_powerbi_timestamp_file(filename: str) -> None:
+    """Escribe la hora actual en el archivo de conector correspondiente de Power BI."""
+    try:
+        os.makedirs(POWER_BI_DIR, exist_ok=True)
+        target_path = os.path.join(POWER_BI_DIR, filename)
+        with open(target_path, "w", encoding="utf-8") as fh:
+            fh.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        logger.info(f"Timestamp escrito en {target_path}")
+    except Exception as err:
+        logger.warning(f"No se pudo escribir timestamp en '{filename}': {err}")
+
 # Suppress warnings
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -960,3 +974,6 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
+
+    # Si llegamos hasta aquí sin lanzar excepción, escribir la marca de éxito de proceso Calidad.
+    _write_powerbi_timestamp_file("conector_calidad.txt")

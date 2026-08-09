@@ -10,7 +10,7 @@ __pycache__/
 .env.*
 ACCESOS_EXPERIENCIA.txt
 
-
+modules/genesys/.chrome_genesys_profile/
 
 # Carpetas de datos sensibles y descargas
 transcripciones/
