@@ -23,13 +23,16 @@ class VerintAPIClient:
         self.base_url = base_url.rstrip("/")
         self.username = username or os.getenv("VERINT_USER")
         self.password = password or os.getenv("VERINT_PASS")
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.session = httpx.Client(
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
             },
             timeout=60.0,
-            follow_redirects=True
+            follow_redirects=True,
+            verify=False  # Proxy corporativo Interbank usa SSL inspection con cert propio
         )
         self.is_authenticated = False
         self.xsrf_token = None
