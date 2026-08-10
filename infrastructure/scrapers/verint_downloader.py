@@ -78,8 +78,8 @@ class ProgressCallbackLogger:
 
 logger = ProgressCallbackLogger(_base_logger)
 
-# Base directory points to the root of the workspace (one level above core/)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Base directory points to the root of the workspace (APP_CALIDAD)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def load_env():
     """Loads environment variables from a local .env file."""
@@ -94,9 +94,13 @@ def load_env():
                     os.environ[key.strip()] = val.strip().strip("'").strip('"')
 
 def load_config():
-    """Loads settings from config/config.json. Returns empty dict if file doesn't exist."""
+    """Loads settings from config/config.json."""
     import json
+    # Probar en la raíz del proyecto (APP_CALIDAD/config/config.json)
     config_path = os.path.join(BASE_DIR, "config", "config.json")
+    if not os.path.exists(config_path):
+        # Fallback a infrastructure/config/config.json si existiera
+        config_path = os.path.join(BASE_DIR, "infrastructure", "config", "config.json")
     if not os.path.exists(config_path):
         logger.warning(f"config.json no encontrado en {config_path}. Usando configuración por defecto.")
         return {}
