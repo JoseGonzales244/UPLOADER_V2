@@ -594,12 +594,24 @@ def run_quality_process_flow(
                 progress_callback(f"ℹ️ Archivos de Verint descargados hoy detectados ({len(downloaded_verint_files)} archivo(s)). Omitiendo descarga.", "info")
         else:
             # Set credentials for Verint downloader environment variables temporarily
-            os.environ["VERINT_USER"] = verint_user
-            os.environ["VERINT_PASS"] = verint_password
-            os.environ["TERADATA_USER"] = td_user
-            os.environ["TERADATA_PASSWORD"] = td_password
-            os.environ["TERADATA_HOST"] = host
-            os.environ["TERADATA_LOGMECH"] = logmech
+            if verint_user:
+                os.environ["VERINT_USER"] = verint_user
+            else:
+                verint_user = os.getenv("VERINT_USER", "")
+
+            if verint_password:
+                os.environ["VERINT_PASS"] = verint_password
+            else:
+                verint_password = os.getenv("VERINT_PASS", "")
+
+            if td_user:
+                os.environ["TERADATA_USER"] = td_user
+            if td_password:
+                os.environ["TERADATA_PASSWORD"] = td_password
+            if host:
+                os.environ["TERADATA_HOST"] = host
+            if logmech:
+                os.environ["TERADATA_LOGMECH"] = logmech
             
             downloaded_verint_files = []
             

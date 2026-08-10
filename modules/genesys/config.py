@@ -6,7 +6,15 @@ load_dotenv()
 
 # Directorios base
 BASE_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOWNLOADS_DIR = Path.home() / "Downloads"
+
+# Cargar .env de la raíz si existe
+env_root = PROJECT_ROOT / ".env"
+if env_root.exists():
+    load_dotenv(dotenv_path=env_root)
+else:
+    load_dotenv()
 
 # Archivos de persistencia
 TRACKING_FILE = BASE_DIR / "tracking.json"
