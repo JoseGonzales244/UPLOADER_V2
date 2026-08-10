@@ -289,7 +289,7 @@ def _download_verint_data_impl(period=None, headless=True, output_dir=None):
     logger.info("Iniciando conexión con Verint...")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(accept_downloads=True)
+        context = browser.new_context(accept_downloads=True, ignore_https_errors=True)
         page = context.new_page()
         
         # 1. Login
