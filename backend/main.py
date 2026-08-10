@@ -320,7 +320,8 @@ def _run_calidad_task(req: CalidadRequest):
                 run_phase3=req.run_fase3,
                 run_phase4=req.run_fase4,
                 run_phase5=req.run_fase5,
-                start_from_script=req.start_script
+                start_from_script=req.start_script,
+                stop_checker=is_stop_requested
             )
     except Exception as e:
         proc_label = "Cierre Mensual" if req.solo_cierre else "flujo de Calidad"

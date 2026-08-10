@@ -461,7 +461,8 @@ def run_quality_process_flow(
     run_phase3=True,
     run_phase4=True,
     run_phase5=True,
-    start_from_script=None
+    start_from_script=None,
+    stop_checker=None
 ):
     """
     Executes the entire Quality Process Flow:
@@ -624,7 +625,8 @@ def run_quality_process_flow(
                     csv_filepath=csv_path,
                     output_dir=INPUT_PROCESO_CALIDAD_DIR,
                     poll_interval_seconds=15,
-                    timeout_minutes=15
+                    timeout_minutes=15,
+                    stop_checker=stop_checker
                 )
                 if res_file:
                     downloaded_verint_files = [f.strip() for f in res_file.split(",") if f.strip() and os.path.exists(f.strip())]

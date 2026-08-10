@@ -377,7 +377,7 @@ class VerintAPIClient:
         logger.error(f"SetFilterAsSearch falló: {res.text[:200]}")
         return False
 
-    def export_televentas_period(self, from_iso: str, to_iso: str, csv_filepath: str, output_dir: str, poll_interval_seconds: int = 60, timeout_minutes: int = 35) -> str:
+    def export_televentas_period(self, from_iso: str, to_iso: str, csv_filepath: str, output_dir: str, poll_interval_seconds: int = 60, timeout_minutes: int = 35, stop_checker: Optional[Any] = None) -> str:
         """
         Ejecuta el flujo completo 100% HTTP API de exportación para Televentas:
         Login -> InitSession -> UploadCSV -> SetFilterAsSearch -> CreateContactsReport -> Wait & Download.
@@ -387,6 +387,9 @@ class VerintAPIClient:
         timestamp_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         report_name = f"Export_Calidad_{timestamp_str}"
         
+        if stop_checker and stop_checker():
+            raise RuntimeError("Proceso cancelado por el usuario antes de iniciar exportación Verint.")
+
         if not self.xsrf_token:
             if not self.login():
                 raise RuntimeError("Fallo en la autenticación con Verint WFO.")
@@ -470,6 +473,9 @@ class VerintAPIClient:
         start_time = time.time()  # FIX: inicializar antes del loop de polling
         
         while (time.time() - start_time) < (timeout_minutes * 60):
+            if stop_checker and stop_checker():
+                logger.warning(f"🛑 Cancelación detectada durante la espera del reporte '{report_name}'. Abortando...")
+                raise RuntimeError("Proceso cancelado por el usuario.")
             reports = self.get_saved_reports()
             matching_reports = [
                 r for r in reports[:20]
