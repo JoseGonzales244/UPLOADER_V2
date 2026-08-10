@@ -631,9 +631,13 @@ def run_quality_process_flow(
                     if progress_callback:
                         progress_callback(f"⚡ ¡Descarga vía API de Verint completada exitosamente ({len(downloaded_verint_files)} archivo(s))!", "success")
             except Exception as api_err:
-                logger.warning(f"Descarga por API de Verint falló ({api_err}). Conmutando a Scraper UI de respaldo...")
+                import traceback as _tb
+                _err_detail = f"{type(api_err).__name__}: {api_err}"
+                _err_trace = _tb.format_exc()
+                logger.warning(f"Descarga por API de Verint falló. {_err_detail}\n{_err_trace}")
                 if progress_callback:
-                    progress_callback("⚠️ Fallo en API REST de Verint. Conmutando a Scraper UI de respaldo...", "warning")
+                    progress_callback(f"⚠️ Fallo en API REST de Verint → {_err_detail}", "warning")
+                    progress_callback(f"🔍 Traceback:\n{_err_trace.strip()}", "warning")
 
             # 2. Si la API no trajo archivos o falló, fallback al Scraper UI de Playwright (legado)
             if not downloaded_verint_files:
