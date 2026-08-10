@@ -151,6 +151,12 @@ class VerintAPIClient:
         if not self.is_authenticated:
             self.login()
             
+        # Asegurar toque previo a /wfo/control/main para registrar sesión en servidor WFO
+        try:
+            self.session.get(f"{self.base_url}/wfo/control/main", timeout=15.0)
+        except Exception as err_main:
+            logger.debug(f"Pre-touch a /wfo/control/main: {err_main}")
+
         url = f"{self.base_url}/SpeechAnalytics/Services/ApplicationSession/ApplicationSessionService.svc/InitializeSession"
         payload = {
             "instanceContext": {
@@ -159,21 +165,37 @@ class VerintAPIClient:
             }
         }
         headers = {"Content-Type": "application/json"}
-        res = self.session.post(url, json=payload, headers=headers)
-        if res.status_code == 200:
-            try:
-                data = res.json()
-                init_res = data.get("InitializeSessionResult", {})
-                data_obj = init_res.get("Data", {})
-                self.speech_session_id = data_obj.get("SessionId")
-                if self.speech_session_id:
-                    logger.info(f"Sesión de Speech Analytics inicializada con éxito: {self.speech_session_id}")
-                    return self.speech_session_id
-            except Exception as e:
-                logger.error(f"Error al deserializar InitializeSession: {e}")
-        else:
-            logger.error(f"Error en InitializeSession ({res.status_code}): {res.text[:200]}")
-        return None
+        
+        def _do_init():
+            res = self.session.post(url, json=payload, headers=headers)
+            if res.status_code == 200:
+                try:
+                    data = res.json()
+                    init_res = data.get("InitializeSessionResult", {})
+                    data_obj = init_res.get("Data", {})
+                    self.speech_session_id = data_obj.get("SessionId")
+                    if self.speech_session_id:
+                        logger.info(f"Sesión de Speech Analytics inicializada con éxito: {self.speech_session_id}")
+                        return self.speech_session_id
+                except Exception as e:
+                    logger.error(f"Error al deserializar InitializeSession: {e}")
+            return None
+
+        sid = _do_init()
+        if sid:
+            return sid
+            
+        # Si falló por cookies expiradas o bloqueadas, forzar renovación transparente con Cookie Harvester
+        logger.warning("InitializeSession rechazado. Forzando renovación de cookies con Harvester...")
+        try:
+            harvested = get_verint_cookies(self.username, self.password, self.base_url, force_refresh=True)
+            for name, value in harvested.items():
+                self.session.cookies.set(name, value)
+            self.session.get(f"{self.base_url}/wfo/control/main", timeout=15.0)
+            return _do_init()
+        except Exception as e_harv:
+            logger.error(f"Fallo crítico al renovar cookies: {e_harv}")
+            return None
 
     def _get_speech_session_payload(self) -> Dict[str, Any]:
         return {
