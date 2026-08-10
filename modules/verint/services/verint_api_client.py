@@ -464,6 +464,7 @@ class VerintAPIClient:
         # 5. Esperar y Descargar por HTTP Pura (Soporta 1 archivo o partes 1-2, 2-2)
         logger.info(f"Monitoreando la finalización del reporte '{report_name}' por API HTTP...")
         downloaded_paths = []
+        start_time = time.time()  # FIX: inicializar antes del loop de polling
         
         while (time.time() - start_time) < (timeout_minutes * 60):
             reports = self.get_saved_reports()
@@ -485,6 +486,8 @@ class VerintAPIClient:
                         return downloaded_paths[0] if len(downloaded_paths) == 1 else ",".join(downloaded_paths)
                         
             time.sleep(poll_interval_seconds)
+            
+        raise RuntimeError(f"Timeout de {timeout_minutes} minutos agotado esperando el reporte '{report_name}' en Verint.")
             
     def get_interaction_transcription_api(self, call_id: str) -> Optional[Dict[str, Any]]:
         """
