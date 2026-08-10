@@ -288,10 +288,10 @@ def _run_calidad_task(req: CalidadRequest):
     try:
         from dotenv import load_dotenv
         load_dotenv()
-        insight_user = os.getenv("USERNAME_INSIGHT", "") or os.getenv("INSIGHT_USER", "")
-        insight_password = os.getenv("PASSWORD_INSIGHT", "") or os.getenv("INSIGHT_PASSWORD", "")
+        insight_user = os.getenv("USERNAME_INSIGHT", "")
+        insight_password = os.getenv("PASSWORD_INSIGHT", "")
         verint_user = os.getenv("VERINT_USER", "")
-        verint_password = os.getenv("VERINT_PASS", "") or os.getenv("VERINT_PASSWORD", "")
+        verint_password = os.getenv("VERINT_PASS", "")
         td_user = os.getenv("TERADATA_USER", "")
         td_password = os.getenv("TERADATA_PASSWORD", "")
 
