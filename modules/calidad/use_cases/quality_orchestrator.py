@@ -647,22 +647,11 @@ def run_quality_process_flow(
             except Exception as api_err:
                 import traceback as _tb
                 _err_detail = f"{type(api_err).__name__}: {api_err}"
-                logger.info(f"API REST no disponible en este entorno ({_err_detail}). Conmutando automáticamente al Scraper UI (Playwright)...")
+                _err_trace = _tb.format_exc()
+                logger.error(f"Fallo crítico en API REST de Verint. {_err_detail}\n{_err_trace}")
                 if progress_callback:
-                    progress_callback("ℹ️ Verint requiere inicio de sesión con navegador (SAML/SSO). Conmutando al Scraper UI de respaldo...", "info")
-
-            # 2. Si la API no trajo archivos o falló, fallback al Scraper UI de Playwright (legado)
-            if not downloaded_verint_files:
-                try:
-                    downloaded_verint_files = download_verint_data(
-                        period=period_str,
-                        headless=True,
-                        progress_callback=progress_callback,
-                        output_dir=INPUT_PROCESO_CALIDAD_DIR,
-                        stop_checker=stop_checker
-                    )
-                except Exception as err:
-                    raise RuntimeError(f"Fallo crítico al descargar datos de Verint (API y Scraper UI fallaron): {err}")
+                    progress_callback(f"❌ Fallo crítico en API REST de Verint: {_err_detail}", "error")
+                raise RuntimeError(f"Fallo en descarga por API de Verint: {api_err}") from api_err
                 
         if not downloaded_verint_files:
             raise ValueError("No se obtuvieron archivos desde la descarga de Verint.")
