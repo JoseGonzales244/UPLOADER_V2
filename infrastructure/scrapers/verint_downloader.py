@@ -251,14 +251,20 @@ def find_input_csv(period):
         f"No input CSV file found or generated for period {period}."
     )
 
-def download_verint_data(period=None, headless=True, progress_callback=None, output_dir=None):
+def download_verint_data(period=None, headless=True, progress_callback=None, output_dir=None, stop_checker=None):
     logger.callback = progress_callback
     try:
-        return _download_verint_data_impl(period, headless, output_dir)
+        return _download_verint_data_impl(period, headless, output_dir, stop_checker)
     finally:
         logger.callback = None
 
-def _download_verint_data_impl(period=None, headless=True, output_dir=None):
+def _download_verint_data_impl(period=None, headless=True, output_dir=None, stop_checker=None):
+    def check_stop():
+        if stop_checker and stop_checker():
+            logger.warning("🛑 Cancelación detectada en Scraper UI de Verint. Abortando...")
+            raise RuntimeError("Proceso cancelado por el usuario.")
+
+    check_stop()
     load_env()
     config = load_config()
     
@@ -303,6 +309,7 @@ def _download_verint_data_impl(period=None, headless=True, output_dir=None):
         except Exception:
             logger.debug("Campo de usuario no encontrado, verificando si la sesión ya está activa...")
             
+        check_stop()
         if "signin" in page.url or page.query_selector("#username"):
             logger.info("Página de inicio de sesión detectada. Enviando credenciales...")
             page.fill("#username", username)
@@ -313,6 +320,7 @@ def _download_verint_data_impl(period=None, headless=True, output_dir=None):
             page.press("#password", "Enter")
             page.wait_for_timeout(3500)
             
+        check_stop()
         logger.info("Inicio de sesión completado.")
         
         # 2. Navigate directly to Speech Analytics Interactions workspace
@@ -322,6 +330,7 @@ def _download_verint_data_impl(period=None, headless=True, output_dir=None):
         
         # 2. Wait ONLY for sidebar menu button to be visible to start filtering immediately
         logger.info("Abriendo Speech Analytics y esperando que la barra lateral esté visible...")
+        check_stop()
         sidebar_proj_btn = page.locator('.SA_silderMenuButton.m_button_project, a[data-qtip="Proyecto"]').first
         sidebar_proj_btn.wait_for(state="visible", timeout=45000)
         

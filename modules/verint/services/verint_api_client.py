@@ -347,6 +347,9 @@ class VerintAPIClient:
         """
         Activa y vincula el filtro QDI como la búsqueda activa en el servidor de Verint.
         """
+        if not self.speech_session_id:
+            self.init_speech_session(instance_id=instance_id)
+
         url = f"{self.base_url}/SpeechAnalytics/Services/Filter/FilterService.svc/SetFilterAsSearch"
         headers = {"Content-Type": "application/json"}
         if self.xsrf_token:
@@ -354,7 +357,7 @@ class VerintAPIClient:
             
         speech_session_payload = {
             "InstanceId": instance_id,
-            "SessionId": self.speech_session_id,
+            "SessionId": self.speech_session_id or "",
             "sessionConfiguration": {"IsSpeakerSeparation": True},
             "id": "SpeechAnalytics.model.session.ApplicationSession-2",
             "ApplicationId": "129eee08-a5b6-4e26-c00d-27d3663975ee"
@@ -368,13 +371,17 @@ class VerintAPIClient:
         res = self.session.post(url, json=payload, headers=headers)
         if res.status_code == 200:
             try:
-                success = res.json().get("SetFilterAsSearchResult", {}).get("Success", False)
+                res_data = res.json().get("SetFilterAsSearchResult", {})
+                success = res_data.get("Success", False)
                 if success:
                     logger.info("✅ Búsqueda activa congelada exitosamente en el servidor de Verint.")
                     return True
+                err_msg = res_data.get("ErrorMessage") or res_data.get("ErrorDescription") or str(res_data)
+                logger.error(f"SetFilterAsSearch rechazado por Verint: {err_msg}")
             except Exception as e:
                 logger.error(f"Error deserializando SetFilterAsSearch: {e}")
-        logger.error(f"SetFilterAsSearch falló: {res.text[:200]}")
+        else:
+            logger.error(f"SetFilterAsSearch falló (HTTP {res.status_code}): {res.text[:200]}")
         return False
 
     def export_televentas_period(self, from_iso: str, to_iso: str, csv_filepath: str, output_dir: str, poll_interval_seconds: int = 60, timeout_minutes: int = 35, stop_checker: Optional[Any] = None) -> str:

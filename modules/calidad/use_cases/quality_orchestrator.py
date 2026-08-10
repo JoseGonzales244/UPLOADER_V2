@@ -648,7 +648,8 @@ def run_quality_process_flow(
                         period=period_str,
                         headless=True,
                         progress_callback=progress_callback,
-                        output_dir=INPUT_PROCESO_CALIDAD_DIR
+                        output_dir=INPUT_PROCESO_CALIDAD_DIR,
+                        stop_checker=stop_checker
                     )
                 except Exception as err:
                     raise RuntimeError(f"Fallo crítico al descargar datos de Verint (API y Scraper UI fallaron): {err}")
