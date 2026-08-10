@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
+from modules.verint.services.verint_cookie_harvester import get_verint_cookies
 
 load_dotenv()
 
@@ -54,19 +55,26 @@ class VerintAPIClient:
         self.app_id = "0a089067-5b54-4e8b-e34b-0420d23ce8b4"
         self.speech_session_id = None
         
-        # Cargar cookie de sesión manual desde .env si existe (para bypass de Imperva WAF / SSO)
+        # --- Auto Cookie Harvester (Playwright headless ~5 seg si caché expiró) ---
+        # Prioridad: VERINT_COOKIES en .env > caché automático > login Playwright
         raw_cookie = os.getenv("VERINT_COOKIES") or os.getenv("VERINT_COOKIE") or os.getenv("VERINT_JSESSIONID")
         if raw_cookie:
-            logger.info("🔑 Cookie de sesión detectada en .env. Asignando directamente al cliente API...")
-            if "=" in raw_cookie:
-                for item in raw_cookie.split(";"):
-                    item = item.strip()
-                    if "=" in item:
-                        k, v = item.split("=", 1)
-                        self.session.cookies.set(k.strip(), v.strip())
-            else:
-                self.session.cookies.set("JSESSIONID", raw_cookie.strip())
+            logger.info("🔑 Cookie manual detectada en .env. Asignando directamente...")
+            for item in raw_cookie.split(";"):
+                item = item.strip()
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    self.session.cookies.set(k.strip(), v.strip())
             self.is_authenticated = True
+        elif self.username and self.password:
+            try:
+                harvested = get_verint_cookies(self.username, self.password, self.base_url)
+                for name, value in harvested.items():
+                    self.session.cookies.set(name, value)
+                self.is_authenticated = True
+                logger.info(f"🍪 {len(harvested)} cookies de sesión inyectadas en el cliente API.")
+            except Exception as e:
+                logger.warning(f"Cookie Harvester falló: {e}. Se intentará login directo luego.")
 
     def login(self) -> bool:
         """
@@ -117,6 +125,17 @@ class VerintAPIClient:
                         logger.info(f"Token CSRF/XSRF obtenido: {self.xsrf_token}")
                 except Exception as e:
                     logger.warning(f"No se pudo parsear xsrfToken: {e}")
+            
+            # Verificar que la sesión es funcional llamando a AppShellStartupData
+            if startup_res.status_code == 401 or startup_res.status_code == 403:
+                logger.warning("Sesión bloqueada por WAF. Forzando renovación de cookies con Playwright...")
+                try:
+                    harvested = get_verint_cookies(self.username, self.password, self.base_url, force_refresh=True)
+                    for name, value in harvested.items():
+                        self.session.cookies.set(name, value)
+                    logger.info(f"🍪 Renovación de cookies completada ({len(harvested)} cookies).")
+                except Exception as he:
+                    logger.error(f"No se pudo renovar cookies: {he}")
             return True
         else:
             logger.error(f"Error al autenticar. Status: {res_post.status_code}")
