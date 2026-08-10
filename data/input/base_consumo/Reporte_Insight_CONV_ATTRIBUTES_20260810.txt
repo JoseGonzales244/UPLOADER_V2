@@ -1,0 +1,1 @@
+﻿conversationId	externalcontactid	key	participantEndTime	participantId	participantName	participantStartTime	purpose	userId	value

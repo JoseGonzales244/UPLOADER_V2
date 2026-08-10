@@ -344,7 +344,7 @@ class VerintAPIClient:
             "SessionId": self.speech_session_id,
             "sessionConfiguration": {"IsSpeakerSeparation": True},
             "id": "SpeechAnalytics.model.session.ApplicationSession-2",
-            "ApplicationId": "129eee08-a5b6-4e26-c00d-27d3663975ee"
+            "ApplicationId": self.app_id
         }
         
         payload = {
@@ -477,7 +477,9 @@ class VerintAPIClient:
         # 2. Construir XML QDI completo vinculado con GUID del FileId y rango de fechas
         guid_str = str(uuid.uuid4())
         now_iso = datetime.datetime.now().isoformat()
-        
+        from_fmt = datetime.datetime.fromisoformat(from_iso).strftime("%Y-%m-%dT%H:%M:%S.0000000+00:00")
+        to_fmt = datetime.datetime.fromisoformat(to_iso).strftime("%Y-%m-%dT%H:%M:%S.0000000+00:00")
+
         qdi_xml = f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <GUID>{guid_str}</GUID>
   <creationTime>{now_iso}+00:00</creationTime>
@@ -488,7 +490,6 @@ class VerintAPIClient:
   <Direction>Full</Direction>
   <Security>
     <QDIRestrictionFlags ETMFilters="Active" MultiChannelApp="Active" PersonalTag="Inactive" />
-    <UserId>247626570</UserId>
     <IsAgentQuery>false</IsAgentQuery>
     <World>CCQ</World>
     <QueryPurpose>SEARCH</QueryPurpose>
@@ -501,8 +502,8 @@ class VerintAPIClient:
   <OrderDef>
     <TimeOfDateBegin>00:00:00</TimeOfDateBegin>
     <TimeOfDateEnd>00:00:00</TimeOfDateEnd>
-    <From>{from_iso}</From>
-    <To>{to_iso}</To>
+    <From>{from_fmt}</From>
+    <To>{to_fmt}</To>
     <RefFrom>0001-01-01T00:00:00.0000000+00:00</RefFrom>
     <RefTo>0001-01-01T00:00:00.0000000+00:00</RefTo>
     <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
