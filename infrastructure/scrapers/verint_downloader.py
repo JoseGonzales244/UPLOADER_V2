@@ -94,9 +94,12 @@ def load_env():
                     os.environ[key.strip()] = val.strip().strip("'").strip('"')
 
 def load_config():
-    """Loads settings from config/config.json."""
-    config_path = os.path.join(BASE_DIR, "config", "config.json")
+    """Loads settings from config/config.json. Returns empty dict if file doesn't exist."""
     import json
+    config_path = os.path.join(BASE_DIR, "config", "config.json")
+    if not os.path.exists(config_path):
+        logger.warning(f"config.json no encontrado en {config_path}. Usando configuración por defecto.")
+        return {}
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
