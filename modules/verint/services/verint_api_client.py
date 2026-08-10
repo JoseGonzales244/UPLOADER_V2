@@ -25,11 +25,25 @@ class VerintAPIClient:
         self.password = password or os.getenv("VERINT_PASS")
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "es,es-ES;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-User": "?1",
+            "sec-ch-ua": '"Not=A?Brand";v="99", "Microsoft Edge";v="151", "Chromium";v="151"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"'
+        }
+        
         self.session = httpx.Client(
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/json, text/plain, */*",
-            },
+            headers=headers,
             timeout=60.0,
             follow_redirects=True,
             verify=False  # Proxy corporativo Interbank usa SSL inspection con cert propio
@@ -39,11 +53,28 @@ class VerintAPIClient:
         self.instance_id = 247129
         self.app_id = "0a089067-5b54-4e8b-e34b-0420d23ce8b4"
         self.speech_session_id = None
+        
+        # Cargar cookie de sesión manual desde .env si existe (para bypass de Imperva WAF / SSO)
+        raw_cookie = os.getenv("VERINT_COOKIES") or os.getenv("VERINT_COOKIE") or os.getenv("VERINT_JSESSIONID")
+        if raw_cookie:
+            logger.info("🔑 Cookie de sesión detectada en .env. Asignando directamente al cliente API...")
+            if "=" in raw_cookie:
+                for item in raw_cookie.split(";"):
+                    item = item.strip()
+                    if "=" in item:
+                        k, v = item.split("=", 1)
+                        self.session.cookies.set(k.strip(), v.strip())
+            else:
+                self.session.cookies.set("JSESSIONID", raw_cookie.strip())
+            self.is_authenticated = True
 
     def login(self) -> bool:
         """
-        Ejecuta inicio de sesión directo a /wfo/control/signin en 2 pasos.
+        Ejecuta inicio de sesión directo a /wfo/control/signin con los headers y formato capturado.
         """
+        if self.is_authenticated:
+            return True
+
         if not self.username or not self.password:
             raise ValueError("VERINT_USER o VERINT_PASS no configurados.")
 
@@ -52,35 +83,29 @@ class VerintAPIClient:
         
         self.session.get(signin_url)
 
-        step1_payload = {
-            "browserCheckEnabled": "true",
-            "username": self.username,
-            "language": "en_US",
-            "defaultHttpPort": "-1",
-            "screenHeight": "1080",
-            "screenWidth": "1920",
-            "pageModelType": "0",
-            "pageDirty": "false",
-            "pageAction": "Login"
+        login_headers = {
+            "Origin": self.base_url,
+            "Referer": signin_url,
+            "Content-Type": "application/x-www-form-urlencoded"
         }
-        self.session.post(signin_url, data=step1_payload)
 
-        step2_payload = {
+        login_payload = {
             "username": self.username,
             "password": self.password,
-            "language": "en_US",
+            "language": "es_ES",
             "defaultHttpPort": "-1",
-            "screenHeight": "1080",
-            "screenWidth": "1920",
+            "screenHeight": "912",
+            "screenWidth": "1536",
             "pageModelType": "0",
             "pageDirty": "false",
             "pageAction": "Login"
         }
-        res_step2 = self.session.post(signin_url, data=step2_payload)
+
+        res_post = self.session.post(signin_url, data=login_payload, headers=login_headers)
         
-        if res_step2.status_code == 200 and "signin" not in str(res_step2.url):
+        if res_post.status_code == 200:
             self.is_authenticated = True
-            logger.info("Autenticación API exitosa en Verint WFO.")
+            logger.info("Autenticación API enviada en Verint WFO.")
             
             startup_res = self.session.get(f"{self.base_url}/wfo/rest/core-api/AppShellStartupData")
             if startup_res.status_code == 200:
@@ -94,7 +119,7 @@ class VerintAPIClient:
                     logger.warning(f"No se pudo parsear xsrfToken: {e}")
             return True
         else:
-            logger.error(f"Error al autenticar. URL final: {res_step2.url}, Status: {res_step2.status_code}")
+            logger.error(f"Error al autenticar. Status: {res_post.status_code}")
             return False
 
     def init_speech_session(self, instance_id: int = None) -> Optional[str]:
