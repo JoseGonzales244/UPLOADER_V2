@@ -431,13 +431,30 @@ async def preview_file(
         
         for col in df.columns:
             suggested = suggest_sql_type(df[col].dtype)
+
+            if not template_config:
+                selected = True
+                new_name = sanitize_identifier(col)
+                convert_nulls = False
+                datatype = suggested
+            elif col in template_config:
+                selected = template_config[col].get("Añadir", True)
+                new_name = sanitize_identifier(template_config[col].get("Nuevo nombre", col))
+                convert_nulls = template_config[col].get("Null:0/No Null:1", False)
+                datatype = template_config[col].get("Tipo de dato", suggested)
+            else:
+                selected = False
+                new_name = sanitize_identifier(col)
+                convert_nulls = False
+                datatype = suggested
+
             columns_info.append({
                 "original_name": col,
                 "name": col,
-                "new_name": sanitize_identifier(col),
-                "datatype": suggested,
-                "selected": True,
-                "convert_nulls": False
+                "new_name": new_name,
+                "datatype": datatype,
+                "selected": selected,
+                "convert_nulls": convert_nulls
             })
 
         preview_rows = df.head(10).to_dicts()
@@ -574,14 +591,33 @@ async def upload_to_teradata(
             df = read_csv_file(tmp_path)
         else:
             df = read_unicode_text_file(tmp_path)
+        template_config = templates.get(selected_template, {})
         for col in df.columns:
+            suggested = suggest_sql_type(df[col].dtype)
+
+            if not template_config:
+                selected = True
+                new_name = sanitize_identifier(col)
+                convert_nulls = False
+                datatype = suggested
+            elif col in template_config:
+                selected = template_config[col].get("Añadir", True)
+                new_name = sanitize_identifier(template_config[col].get("Nuevo nombre", col))
+                convert_nulls = template_config[col].get("Null:0/No Null:1", False)
+                datatype = template_config[col].get("Tipo de dato", suggested)
+            else:
+                selected = False
+                new_name = sanitize_identifier(col)
+                convert_nulls = False
+                datatype = suggested
+
             selections.append({
                 "original_name": col,
                 "name": col,
-                "new_name": sanitize_identifier(col),
-                "datatype": suggest_sql_type(df[col].dtype),
-                "selected": True,
-                "convert_nulls": False
+                "new_name": new_name,
+                "datatype": datatype,
+                "selected": selected,
+                "convert_nulls": convert_nulls
             })
 
     background_tasks.add_task(
