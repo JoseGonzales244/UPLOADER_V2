@@ -99,23 +99,63 @@ flowchart TD
 ### 📌 Fase 4: Pipeline de Transformación SQL Teradata
 
 - 📥 **INPUTS**:
-  - **Tablas Origen Teradata**: `T_SP_CD40K`, `BN_DESEMBOLSOS_GENERAL`, `M_EXP_TRAFICO_GENESIS`, `M_EXP_BT_CONVERSATIONS_ATTRIBUTES`, entre otras.
-  - **Archivos SQL**:
-    1. `modules/consumo/sql/ventas_dn.sql`
-    2. `modules/consumo/sql/cd40k.sql`
-    3. `modules/consumo/sql/source_tvl.sql`
-    4. `modules/consumo/sql/ca_consentimiento_diario.sql`
-    5. `modules/consumo/sql/kri_ventas_sin_audio.sql`
-    6. `modules/consumo/sql/tlf_no_autorizado.sql`
+  - **Tablas Origen Teradata / Vistas Corporativas**: `T_SP_CD40K`, `BN_DESEMBOLSOS_GENERAL`, `M_EXP_TELEVENTAS_EJECUTIVOS`, `M_EXP_DOCUMENTOS_EVALUADOS`, `TLV_CARGA_ACTUAL`, `TLV_CARGA_ACTUAL_DIGITAL_PRC`, `E_DW_VIEWS.V_FCT_RT_TC_HISTORICO`, `E_DW_VIEWS_DLAB.CGR_PRESTAMOS`, `E_DW_VIEWS_DLAB.CGR_EXTRACASH`, `E_DW_VIEWS_DLAB.V_CD_DESEMB_HISTORICO`, `E_DW_VIEWS.V_FCT_CNV_VENTAS`, `E_DW_VIEWS_DLAB.CGR_UPGRADE_HST`, `E_DW_VIEWS_DLAB.CGR_INC_LINEA_HST`, `E_DW_VIEWS_DLAB.V_CGR_PAGO_AUTOMATICO`, `E_DW_VIEWS_DLAB.V_DLAB_CGR_SEGUROS_VENTAS`, `E_DW_VIEWS.V_CRM_EXO_GIR_*`, `V_CONT_TELEFONO_APICLIENTE`, entre otras.
 
-- 📤 **OUTPUTS**:
-  - **Tablas Consolidadas Teradata**:
-    - `DLAB_GEC.M_EXP_VENTAS_DN`
-    - `DLAB_GEC.M_EXP_BASE_CD40K`
-    - `DLAB_GEC.M_EXP_SOURCE_TVL`
-    - `DLAB_GEC.T_EXP_CONSENTIMIENTO_DIARIO`
-    - `DLAB_GEC.T_EXP_KRI_VENTAS_SINAUDIO`
-    - `DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO`
+  - **Archivos SQL y Tablas Generadas/Modificadas por cada Script**:
+
+    1. **`modules/consumo/sql/VENTAS_DN.sql`**
+       - 📤 **Outputs**:
+         - `DLAB_GEC.M_EXP_VENTAS_TC` (Ventas Tarjetas de Crédito - DTC)
+         - `DLAB_GEC.M_EXP_VENTAS_PP` (Ventas Préstamos Personales - DPP)
+         - `DLAB_GEC.M_EXP_VENTAS_EC` (Ventas Extra Cash - DEC)
+         - `DLAB_GEC.M_EXP_VENTAS_CD` (Ventas Compra de Deuda - DCD)
+         - `DLAB_GEC.M_EXP_VENTAS_CON` (Ventas Convenios - DCO)
+         - `DLAB_GEC.M_EXP_VENTAS_UPG` (Ventas Upgrade - DUPG)
+         - `DLAB_GEC.M_EXP_VENTAS_IL` (Ventas Incremento de Línea - DIL)
+         - `DLAB_GEC.M_EXP_VENTAS_PA` (Ventas Pago Automático - PA)
+         - `DLAB_GEC.M_EXP_VENTAS_SEG` (Ventas Seguros - SEG)
+
+    2. **`modules/consumo/sql/CD40K.sql`**
+       - 📤 **Outputs / Updates**:
+         - `DLAB_GEC.T_SP_CD40K` (Update TRIM)
+         - `DLAB_GEC.M_EXP_CD40K` (Filtro Compra de Deuda > 40K y EECC)
+
+    3. **`modules/consumo/sql/SOURCE_TVL.sql`**
+       - 📤 **Outputs**:
+         - `DLAB_GEC.T_RETENCION_BASE_CALIDAD_GIRU` (Base Calidad GIRU Reclamos)
+         - `DLAB_GEC.T_CALIDAD_SEGUROS_PRT` (Calidad Seguros PRT)
+         - `DLAB_GEC.M_EXP_CONSUMO_SELECT_PP_EC` (Canal Select Préstamos Personales y Extra Cash)
+         - `DLAB_GEC.V_GESTION_CHIP` (Vista Teradata parametrizada)
+         - `DLAB_GEC.V_CNV_RETENCION_PBI` (Vista Retención Power BI)
+
+    4. **`modules/consumo/sql/CA_CONSENTIMIENTO_DIARIO.sql`**
+       - 📤 **Outputs**:
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_PP`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_TC`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_EC`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_CD`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_CON`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_IL`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_UPG`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_DPP`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_DTC`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_DEC`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_DCD`
+         - `DLAB_GEC.M_EXP_CONSENTIMIENTO_DPRT`
+
+    5. **`modules/consumo/sql/KRI_VENTAS_SIN_AUDIO.sql`**
+       - 📤 **Outputs / Intermedias**:
+         - `DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL`
+         - `DLAB_GEC.TEMP_TRAFICO`
+         - `DLAB_GEC.M_EXP_TRAFICO_GENESYS` (Update DNI / Tip Cliente)
+         - `DLAB_GEC.T_EXP_KRI_VENTAS_SINAUDIO`
+         - `DLAB_GEC.T_EXP_KRI_VENTAS_SINAUDIO_CALIDAD`
+
+    6. **`modules/consumo/sql/TLF_NO_AUTORIZADO.sql`**
+       - 📤 **Outputs / Intermedias**:
+         - Tablas intermedias por producto (`M_EXP_TLFNO_AUTORIZADO_TC`, `PP`, `CD`, `EC`, `CON`, `IL`, `UPG`, `TCA`, `ALL`)
+         - `DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO`
+         - `DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO_CALIDAD`
 
 ---
 
@@ -123,9 +163,10 @@ flowchart TD
 
 - 📥 **INPUTS**:
   - **Archivo SQL**: `modules/consumo/sql/CONSUMO_SELECT_TC_CD_SEG.sql`
-  - **Tablas Origen Teradata**: Tablas consolidadas de la Fase 4.
-  - **Conexión**: Usuario de lectura/escritura selectiva (`TERADATA_USER_SELECT`).
+  - **Vistas Corporativas Teradata**:
+    - `E_DW_VIEWS.V_AGG_VENTAS_CONSOLIDADAS`
+    - `E_DW_VIEWS.V_CARTERA_CLIENTE_HIST`
 
 - 📤 **OUTPUTS**:
-  - **Tabla Consolidada Teradata**: `DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG`
-  - **Vista Teradata**: `DLAB_GEC.V_GESTION_CHIP` (reemplazada y parametrizada con el período de ejecución).
+  - **Tabla Consolidada Teradata**: `DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG` (Tarjetas de Crédito, Compra de Deuda y Seguros del Canal Select)
+
