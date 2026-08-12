@@ -90,11 +90,11 @@ class VerintAPIClient:
             except Exception as e:
                 logger.warning(f"Cookie/Token Harvester falló: {e}. Se intentará login directo luego.")
 
-    def login(self) -> bool:
+    def login(self, force_refresh: bool = False) -> bool:
         """
         Garantiza que la sesión esté autenticada con cookies y token SSO validos.
         """
-        if self.is_authenticated:
+        if self.is_authenticated and not force_refresh:
             return True
 
         if not self.username:
