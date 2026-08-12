@@ -78,7 +78,8 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
     token_container = {"impact360_token": None}
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # 🟢 Hacemos el navegador visible para que puedas poner tu clave/MFA
+        browser = p.chromium.launch(headless=False)
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
 
@@ -119,22 +120,21 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
             logger.warning(f"Navegación inicial a signin_url: {e}")
 
         # --- Manejo del Formulario de Inicio de Sesión (Microsoft SSO / Verint) ---
-        # Buscar campo de usuario (puede ser #username, input[type='email'], input[name='username'])
         user_input = page.query_selector("input[name='username']") or page.query_selector("#username") or page.query_selector("input[type='email']")
         if user_input:
             logger.info(f"Ingresando usuario SSO: {username}")
             user_input.fill(username)
             
-            # Buscar botón Continuar o presionar Enter
             btn_continuar = page.query_selector("button:has-text('Continuar')") or page.query_selector("input[type='submit']") or page.query_selector("button[type='submit']")
             if btn_continuar:
                 btn_continuar.click()
             else:
                 user_input.press("Enter")
 
-        # Esperar redirección SAML de Microsoft / Carga de interfaz Verint
+        # 🟢 Esperar a que completes MFA y cargue Verint (extendido a 60 segundos)
+        logger.info("Esperando inicio de sesión manual (MFA/Contraseña). Tienes 60 segundos...")
         try:
-            page.wait_for_url("**/wfo/ui/**", timeout=25000)
+            page.wait_for_url("**/wfo/ui/**", timeout=60000)
         except Exception:
             try:
                 page.wait_for_load_state("networkidle", timeout=10000)

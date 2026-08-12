@@ -63,7 +63,13 @@ class VerintAPIClient:
                 item = item.strip()
                 if "=" in item:
                     k, v = item.split("=", 1)
-                    self.session.cookies.set(k.strip(), v.strip())
+                    k_str, v_str = k.strip(), v.strip()
+                    self.session.cookies.set(k_str, v_str)
+                    if k_str in ["Impact360AuthToken", "xsrfToken"]:
+                        self.impact360_token = v_str
+                        self.xsrf_token = v_str
+                        self.session.headers["Impact360AuthToken"] = v_str
+                        self.session.headers["xsrfToken"] = v_str
             self.is_authenticated = True
         elif self.username:
             try:
