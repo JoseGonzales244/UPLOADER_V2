@@ -44,20 +44,19 @@ def test_verint_sso_connection():
     print(f"✅ Autenticado exitosamente.")
     print(f"🔑 Impact360AuthToken: {client.impact360_token}")
     
-    # 3. Probar llamada API nativa a empleados
-    print("\n--- Paso 2: Consulta de API REST (/user-mgmt-api/v2/employees) ---")
-    emp_url = f"{client.base_url}/wfo/user-mgmt-api/v2/employees?filter[username][EQUAL]={client.username}"
+    # 3. Probar llamada real a la API de Speech Analytics
+    print("\n--- Paso 2: Inicialización de Sesión de Speech Analytics ---")
+    sid = client.init_speech_session()
     
-    res = client.session.get(emp_url)
-    print(f"Status Code: {res.status_code}")
-    
-    if res.status_code == 200:
-        data = res.json()
-        print("✅ Respuesta recibida exitosamente desde la API de Verint:")
-        print(f"   Contenido: {str(data)[:300]}...")
+    if sid:
+        print(f"✅ SessionId de Speech Analytics inicializado exitosamente: {sid}")
+        print("\n--- Paso 3: Consulta de Reportes Guardados (GetSavedReports) ---")
+        reports = client.get_saved_reports()
+        print(f"📊 Reportes guardados encontrados en Verint: {len(reports)}")
+        if reports:
+            print(f"   Primer reporte: {reports[0].get('Name')} (URL: {reports[0].get('URL')})")
     else:
-        print(f"⚠️ Error en consulta API. HTTP Status: {res.status_code}")
-        print(f"   Respuesta: {res.text[:300]}")
+        print("⚠️ No se pudo obtener SessionId de Speech Analytics. Revisa los logs.")
 
     print("\n==================================================")
     print("🎉 PRUEBA FINALIZADA CORRECTAMENTE")

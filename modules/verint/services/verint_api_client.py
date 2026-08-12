@@ -51,8 +51,8 @@ class VerintAPIClient:
         self.is_authenticated = False
         self.xsrf_token = None
         self.impact360_token = None
-        self.instance_id = 247129
-        self.app_id = "0a089067-5b54-4e8b-e34b-0420d23ce8b4"
+        self.instance_id = 247115
+        self.app_id = "37dd24f2-129c-47c2-bea8-cf1064663284"
         self.speech_session_id = None
         
         # --- Auto Cookie & Token Harvester (Playwright SSO headless si caché expiró) ---
@@ -71,6 +71,7 @@ class VerintAPIClient:
                 for name, value in harvested_cookies.items():
                     self.session.cookies.set(name, value)
                 
+                token = token or harvested_cookies.get("Impact360AuthToken")
                 if token:
                     self.impact360_token = token
                     self.xsrf_token = token
@@ -87,7 +88,7 @@ class VerintAPIClient:
         """
         Garantiza que la sesión esté autenticada con cookies y token SSO validos.
         """
-        if self.is_authenticated and self.impact360_token:
+        if self.is_authenticated:
             return True
 
         if not self.username:
@@ -99,6 +100,7 @@ class VerintAPIClient:
             for name, value in harvested_cookies.items():
                 self.session.cookies.set(name, value)
             
+            token = token or harvested_cookies.get("Impact360AuthToken")
             if token:
                 self.impact360_token = token
                 self.xsrf_token = token

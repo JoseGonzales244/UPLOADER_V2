@@ -145,6 +145,14 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
         browser.close()
 
     captured_token = token_container.get("impact360_token")
+    if not captured_token:
+        for c in cookies:
+            c_name = c.get("name", "")
+            if c_name in {"Impact360AuthToken", "xsrfToken", "XSRF-TOKEN"} or "token" in c_name.lower():
+                captured_token = c.get("value")
+                logger.info(f"🔑 Token extraído dinámicamente de la cookie '{c_name}': {captured_token}")
+                break
+
     logger.info(f"🍪 {len(cookies)} cookies capturadas. Token: {captured_token}")
     return cookies, captured_token
 
@@ -168,7 +176,7 @@ def get_verint_session(
         cache = _load_cache()
         if _is_cache_valid(cache):
             cookies_dict = {c["name"]: c["value"] for c in cache.get("cookies", [])}
-            token = cache.get("impact360_token")
+            token = cache.get("impact360_token") or cookies_dict.get("Impact360AuthToken")
             return cookies_dict, token
 
     signin_url = f"{base_url}/wfo/control/signin"
@@ -177,8 +185,11 @@ def get_verint_session(
     if not cookies_list:
         raise RuntimeError("Playwright no pudo capturar cookies de sesión de Verint WFO.")
     
-    _save_cache(cookies_list, token)
     cookies_dict = {c["name"]: c["value"] for c in cookies_list}
+    if not token:
+        token = cookies_dict.get("Impact360AuthToken")
+        
+    _save_cache(cookies_list, token)
     return cookies_dict, token
 
 
