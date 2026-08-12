@@ -87,6 +87,7 @@ function App() {
   const [logFilter, setLogFilter] = useState('all');
 
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [columnsConfig, setColumnsConfig] = useState([]);
@@ -244,11 +245,37 @@ function App() {
     }
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+  const processSelectedFile = async (file) => {
     if (!file) return;
     setUploadedFile(file);
     await fetchFilePreview(file, fileType, selectedTemplate);
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    await processSelectedFile(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      await processSelectedFile(file);
+    }
   };
 
   const handleTemplateChange = async (e) => {
@@ -657,11 +684,53 @@ function App() {
             h('h2', { class: 'text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2.5 font-display' },
               `📁 Cargar Archivo Origen (${fileType})`
             ),
-            h('input', {
-              type: 'file',
-              onChange: handleFileChange,
-              class: 'block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer'
-            })
+            h('div', {
+              onDragOver: handleDragOver,
+              onDragLeave: handleDragLeave,
+              onDrop: handleDrop,
+              class: `relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
+                isDragging
+                  ? 'border-emerald-400 bg-emerald-950/40 shadow-lg shadow-emerald-950/50 scale-[1.01]'
+                  : uploadedFile
+                  ? 'border-emerald-600/60 bg-slate-900/50 hover:border-emerald-500 hover:bg-slate-850/60'
+                  : 'border-slate-700 bg-slate-900/30 hover:border-slate-500 hover:bg-slate-850/50'
+              }`
+            },
+              h('input', {
+                type: 'file',
+                id: 'teradata-file-input',
+                onChange: handleFileChange,
+                class: 'hidden'
+              }),
+              h('label', {
+                htmlFor: 'teradata-file-input',
+                class: 'cursor-pointer flex flex-col items-center justify-center space-y-2'
+              },
+                h('div', { class: `w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                  isDragging ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                }` },
+                  h('span', { class: 'text-2xl' }, isDragging ? '📥' : (uploadedFile ? '📄' : '☁️'))
+                ),
+                h('div', { class: 'space-y-1' },
+                  uploadedFile
+                    ? h('div', {},
+                        h('p', { class: 'text-xs font-semibold text-emerald-400 font-mono-code' }, uploadedFile.name),
+                        h('p', { class: 'text-[11px] text-slate-400' }, `${(uploadedFile.size / 1024).toFixed(1)} KB — Clic o arrastra para cambiar archivo`)
+                      )
+                    : h('div', {},
+                        h('p', { class: 'text-xs font-semibold text-slate-200' },
+                          'Arrastra y suelta tu archivo aquí, o ',
+                          h('span', { class: 'text-emerald-400 underline decoration-emerald-500/40 underline-offset-2' }, 'examina tus archivos')
+                        ),
+                        h('p', { class: 'text-[11px] text-slate-400' },
+                          `Archivos soportados para tipo ${fileType}: ${
+                            fileType === 'Excel' ? '.xlsx, .xls' : fileType === 'CSV' ? '.csv' : '.txt'
+                          }`
+                        )
+                      )
+                )
+              )
+            )
           ),
 
           filePreview && h('div', { class: 'ib-card p-6 space-y-4' },
