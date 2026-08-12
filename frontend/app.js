@@ -259,6 +259,18 @@ function App() {
     await processSelectedFile(file);
   };
 
+  const handleRemoveFile = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setUploadedFile(null);
+    setFilePreview(null);
+    setColumnsConfig([]);
+    const inputEl = document.getElementById('teradata-file-input');
+    if (inputEl) inputEl.value = '';
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -709,6 +721,15 @@ function App() {
                   : 'border-slate-700 bg-slate-900/30 hover:border-slate-500 hover:bg-slate-850/50'
               }`
             },
+              uploadedFile && h('button', {
+                type: 'button',
+                onClick: handleRemoveFile,
+                title: 'Quitar archivo',
+                class: 'absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-slate-800/90 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/50 flex items-center justify-center transition-all duration-150 shadow-md group',
+                'aria-label': 'Quitar archivo'
+              },
+                h('span', { class: 'text-xs font-bold leading-none' }, '✕')
+              ),
               h('input', {
                 type: 'file',
                 id: 'teradata-file-input',
