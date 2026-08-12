@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
-from modules.verint.services.verint_cookie_harvester import get_verint_cookies
+from modules.verint.services.verint_cookie_harvester import get_verint_cookies, get_verint_session
 
 load_dotenv()
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("verint_api_client")
 class VerintAPIClient:
     """
     Cliente API / HTTP directo para Verint WFO & Speech Analytics.
-    Permite autenticarse mediante HTTP POST/Session cookies, inicializar sesiones de Speech Analytics,
+    Permite autenticarse mediante HTTP POST/Session cookies/SSO Microsoft, inicializar sesiones de Speech Analytics,
     aplicar filtros por fecha y agente, consultar contactos directamente, y gestionar exportaciones.
     """
     def __init__(self, base_url: str = "https://wfo.mt5.verintcloudservices.com", username: str = None, password: str = None):
@@ -29,15 +29,14 @@ class VerintAPIClient:
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "es,es-ES;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
+            "X-Requested-With": "XMLHttpRequest",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-User": "?1",
             "sec-ch-ua": '"Not=A?Brand";v="99", "Microsoft Edge";v="151", "Chromium";v="151"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"'
@@ -51,12 +50,12 @@ class VerintAPIClient:
         )
         self.is_authenticated = False
         self.xsrf_token = None
+        self.impact360_token = None
         self.instance_id = 247129
         self.app_id = "0a089067-5b54-4e8b-e34b-0420d23ce8b4"
         self.speech_session_id = None
         
-        # --- Auto Cookie Harvester (Playwright headless ~5 seg si caché expiró) ---
-        # Prioridad: VERINT_COOKIES en .env > caché automático > login Playwright
+        # --- Auto Cookie & Token Harvester (Playwright SSO headless si caché expiró) ---
         raw_cookie = os.getenv("VERINT_COOKIES") or os.getenv("VERINT_COOKIE") or os.getenv("VERINT_JSESSIONID")
         if raw_cookie:
             logger.info("🔑 Cookie manual detectada en .env. Asignando directamente...")
@@ -66,79 +65,51 @@ class VerintAPIClient:
                     k, v = item.split("=", 1)
                     self.session.cookies.set(k.strip(), v.strip())
             self.is_authenticated = True
-        elif self.username and self.password:
+        elif self.username:
             try:
-                harvested = get_verint_cookies(self.username, self.password, self.base_url)
-                for name, value in harvested.items():
+                harvested_cookies, token = get_verint_session(self.username, self.password or "", self.base_url)
+                for name, value in harvested_cookies.items():
                     self.session.cookies.set(name, value)
+                
+                if token:
+                    self.impact360_token = token
+                    self.xsrf_token = token
+                    self.session.headers["Impact360AuthToken"] = token
+                    self.session.headers["xsrfToken"] = token
+                    logger.info(f"🔑 Impact360AuthToken inyectado en cabecera: {token}")
+
                 self.is_authenticated = True
-                logger.info(f"🍪 {len(harvested)} cookies de sesión inyectadas en el cliente API.")
+                logger.info(f"🍪 {len(harvested_cookies)} cookies de sesión inyectadas en el cliente API.")
             except Exception as e:
-                logger.warning(f"Cookie Harvester falló: {e}. Se intentará login directo luego.")
+                logger.warning(f"Cookie/Token Harvester falló: {e}. Se intentará login directo luego.")
 
     def login(self) -> bool:
         """
-        Ejecuta inicio de sesión directo a /wfo/control/signin con los headers y formato capturado.
+        Garantiza que la sesión esté autenticada con cookies y token SSO validos.
         """
-        if self.is_authenticated:
+        if self.is_authenticated and self.impact360_token:
             return True
 
-        if not self.username or not self.password:
-            raise ValueError("VERINT_USER o VERINT_PASS no configurados.")
+        if not self.username:
+            raise ValueError("VERINT_USER no configurado.")
 
-        logger.info(f"Autenticando usuario '{self.username}' en Verint WFO...")
-        signin_url = f"{self.base_url}/wfo/control/signin"
-        
-        self.session.get(signin_url)
+        logger.info(f"Autenticando usuario SSO '{self.username}' en Verint WFO vía Harvester...")
+        try:
+            harvested_cookies, token = get_verint_session(self.username, self.password or "", self.base_url, force_refresh=True)
+            for name, value in harvested_cookies.items():
+                self.session.cookies.set(name, value)
+            
+            if token:
+                self.impact360_token = token
+                self.xsrf_token = token
+                self.session.headers["Impact360AuthToken"] = token
+                self.session.headers["xsrfToken"] = token
+                logger.info(f"🔑 Nuevo Impact360AuthToken inyectado: {token}")
 
-        login_headers = {
-            "Origin": self.base_url,
-            "Referer": signin_url,
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
-        login_payload = {
-            "username": self.username,
-            "password": self.password,
-            "language": "es_ES",
-            "defaultHttpPort": "-1",
-            "screenHeight": "912",
-            "screenWidth": "1536",
-            "pageModelType": "0",
-            "pageDirty": "false",
-            "pageAction": "Login"
-        }
-
-        res_post = self.session.post(signin_url, data=login_payload, headers=login_headers)
-        
-        if res_post.status_code == 200:
             self.is_authenticated = True
-            logger.info("Autenticación API enviada en Verint WFO.")
-            
-            startup_res = self.session.get(f"{self.base_url}/wfo/rest/core-api/AppShellStartupData")
-            if startup_res.status_code == 200:
-                try:
-                    data = startup_res.json()
-                    self.xsrf_token = data.get("StartupData", {}).get("securityContextEntity", {}).get("xsrfToken")
-                    if self.xsrf_token:
-                        self.session.headers["xsrfToken"] = self.xsrf_token
-                        logger.info(f"Token CSRF/XSRF obtenido: {self.xsrf_token}")
-                except Exception as e:
-                    logger.warning(f"No se pudo parsear xsrfToken: {e}")
-            
-            # Verificar que la sesión es funcional llamando a AppShellStartupData
-            if startup_res.status_code == 401 or startup_res.status_code == 403:
-                logger.warning("Sesión bloqueada por WAF. Forzando renovación de cookies con Playwright...")
-                try:
-                    harvested = get_verint_cookies(self.username, self.password, self.base_url, force_refresh=True)
-                    for name, value in harvested.items():
-                        self.session.cookies.set(name, value)
-                    logger.info(f"🍪 Renovación de cookies completada ({len(harvested)} cookies).")
-                except Exception as he:
-                    logger.error(f"No se pudo renovar cookies: {he}")
             return True
-        else:
-            logger.error(f"Error al autenticar. Status: {res_post.status_code}")
+        except Exception as e:
+            logger.error(f"Fallo al autenticar vía SSO Playwright: {e}")
             return False
 
     def init_speech_session(self, instance_id: int = None) -> Optional[str]:
