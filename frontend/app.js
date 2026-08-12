@@ -165,6 +165,9 @@ function App() {
 
               if (prev.length > 0) {
                 const lastLog = prev[prev.length - 1];
+                if (lastLog.text === newText) {
+                  return prev;
+                }
                 const sigNew = getSig(newText);
                 const sigLast = getSig(lastLog.text);
 
