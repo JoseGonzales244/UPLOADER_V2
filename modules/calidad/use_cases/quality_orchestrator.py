@@ -9,7 +9,7 @@ import teradatasql
 from pathlib import Path
 
 from infrastructure.scrapers.insight_downloader import download_insight_data
-from infrastructure.scrapers.verint_downloader import download_verint_data
+
 from infrastructure.parsers.readers import read_excel_file
 from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
@@ -621,7 +621,7 @@ def run_quality_process_flow(
                 if progress_callback:
                     progress_callback("⚡ Intentando descarga ultrarrápida de Verint vía API REST...", "info")
                 from modules.verint.services.verint_api_client import VerintAPIClient
-                from infrastructure.scrapers.verint_downloader import find_input_csv
+                from modules.verint.services.verint_utils import find_input_csv
                 
                 csv_path = find_input_csv(period_str)
                 anio_p = int(period_str[:4])

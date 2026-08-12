@@ -18,7 +18,7 @@ from infrastructure.system.logging_config import logger, setup_logging
 from ui.components import render_sidebar, render_column_editor
 
 from infrastructure.scrapers.insight_downloader import download_insight_data
-from infrastructure.scrapers.verint_downloader import download_verint_data
+
 from infrastructure.database.sql_executor import SQLScriptExecutionError
 from modules.consumo.use_cases.consumo_orchestrator import run_orchestration_flow
 from modules.calidad.use_cases.quality_orchestrator import run_quality_process_flow
