@@ -78,8 +78,8 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
     token_container = {"impact360_token": None}
     
     with sync_playwright() as p:
-        # 🟢 Hacemos el navegador visible para que puedas poner tu clave/MFA
-        browser = p.chromium.launch(headless=False)
+        # Modo headless desatendido para ejecuciones en segundo plano
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
 
