@@ -15,7 +15,7 @@ from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
 from infrastructure.database.sql_executor import get_friendly_script_name
 from ui.components import load_templates
-from modules.televentas.use_cases.grouped_orchestrator import ensure_grouped_data_for_period
+from modules.calidad.televentas.use_cases.grouped_orchestrator import ensure_grouped_data_for_period
 
 logger = logging.getLogger(__name__)
 

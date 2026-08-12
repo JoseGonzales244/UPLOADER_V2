@@ -14,7 +14,7 @@ from pathlib import Path
 root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
-from modules.televentas.use_cases.grouped_orchestrator import process_televentas_grouped
+from modules.calidad.televentas.use_cases.grouped_orchestrator import process_televentas_grouped
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

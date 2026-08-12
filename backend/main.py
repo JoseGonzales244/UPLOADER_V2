@@ -546,7 +546,7 @@ def _run_upload_task(
                 if "PERIODO" in df_clean.columns and not df_clean["PERIODO"].is_empty():
                     first_period = str(df_clean["PERIODO"][0]).strip()
                     if first_period:
-                        from modules.televentas.use_cases.grouped_orchestrator import process_televentas_grouped
+                        from modules.calidad.televentas.use_cases.grouped_orchestrator import process_televentas_grouped
                         send_progress_update(f"⚙️ Iniciando agrupación de TELEVENTAS_EJECUTIVOS_GROUPED para periodo {first_period}...", "info")
                         process_televentas_grouped(first_period, force_reprocess=False, progress_callback=progress_cb)
             except Exception as grouped_err:

@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 # Asegurar importación de módulos del proyecto
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modules.transcripciones.extractors.verint_transcript_extractor import (
+from modules.verint.transcripciones.extractors.verint_transcript_extractor import (
     initialize_verint_session,
     extract_single_transcript_in_session,
     get_pending_calls_from_teradata

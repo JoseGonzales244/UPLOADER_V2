@@ -272,8 +272,17 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
+    
+    let file = null;
+    if (e.dataTransfer.items) {
+      if (e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].kind === 'file') {
+        file = e.dataTransfer.items[0].getAsFile();
+      }
+    } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      file = e.dataTransfer.files[0];
+    }
+
+    if (file) {
       await processSelectedFile(file);
     }
   };
@@ -685,6 +694,7 @@ function App() {
               `📁 Cargar Archivo Origen (${fileType})`
             ),
             h('div', {
+              onDragEnter: handleDragOver,
               onDragOver: handleDragOver,
               onDragLeave: handleDragLeave,
               onDrop: handleDrop,

@@ -33,9 +33,9 @@ def test_verint_sso_connection():
         print("❌ ERROR: VERINT_USER no está definido en el entorno / .env")
         sys.exit(1)
         
-    # 2. Verificar o forzar inicio de sesión (creando perfil persistente Chromium)
+    # 2. Verificar o forzar inicio de sesión
     print("\n--- Paso 1: Autenticación / Verificación de Sesión ---")
-    auth_success = client.login(force_refresh=True)
+    auth_success = client.login()
     
     if not auth_success:
         print("❌ Falló la autenticación en Verint WFO.")
