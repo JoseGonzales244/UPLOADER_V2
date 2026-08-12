@@ -65,28 +65,39 @@ def _is_cache_valid(cache: Dict) -> bool:
     return True
 
 
-def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tuple[list, Optional[str]]:
+PERSISTENT_PROFILE_PATH = PROJECT_ROOT / "data" / "verint_browser_profile"
+
+
+def _harvest_via_playwright(
+    username: str, 
+    password: str, 
+    signin_url: str, 
+    headless: bool = True
+) -> Tuple[list, Optional[str]]:
     """
-    Abre Chromium headless, completa el flujo SSO / login de Verint,
+    Abre Chromium con perfil persistente (user_data_dir), completa el flujo SSO / login de Verint,
     captura las cookies de sesión y el token Impact360AuthToken.
-    Tarda ~5-8 segundos. Cierra el navegador inmediatamente después.
+    Al usar perfil persistente, mantiene la sesión de Microsoft en disco de forma segura.
     """
     from playwright.sync_api import sync_playwright
 
-    logger.info("🌐 Abriendo sesión headless de Verint (SSO Microsoft) para capturar token/cookies...")
+    mode_str = "desatendida (oculta)" if headless else "INTERACTIVA (visible)"
+    logger.info(f"🌐 Abriendo sesión {mode_str} de Verint (SSO Microsoft)...")
     cookies = []
     token_container = {"impact360_token": None}
     
+    PERSISTENT_PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        # Modo headless desatendido para ejecuciones en segundo plano
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(ignore_https_errors=True)
-        page = context.new_page()
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(PERSISTENT_PROFILE_PATH),
+            headless=headless,
+            ignore_https_errors=True
+        )
+        page = context.pages[0] if context.pages else context.new_page()
 
         # Interceptamos respuestas para extraer el authToken de AppShellStartupData o headers
         def handle_response(response):
             try:
-                # 1. Intentar capturar desde la respuesta de AppShellStartupData
                 if "AppShellStartupData" in response.url and response.status == 200:
                     data = response.json()
                     sec_entity = data.get("StartupData", {}).get("securityContextEntity", {})
@@ -95,7 +106,6 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
                         token_container["impact360_token"] = token
                         logger.info(f"🔑 Token capturado desde AppShellStartupData: {token}")
 
-                # 2. Revisar cabeceras de respuesta por Impact360AuthToken
                 for name, val in response.headers.items():
                     if name.lower() == "impact360authtoken" and val:
                         token_container["impact360_token"] = val
@@ -131,10 +141,10 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
             else:
                 user_input.press("Enter")
 
-        # 🟢 Esperar a que completes MFA y cargue Verint (extendido a 60 segundos)
-        logger.info("Esperando inicio de sesión manual (MFA/Contraseña). Tienes 60 segundos...")
+        # Esperar carga de interfaz Verint
+        wait_timeout = 60000 if not headless else 25000
         try:
-            page.wait_for_url("**/wfo/ui/**", timeout=60000)
+            page.wait_for_url("**/wfo/ui/**", timeout=wait_timeout)
         except Exception:
             try:
                 page.wait_for_load_state("networkidle", timeout=10000)
@@ -142,7 +152,7 @@ def _harvest_via_playwright(username: str, password: str, signin_url: str) -> Tu
                 page.wait_for_timeout(5000)
 
         cookies = context.cookies()
-        browser.close()
+        context.close()
 
     captured_token = token_container.get("impact360_token")
     if not captured_token:
@@ -165,12 +175,8 @@ def get_verint_session(
 ) -> Tuple[Dict[str, str], Optional[str]]:
     """
     Retorna una tupla (cookies_dict, impact360_token) lista para usar en httpx/requests.
-    
-    Flujo:
-    1. Intenta leer el caché local.
-    2. Si el caché es válido (< TTL), devuelve (cookies, token) directamente.
-    3. Si expiró o no existe, ejecuta Playwright headless para autenticar por SSO,
-       guarda en caché y devuelve los valores actualizados.
+    Con Auto-Healing: Si el modo desatendido falla (ej. cambio de clave en 8 días),
+    abre automáticamente el navegador visible para solicitar credenciales.
     """
     if not force_refresh:
         cache = _load_cache()
@@ -180,8 +186,17 @@ def get_verint_session(
             return cookies_dict, token
 
     signin_url = f"{base_url}/wfo/control/signin"
-    cookies_list, token = _harvest_via_playwright(username, password, signin_url)
     
+    # Intento 1: Desatendido (Headless)
+    cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=True)
+    
+    # Si no se capturó un token o cookies de sesión de Verint, lanzar auto-recuperación interactiva (Headless=False)
+    has_session_cookie = any(c.get("name") in {"JSESSIONID", "ASP.NET_SessionId", ".ASPXAUTH"} for c in cookies_list)
+    if not token and not has_session_cookie:
+        logger.warning("⚠️ Sesión expirada o re-autenticación de Microsoft requerida (Cambio de Clave / MFA).")
+        logger.warning("🚀 Abriendo navegador visible para ingresar credenciales...")
+        cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=False)
+
     if not cookies_list:
         raise RuntimeError("Playwright no pudo capturar cookies de sesión de Verint WFO.")
     
