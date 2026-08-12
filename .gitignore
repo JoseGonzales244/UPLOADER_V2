@@ -36,4 +36,5 @@ logs/
 .vscode/
 .DS_Store
 Thumbs.db
+*.vbs
 run_transcript_audit.py
