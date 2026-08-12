@@ -15,6 +15,7 @@ from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
 from infrastructure.database.sql_executor import get_friendly_script_name
 from ui.components import load_templates
+from modules.televentas.use_cases.grouped_orchestrator import ensure_grouped_data_for_period
 
 logger = logging.getLogger(__name__)
 
@@ -774,6 +775,9 @@ def run_quality_process_flow(
     if run_phase4:
         if progress_callback:
             progress_callback("⚡ Fase 4: Ejecutando Scripts SQL del Pipeline de Calidad...", "info")
+
+        # 4.0 Validar/Ingestar automáticamente TELEVENTAS_EJECUTIVOS_GROUPED para el periodo
+        ensure_grouped_data_for_period(period_str, progress_callback=progress_callback)
             
         try:
             con = connect_teradata(td_user, td_password, host=host, logmech=logmech)
