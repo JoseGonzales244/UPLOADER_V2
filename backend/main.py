@@ -122,6 +122,11 @@ def send_progress_update(message: str, type_str: str = "info", progress: Optiona
         process_state["progress"] = progress
     if phase is not None:
         process_state["current_phase"] = phase
+    else:
+        for i in range(1, 6):
+            if f"fase {i}" in message.lower():
+                process_state["current_phase"] = i
+                break
     process_state["message"] = message
     process_state["status"] = type_str
 

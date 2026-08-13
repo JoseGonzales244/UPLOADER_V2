@@ -21,13 +21,13 @@ def get_logger(name: str = "GenesysBot") -> logging.Logger:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # Handler opcional a archivo de log por día
+    # Handler opcional a archivo de log centralizado en la raíz (logs/)
     try:
         from datetime import datetime
-        log_dir = Path(__file__).parent / "logs"
-        log_dir.mkdir(exist_ok=True)
+        from infrastructure.system.logging_config import LOG_DIR
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         date_str = datetime.now().strftime("%Y%m%d")
-        file_handler = logging.FileHandler(log_dir / f"bot_{date_str}.log", encoding="utf-8")
+        file_handler = logging.FileHandler(LOG_DIR / f"genesys_bot_{date_str}.log", encoding="utf-8")
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except Exception:
