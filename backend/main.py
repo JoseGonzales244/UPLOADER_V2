@@ -457,13 +457,21 @@ async def preview_file(
                 "convert_nulls": convert_nulls
             })
 
-        preview_rows = df.head(10).to_dicts()
+        # Aplicar la plantilla sobre el DataFrame de vista previa para reflejar las transformaciones finales
+        df_transformed = clean_dataframe(
+            df,
+            selections=columns_info,
+            convertir_sin_acentos=True,
+            transformar_varchar_latin=False,
+            max_len_varchar=3000
+        )
+        preview_rows = df_transformed.head(10).to_dicts()
 
         return {
             "status": "ok",
             "filename": file.filename,
             "total_rows": len(df),
-            "total_cols": len(df.columns),
+            "total_cols": len(df_transformed.columns),
             "columns": columns_info,
             "preview": preview_rows
         }
