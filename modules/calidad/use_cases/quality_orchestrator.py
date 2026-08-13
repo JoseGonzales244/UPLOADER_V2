@@ -647,11 +647,14 @@ def run_quality_process_flow(
                         progress_callback(f"⚡ ¡Descarga vía API de Verint completada exitosamente ({len(downloaded_verint_files)} archivo(s))!", "success")
             except Exception as api_err:
                 import traceback as _tb
+                from infrastructure.system.logging_config import LOG_DIR
                 _err_detail = f"{type(api_err).__name__}: {api_err}"
                 _err_trace = _tb.format_exc()
+                date_str = datetime.datetime.now().strftime("%Y%m%d")
+                log_file_hint = LOG_DIR / f"proceso_calidad_{date_str}.log"
                 logger.error(f"Fallo crítico en API REST de Verint. {_err_detail}\n{_err_trace}")
                 if progress_callback:
-                    progress_callback(f"❌ Fallo crítico en API REST de Verint: {_err_detail}", "error")
+                    progress_callback(f"❌ Fallo crítico en API REST de Verint: {_err_detail} (Detalles en: {log_file_hint})", "error")
                 raise RuntimeError(f"Fallo en descarga por API de Verint: {api_err}") from api_err
                 
         if not downloaded_verint_files:

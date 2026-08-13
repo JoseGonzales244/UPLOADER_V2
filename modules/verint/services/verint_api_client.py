@@ -382,10 +382,19 @@ class VerintAPIClient:
             res = self.session.post(url, params=params, files=files)
 
         if res.status_code == 200:
-            file_id = res.json().get("id", "")
+            file_id = ""
+            if res.text and res.text.strip():
+                try:
+                    data = res.json()
+                    file_id = data.get("id", "") if isinstance(data, dict) else str(data)
+                except Exception as _je:
+                    logger.debug(f"UploadFileList.ashx retornó respuesta no JSON: '{res.text[:100]}'")
+                    file_id = res.text.strip()
+            if not file_id:
+                file_id = desc_name
             logger.info(f"✅ CSV '{path_obj.name}' cargado exitosamente por HTTP. FileId: {file_id}")
             return file_id, desc_str
-        logger.error(f"Error al cargar CSV por HTTP ({res.status_code}): {res.text[:200]}")
+        logger.error(f"Error al cargar CSV por HTTP (HTTP {res.status_code}): {res.text[:500]}")
         return "", desc_str
 
     def set_filter_as_search(self, qdi_xml: str, instance_id: int = 247115) -> bool:

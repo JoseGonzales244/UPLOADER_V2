@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 LOG_DIR = BASE_DIR / "logs"
 
 
@@ -47,7 +47,7 @@ def setup_logging(
         handler.close()
 
     logger.setLevel(level)
-    logger.propagate = False
+    logger.propagate = True if name else False
 
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     sensitive_filter = SensitiveDataFilter()
@@ -62,6 +62,15 @@ def setup_logging(
 
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
+
+    # También configurar el root logger si se configuró un logger nombrado
+    if name != "":
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
+        if not root_logger.handlers:
+            root_logger.addHandler(console_handler)
+            root_logger.addHandler(file_handler)
+
     return logger
 
 
