@@ -858,6 +858,9 @@ def run_quality_process_flow(
             if progress_callback:
                 progress_callback("🎉 ¡Pipeline de Calidad Completo ejecutado exitosamente!", "success")
                 
+            # Escribir la marca de timestamp en conector_calidad.txt únicamente si se ejecutó la Fase 4 (SQL Scripts)
+            _write_powerbi_timestamp_file("conector_calidad.txt")
+                
         except Exception as e:
             if progress_callback:
                 progress_callback(f"❌ Fallo crítico en el procesamiento SQL. Revirtiendo cambios (Rollback)... Error: {e}", "error")
@@ -987,6 +990,3 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
-
-    # Si llegamos hasta aquí sin lanzar excepción, escribir la marca de éxito de proceso Calidad.
-    _write_powerbi_timestamp_file("conector_calidad.txt")

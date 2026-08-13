@@ -32,7 +32,7 @@ class SensitiveDataFilter(logging.Filter):
 def setup_logging(
     name: str = "",
     level: int = logging.INFO,
-    log_prefix: str = "plantilla",
+    log_prefix: str = "proceso_calidad",
     log_dir: Path | None = None,
 ) -> logging.Logger:
     target_dir = Path(log_dir) if log_dir is not None else LOG_DIR
