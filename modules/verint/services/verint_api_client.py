@@ -65,11 +65,14 @@ class VerintAPIClient:
                     k, v = item.split("=", 1)
                     k_str, v_str = k.strip(), v.strip()
                     self.session.cookies.set(k_str, v_str)
-                    if k_str in ["Impact360AuthToken", "xsrfToken"]:
+                    if k_str.lower() in ["impact360authtoken", "xsrftoken"]:
                         self.impact360_token = v_str
                         self.xsrf_token = v_str
                         self.session.headers["Impact360AuthToken"] = v_str
+                        self.session.headers["impact360authtoken"] = v_str
                         self.session.headers["xsrfToken"] = v_str
+                        self.session.headers["Referer"] = f"{self.base_url}/wfo/ui/"
+                        self.session.headers["Origin"] = self.base_url
             self.is_authenticated = True
         elif self.username:
             try:
@@ -77,13 +80,16 @@ class VerintAPIClient:
                 for name, value in harvested_cookies.items():
                     self.session.cookies.set(name, value)
                 
-                token = token or harvested_cookies.get("Impact360AuthToken")
+                token = token or harvested_cookies.get("Impact360AuthToken") or harvested_cookies.get("impact360authtoken")
                 if token:
                     self.impact360_token = token
                     self.xsrf_token = token
                     self.session.headers["Impact360AuthToken"] = token
+                    self.session.headers["impact360authtoken"] = token
                     self.session.headers["xsrfToken"] = token
-                    logger.info(f"🔑 Impact360AuthToken inyectado en cabecera: {token}")
+                    self.session.headers["Referer"] = f"{self.base_url}/wfo/ui/"
+                    self.session.headers["Origin"] = self.base_url
+                    logger.info(f"🔑 Impact360AuthToken inyectado en cabeceras: {token}")
 
                 self.is_authenticated = True
                 logger.info(f"🍪 {len(harvested_cookies)} cookies de sesión inyectadas en el cliente API.")
@@ -106,12 +112,15 @@ class VerintAPIClient:
             for name, value in harvested_cookies.items():
                 self.session.cookies.set(name, value)
             
-            token = token or harvested_cookies.get("Impact360AuthToken")
+            token = token or harvested_cookies.get("Impact360AuthToken") or harvested_cookies.get("impact360authtoken")
             if token:
                 self.impact360_token = token
                 self.xsrf_token = token
                 self.session.headers["Impact360AuthToken"] = token
+                self.session.headers["impact360authtoken"] = token
                 self.session.headers["xsrfToken"] = token
+                self.session.headers["Referer"] = f"{self.base_url}/wfo/ui/"
+                self.session.headers["Origin"] = self.base_url
                 logger.info(f"🔑 Nuevo Impact360AuthToken inyectado: {token}")
 
             self.is_authenticated = True

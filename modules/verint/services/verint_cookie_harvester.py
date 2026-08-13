@@ -141,7 +141,7 @@ def _harvest_via_playwright(
             else:
                 user_input.press("Enter")
 
-        # Esperar carga de interfaz Verint
+        # Esperar carga de interfaz Verint y navegar a /wfo/ui/ para asegurar generación de cookies de sesión
         wait_timeout = 60000 if not headless else 25000
         try:
             page.wait_for_url("**/wfo/ui/**", timeout=wait_timeout)
@@ -151,6 +151,29 @@ def _harvest_via_playwright(
             except Exception:
                 page.wait_for_timeout(5000)
 
+        # Forzar navegación a /wfo/ui/ para garantizar inicialización de Impact360AuthToken
+        try:
+            parsed_base = signin_url.split("/wfo/")[0]
+            page.goto(f"{parsed_base}/wfo/ui/", timeout=15000)
+            page.wait_for_timeout(3000)
+        except Exception as _e_ui:
+            logger.debug(f"Navegación de confirmación a /wfo/ui/: {_e_ui}")
+
+        # Intentar extraer token desde sessionStorage / localStorage / window JS context
+        try:
+            storage_token = page.evaluate("""() => {
+                return sessionStorage.getItem('Impact360AuthToken') || 
+                       localStorage.getItem('Impact360AuthToken') || 
+                       sessionStorage.getItem('xsrfToken') || 
+                       localStorage.getItem('xsrfToken') || 
+                       (window.Impact360AuthToken ? window.Impact360AuthToken : '');
+            }""")
+            if storage_token:
+                token_container["impact360_token"] = storage_token
+                logger.info(f"🔑 Token capturado desde Browser Storage: {storage_token}")
+        except Exception as _e_st:
+            logger.debug(f"Evaluación de storage: {_e_st}")
+
         cookies = context.cookies()
         context.close()
 
@@ -158,7 +181,7 @@ def _harvest_via_playwright(
     if not captured_token:
         for c in cookies:
             c_name = c.get("name", "")
-            if c_name in {"Impact360AuthToken", "xsrfToken", "XSRF-TOKEN"} or "token" in c_name.lower():
+            if c_name.lower() in {"impact360authtoken", "xsrftoken", "xsrf-token"} or "impact360" in c_name.lower():
                 captured_token = c.get("value")
                 logger.info(f"🔑 Token extraído dinámicamente de la cookie '{c_name}': {captured_token}")
                 break
