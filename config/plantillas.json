@@ -4129,6 +4129,12 @@
             "Null:0/No Null:1": true,
             "Tipo de dato": "FLOAT",
             "Nuevo nombre": "TCAD_B"
+        },
+        "SEG_360_GC_Ofrecimiento": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OFRE_360"
         }
     },
     "P026-CROSS_TCAD": {
