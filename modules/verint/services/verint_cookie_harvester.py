@@ -53,13 +53,18 @@ def _save_cache(cookies: list, impact360_token: Optional[str] = None) -> None:
 
 
 def _is_cache_valid(cache: Dict) -> bool:
-    """Verifica si el caché sigue siendo válido según el TTL."""
+    """Verifica si el caché sigue siendo válido según el TTL y presencia de token."""
     if not cache:
         return False
     harvested_at = cache.get("harvested_at", 0)
     age = time.time() - harvested_at
     if age > SESSION_TTL_SECONDS:
         logger.info(f"⏰ Caché de sesión expirado (edad: {age/3600:.1f}h > TTL: {SESSION_TTL_SECONDS/3600:.1f}h). Se renovará.")
+        return False
+    token = cache.get("impact360_token")
+    cookies_dict = {c["name"]: c["value"] for c in cache.get("cookies", [])}
+    if not token and "Impact360AuthToken" not in cookies_dict and "impact360authtoken" not in cookies_dict:
+        logger.info("⚠️ Caché guardado no contiene Impact360AuthToken válido. Forzando renovación.")
         return False
     logger.info(f"✅ Caché válido (edad: {age/60:.1f} min). Sin necesidad de abrir navegador.")
     return True
@@ -107,7 +112,7 @@ def _harvest_via_playwright(
                         logger.info(f"🔑 Token capturado desde AppShellStartupData: {token}")
 
                 for name, val in response.headers.items():
-                    if name.lower() == "impact360authtoken" and val:
+                    if name.lower() in {"impact360authtoken", "xsrftoken"} and val:
                         token_container["impact360_token"] = val
                         logger.info(f"🔑 Token capturado desde Response Header: {val}")
             except Exception:
@@ -116,7 +121,7 @@ def _harvest_via_playwright(
         def handle_request(request):
             try:
                 for name, val in request.headers.items():
-                    if name.lower() == "impact360authtoken" and val:
+                    if name.lower() in {"impact360authtoken", "xsrftoken"} and val:
                         token_container["impact360_token"] = val
             except Exception:
                 pass
@@ -142,7 +147,7 @@ def _harvest_via_playwright(
                 user_input.press("Enter")
 
         # Esperar carga de interfaz Verint y navegar a /wfo/ui/ para asegurar generación de cookies de sesión
-        wait_timeout = 60000 if not headless else 25000
+        wait_timeout = 120000 if not headless else 12000
         try:
             page.wait_for_url("**/wfo/ui/**", timeout=wait_timeout)
         except Exception:
@@ -198,14 +203,14 @@ def get_verint_session(
 ) -> Tuple[Dict[str, str], Optional[str]]:
     """
     Retorna una tupla (cookies_dict, impact360_token) lista para usar en httpx/requests.
-    Con Auto-Healing: Si el modo desatendido falla (ej. cambio de clave en 8 días),
-    abre automáticamente el navegador visible para solicitar credenciales.
+    Con Auto-Healing: Si el modo desatendido falla (ej. cambio de clave o pantalla de login de Microsoft),
+    abre automáticamente el navegador visible para solicitar credenciales/completar SSO.
     """
     if not force_refresh:
         cache = _load_cache()
         if _is_cache_valid(cache):
             cookies_dict = {c["name"]: c["value"] for c in cache.get("cookies", [])}
-            token = cache.get("impact360_token") or cookies_dict.get("Impact360AuthToken")
+            token = cache.get("impact360_token") or cookies_dict.get("Impact360AuthToken") or cookies_dict.get("impact360authtoken")
             return cookies_dict, token
 
     signin_url = f"{base_url}/wfo/control/signin"
@@ -213,11 +218,13 @@ def get_verint_session(
     # Intento 1: Desatendido (Headless)
     cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=True)
     
-    # Si no se capturó un token o cookies de sesión de Verint, lanzar auto-recuperación interactiva (Headless=False)
-    has_session_cookie = any(c.get("name") in {"JSESSIONID", "ASP.NET_SessionId", ".ASPXAUTH"} for c in cookies_list)
-    if not token and not has_session_cookie:
-        logger.warning("⚠️ Sesión expirada o re-autenticación de Microsoft requerida (Cambio de Clave / MFA).")
-        logger.warning("🚀 Abriendo navegador visible para ingresar credenciales...")
+    cookies_dict_temp = {c.get("name", ""): c.get("value", "") for c in cookies_list}
+    token = token or cookies_dict_temp.get("Impact360AuthToken") or cookies_dict_temp.get("impact360authtoken")
+    
+    # Si headless no pudo obtener el token de Verint, lanzar auto-recuperación interactiva en navegador visible (headless=False)
+    if not token:
+        logger.warning("⚠️ No se pudo extraer Impact360AuthToken en modo desatendido (autenticación SSO de Microsoft pendiente).")
+        logger.warning("🚀 Abriendo navegador visible para completar la sesión SSO...")
         cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=False)
 
     if not cookies_list:
@@ -225,7 +232,7 @@ def get_verint_session(
     
     cookies_dict = {c["name"]: c["value"] for c in cookies_list}
     if not token:
-        token = cookies_dict.get("Impact360AuthToken")
+        token = cookies_dict.get("Impact360AuthToken") or cookies_dict.get("impact360authtoken")
         
     _save_cache(cookies_list, token)
     return cookies_dict, token
