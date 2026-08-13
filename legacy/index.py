@@ -824,15 +824,15 @@ with tab_orchestrator:
     st.markdown("#### 🕒 Fases a Ejecutar")
     col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
     with col_f1:
-        run_f1 = st.checkbox("Fase 1: Insight (7 Insumos)", value=True, key="orch_run_f1")
+        run_f1 = st.checkbox("Fase 1: Insight", value=True, key="orch_run_f1")
     with col_f2:
-        run_f2 = st.checkbox("Fase 2: Ingesta CD40K Manual", value=True, key="orch_run_f2")
+        run_f2 = st.checkbox("Fase 2: CD40K", value=True, key="orch_run_f2")
     with col_f3:
-        run_f3 = st.checkbox("Fase 3: Desembolsos (SQL Server)", value=True, key="orch_run_f3")
+        run_f3 = st.checkbox("Fase 3: BN Desembolsos", value=True, key="orch_run_f3")
     with col_f4:
-        run_f4 = st.checkbox("Fase 4: Pipeline SQL Consumo", value=True, key="orch_run_f4")
+        run_f4 = st.checkbox("Fase 4: Proceso SQL", value=True, key="orch_run_f4")
     with col_f5:
-        run_f5 = st.checkbox("Fase 5: Ingesta Selección (Secundario)", value=True, key="orch_run_f5")
+        run_f5 = st.checkbox("Fase 5: SELECT", value=True, key="orch_run_f5")
         
     start_from_script = None
     if run_f4:
@@ -882,7 +882,7 @@ with tab_orchestrator:
             log_history = []
             state = {"current_script": "", "current_phase": 0}
             run_phases = [run_f1, run_f2, run_f3, run_f4, run_f5]
-            labels = ["Insight Insumos", "CD40K Manual", "Desembolsos SQL", "SQL Consumo", "Selección"]
+            labels = ["Insight", "CD40K", "BN Desembolsos", "Proceso SQL", "SELECT"]
             
             def progress_cb(msg, log_type="info", *args, **kwargs):
                 if "ejecutando sentencia" in msg.lower():

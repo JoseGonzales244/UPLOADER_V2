@@ -71,6 +71,9 @@ def setup_logging(
             root_logger.addHandler(console_handler)
             root_logger.addHandler(file_handler)
 
+    # Silenciar warnings ruidosos de librerías de terceros (fastexcel)
+    logging.getLogger("fastexcel").setLevel(logging.ERROR)
+
     return logger
 
 

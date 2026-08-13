@@ -569,6 +569,8 @@ def run_quality_process_flow(
                     con.close()
                 except Exception:
                     pass
+                if progress_callback:
+                    progress_callback("✅ Fase 1 completada exitosamente.", "success")
                 
     # ----------------------------------------------------
     # PHASE 2: DOWNLOAD & INGEST VERINT (SPEECH ANALYTICS)
@@ -637,8 +639,8 @@ def run_quality_process_flow(
                     to_iso=to_iso,
                     csv_filepath=csv_path,
                     output_dir=INPUT_PROCESO_CALIDAD_DIR,
-                    poll_interval_seconds=15,
-                    timeout_minutes=15,
+                    poll_interval_seconds=60,
+                    timeout_minutes=35,
                     stop_checker=stop_checker
                 )
                 if res_file:
@@ -712,6 +714,8 @@ def run_quality_process_flow(
                     con.close()
                 except Exception:
                     pass
+                if progress_callback:
+                    progress_callback("✅ Fase 2 completada exitosamente.", "success")
 
     # ----------------------------------------------------
     # PHASE 3: INGEST LOCAL ACCION_TOMADA EXCEL
@@ -771,6 +775,8 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
+            if progress_callback:
+                progress_callback("✅ Fase 3 completada exitosamente.", "success")
 
     # ----------------------------------------------------
     # PHASE 4: EXECUTE SQL TRANSFORMATION SCRIPTS
@@ -874,6 +880,8 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
+            if progress_callback:
+                progress_callback("✅ Fase 4 completada exitosamente.", "success")
 
     # ----------------------------------------------------
     # PHASE 5: NTD PROCESS

@@ -1007,11 +1007,11 @@ function App() {
             h('label', { class: 'block text-xs font-semibold text-slate-300' }, 'Fases a Ejecutar:'),
             h('div', { class: 'grid grid-cols-2 md:grid-cols-5 gap-3' },
               [
-                { key: 'f1', label: 'Fase 1: Ingesta Insight' },
+                { key: 'f1', label: 'Fase 1: Insight' },
                 { key: 'f2', label: 'Fase 2: CD40K' },
-                { key: 'f3', label: 'Fase 3: SQL Server' },
-                { key: 'f4', label: 'Fase 4: SQL Teradata' },
-                { key: 'f5', label: 'Fase 5: Selección' }
+                { key: 'f3', label: 'Fase 3: BN Desembolsos' },
+                { key: 'f4', label: 'Fase 4: Proceso SQL' },
+                { key: 'f5', label: 'Fase 5: SELECT' }
               ].map((f) =>
                 h('label', { key: f.key, class: 'flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 cursor-pointer select-none hover:border-slate-700' },
                   h('input', {
@@ -1053,7 +1053,7 @@ function App() {
               style: { width: `${currentPhase > 0 ? (currentPhase - 1) * 20 + 10 : 0}%` }
             }),
             h('div', { class: 'relative z-10 flex justify-between' },
-              ['1. Insight', '2. CD40K', '3. SQL Server', '4. Teradata', '5. Selección'].map((lbl, idx) => {
+              ['1. Insight', '2. CD40K', '3. BN Desembolsos', '4. Proceso SQL', '5. SELECT'].map((lbl, idx) => {
                 const stepNum = idx + 1;
                 const isCompleted = currentPhase > stepNum;
                 const isActive = currentPhase === stepNum;
@@ -1154,6 +1154,34 @@ function App() {
                     h('option', { value: '04_sa_ajustes_curva.sql' }, '4. 04_sa_ajustes_curva.sql'),
                     h('option', { value: '04_b_sa_parche_nota_cero.sql' }, '5. 04_b_sa_parche_nota_cero.sql'),
                     h('option', { value: '05_consolidacion_nota_final.sql' }, '6. 05_consolidacion_nota_final.sql')
+                  )
+                ),
+
+                // Stepper gráfico Calidad
+                h('div', { class: 'relative py-6 px-4 bg-slate-900/60 rounded-xl border border-slate-800' },
+                  h('div', { class: 'stepper-line-track' }),
+                  h('div', {
+                    class: 'stepper-progress-fill',
+                    style: { width: `${currentPhase > 0 ? (currentPhase - 1) * 20 + 10 : 0}%` }
+                  }),
+                  h('div', { class: 'relative z-10 flex justify-between' },
+                    ['1. Insight PC', '2. Verint SA', '3. Acción tomada', '4. Scripts SQL', '5. NTD'].map((lbl, idx) => {
+                      const stepNum = idx + 1;
+                      const isCompleted = currentPhase > stepNum;
+                      const isActive = currentPhase === stepNum;
+                      return h('div', { key: idx, class: 'flex flex-col items-center' },
+                        h('div', {
+                          class: `w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs font-display transition-all ${
+                            isCompleted
+                              ? 'bg-emerald-500 text-white border-2 border-emerald-400 shadow-md shadow-emerald-950'
+                              : isActive
+                              ? 'bg-blue-600 text-white border-2 border-blue-400 shadow-lg shadow-blue-500/50 animate-pulse'
+                              : 'bg-slate-800 text-slate-400 border-2 border-slate-700'
+                          }`
+                        }, isCompleted ? '✔' : stepNum),
+                        h('span', { class: `text-[11px] font-semibold mt-2 ${isActive ? 'text-blue-400 font-bold' : 'text-slate-400'}` }, lbl)
+                      );
+                    })
                   )
                 )
               )

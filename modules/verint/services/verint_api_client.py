@@ -292,6 +292,10 @@ class VerintAPIClient:
         
         report_name = report_item.get("Name", "")
         rel_url = report_item.get("URL", "")
+        if not rel_url or str(rel_url).strip().lower() in ["none", "null", ""]:
+            logger.warning(f"⚠️ El reporte '{report_name}' aún no posee URL de descarga asignada ({rel_url}). Esperando a que finalice...")
+            return False
+
         report_format = report_item.get("Format", 4)
         token = random.randint(10000, 99999)
         
@@ -554,7 +558,10 @@ class VerintAPIClient:
             ]
             
             if matching_reports:
-                all_ready = all(str(r.get("Status", "")) in ["1", "2", "4", "completed", "completado"] for r in matching_reports)
+                all_ready = all(
+                    str(r.get("Status", "")) in ["1", "completed", "completado"] and r.get("URL") and str(r.get("URL")).strip().lower() != "null"
+                    for r in matching_reports
+                )
                 if all_ready:
                     logger.info(f"🎯 Reporte '{report_name}' ({len(matching_reports)} parte(s)) completado en Verint Cloud! Descargando...")
                     for r in matching_reports:
@@ -564,6 +571,9 @@ class VerintAPIClient:
                             downloaded_paths.append(str(out_path))
                     if downloaded_paths:
                         return downloaded_paths[0] if len(downloaded_paths) == 1 else ",".join(downloaded_paths)
+                else:
+                    statuses = [f"{r.get('Name')}: Status={r.get('Status')}, URL={r.get('URL')}" for r in matching_reports]
+                    logger.info(f"⏳ Esperando generación del reporte en Verint Cloud... Estado actual: {statuses}")
                         
             time.sleep(poll_interval_seconds)
             

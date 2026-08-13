@@ -1,4 +1,5 @@
 import os
+import sys
 import teradatasql
 import polars as pl
 from dotenv import load_dotenv
@@ -128,9 +129,17 @@ def load_to_teradata(con, table_name, df: pl.DataFrame, selected_columns_config,
         batch = raw_rows[i:i + batch_size]
         batch_values = [[_sanitize_cell(val) for val in row] for row in batch]
         cur.executemany(insert_query, batch_values)
+        pct = min(100, int(((i + len(batch)) / total_rows) * 100))
+        msg = f"\rCargando registros... {pct}% ({i + len(batch)}/{total_rows})"
         if progress_callback:
-            pct = min(100, int(((i + len(batch)) / total_rows) * 100))
-            progress_callback(f"Cargando registros... {pct}% ({i + len(batch)}/{total_rows})")
+            progress_callback(msg)
+        else:
+            sys.stdout.write(msg)
+            sys.stdout.flush()
+            if pct == 100:
+                sys.stdout.write("\n")
 
     con.commit()
     cur.close()
+    if not progress_callback:
+        sys.stdout.write("\n")

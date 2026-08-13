@@ -253,6 +253,8 @@ def run_orchestration_flow(
                         progress_callback=progress_callback
                     )
                     logger.info(f"Table '{table_name}' loaded successfully.")
+            if progress_callback:
+                progress_callback("✅ Fase 1 completada exitosamente.", "success")
 
         # ----------------------------------------------------
         # FASE 2: INGESTA CD40K MANUAL
@@ -295,6 +297,8 @@ def run_orchestration_flow(
                             progress_callback=progress_callback
                         )
                         logger.info("CD40K table loaded successfully.")
+                        if progress_callback:
+                            progress_callback("✅ Fase 2 completada exitosamente.", "success")
                 except Exception as cd_err:
                     msg_warn = f"⚠️ Advertencia al procesar la base manual CD40K: {cd_err}. Se continuará con el flujo."
                     logger.error(f"Error processing CD40K manual Excel: {cd_err}")
@@ -377,6 +381,8 @@ def run_orchestration_flow(
                         cursor.execute("UPDATE DLAB_GEC.T_VENTAS_BPE_MARKET SET FECHA_UPDATE = CURRENT_TIMESTAMP(0)")
                         
                     logger.info("Updated EVALUADO and FECHA_UPDATE flags in T_VENTAS_BPE_MARKET.")
+                    if progress_callback:
+                        progress_callback("✅ Fase 3 completada exitosamente.", "success")
                 except Exception as desemb_err:
                     logger.error(f"Error extracting desembolsos from SQL Server: {desemb_err}")
                     if progress_callback:
@@ -399,6 +405,8 @@ def run_orchestration_flow(
                 progress_callback=progress_callback,
                 start_from_script=start_from_script
             )
+            if progress_callback:
+                progress_callback("✅ Fase 4 completada exitosamente.", "success")
 
         # ----------------------------------------------------
         # FASE 5: TRANSFORMACIÓN DE SELECCIÓN
@@ -414,6 +422,8 @@ def run_orchestration_flow(
                 period_str=period_str,
                 progress_callback=progress_callback
             )
+            if progress_callback:
+                progress_callback("✅ Fase 5 completada exitosamente.", "success")
             
         msg_ok = "🎉 ¡Proceso de Consumo completado exitosamente!"
         logger.info(f"=== PROCESO DE CONSUMO COMPLETADO EXITOSAMENTE PARA EL PERÍODO {period_str} ===")
