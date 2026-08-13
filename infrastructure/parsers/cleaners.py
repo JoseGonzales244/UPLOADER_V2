@@ -46,12 +46,21 @@ def clean_dataframe(df: pl.DataFrame, selections: list, convertir_sin_acentos: b
     Cleans, projects, and renames the DataFrame columns in parallel using vectorized Polars expressions.
     """
     expressions = []
+    seen_aliases = set()
     
     for col_dict in selections:
         col_name = col_dict['name']
         new_name = col_dict['new_name']
         if not col_dict['selected']:
             continue
+            
+        # Evitar fallo de Polars por alias duplicados agregando sufijo numérico
+        original_new_name = new_name
+        counter = 1
+        while new_name in seen_aliases:
+            new_name = f"{original_new_name}_{counter}"
+            counter += 1
+        seen_aliases.add(new_name)
             
         # 1. Null transformation (0/1 check)
         if col_dict.get('convert_nulls', False):

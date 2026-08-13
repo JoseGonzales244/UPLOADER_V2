@@ -9,6 +9,7 @@ Proporciona endpoints REST y WebSockets en tiempo real para:
 """
 import os
 import sys
+import io
 import json
 import asyncio
 import logging
@@ -412,18 +413,14 @@ async def preview_file(
         templates = load_templates()
         content = await file.read()
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        file_bytes = io.BytesIO(content)
 
         if file_type == "Excel":
-            df = read_excel_file(tmp_path, selected_template=selected_template, templates=templates)
+            df = read_excel_file(file_bytes, selected_template=selected_template, templates=templates)
         elif file_type == "CSV":
-            df = read_csv_file(tmp_path)
+            df = read_csv_file(file_bytes)
         else:
-            df = read_unicode_text_file(tmp_path)
-
-        os.remove(tmp_path)
+            df = read_unicode_text_file(file_bytes)
 
         # Sugerir tipos de datos
         columns_info = []
