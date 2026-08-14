@@ -40,12 +40,13 @@ def generate_ev_csv_from_teradata(period):
 
     td_config = load_teradata_config()
 
-    query = """
+    query = f"""
         SELECT DISTINCT REG_EJECUTIVO
-        FROM DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS
+        FROM DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED
+        WHERE PERIODO = '{period}'
     """
 
-    logger.info("Connecting to Teradata to generate EV CSV...")
+    logger.info(f"Connecting to Teradata to generate EV CSV for period {period}...")
     logger.info(f"Output CSV will be created at: {output_path}")
 
     rows = []
@@ -62,12 +63,12 @@ def generate_ev_csv_from_teradata(period):
                 rows = cur.fetchall()
 
     except Exception as e:
-        logger.error(f"Error querying Teradata: {e}")
+        logger.error(f"Error querying Teradata for period {period}: {e}")
         raise
 
     if not rows:
         raise ValueError(
-            "El SELECT de Teradata no devolvió registros para REG_EJECUTIVO."
+            f"El SELECT de Teradata no devolvió ejecutivos en DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED para el período {period}."
         )
 
     with open(output_path, mode="w", newline="", encoding="utf-8") as file:
@@ -77,7 +78,7 @@ def generate_ev_csv_from_teradata(period):
             writer.writerow([row[0]])
 
     logger.info(f"Generated CSV successfully: {output_path}")
-    logger.info(f"Total executives exported: {len(rows)}")
+    logger.info(f"Total executives exported for period {period}: {len(rows)}")
 
     return output_path
 

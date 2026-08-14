@@ -507,7 +507,7 @@ def run_quality_process_flow(
     # ----------------------------------------------------
     if run_phase1:
         if progress_callback:
-            progress_callback("📥 Fase 1: Descargando Evaluaciones de Insight...", "info")
+            progress_callback("🚀 Fase 1 iniciando: Descarga e Ingesta de Evaluaciones de Insight...", "info")
             
         today_str = datetime.datetime.now().strftime("%Y%m%d")
         expected_insight_file = os.path.join(INPUT_PROCESO_CALIDAD_DIR, f"Reporte_Insight_EVALUATIONS_{today_str}.txt")
@@ -570,14 +570,14 @@ def run_quality_process_flow(
                 except Exception:
                     pass
                 if progress_callback:
-                    progress_callback("✅ Fase 1 completada exitosamente.", "success")
+                    progress_callback("🏁 Fase 1 concluida exitosamente: Evaluaciones Insight cargadas.", "success")
                 
     # ----------------------------------------------------
     # PHASE 2: DOWNLOAD & INGEST VERINT (SPEECH ANALYTICS)
     # ----------------------------------------------------
     if run_phase2:
         if progress_callback:
-            progress_callback(f"📥 Fase 2: Descargando Speech Analytics de Verint para el periodo {period_str}...", "info")
+            progress_callback(f"🚀 Fase 2 iniciando: Descarga e Ingesta de Speech Analytics Verint ({period_str})...", "info")
             
         import glob
         all_files = sorted(glob.glob(os.path.join(INPUT_PROCESO_CALIDAD_DIR, "Export_Calidad_*.xlsx")))
@@ -715,14 +715,14 @@ def run_quality_process_flow(
                 except Exception:
                     pass
                 if progress_callback:
-                    progress_callback("✅ Fase 2 completada exitosamente.", "success")
+                    progress_callback("🏁 Fase 2 concluida exitosamente: Speech Analytics Verint cargado en Teradata.", "success")
 
     # ----------------------------------------------------
     # PHASE 3: INGEST LOCAL ACCION_TOMADA EXCEL
     # ----------------------------------------------------
     if run_phase3:
         if progress_callback:
-            progress_callback("📂 Fase 3: Procesando Excel de Acciones Tomadas local...", "info")
+            progress_callback("🚀 Fase 3 iniciando: Ingesta de Acciones Tomadas (ACCION_TOMADA.xlsx)...", "info")
             
         excel_path = os.path.join(INPUT_PROCESO_CALIDAD_DIR, "ACCION_TOMADA.xlsx")
         if not os.path.exists(excel_path):
@@ -776,14 +776,14 @@ def run_quality_process_flow(
             except Exception:
                 pass
             if progress_callback:
-                progress_callback("✅ Fase 3 completada exitosamente.", "success")
+                progress_callback("🏁 Fase 3 concluida exitosamente: Acciones Tomadas cargadas en Teradata.", "success")
 
     # ----------------------------------------------------
     # PHASE 4: EXECUTE SQL TRANSFORMATION SCRIPTS
     # ----------------------------------------------------
     if run_phase4:
         if progress_callback:
-            progress_callback("⚡ Fase 4: Ejecutando Scripts SQL del Pipeline de Calidad...", "info")
+            progress_callback("🚀 Fase 4 iniciando: Ejecución de Scripts SQL del Pipeline de Calidad...", "info")
 
         # 4.0 Validar/Ingestar automáticamente TELEVENTAS_EJECUTIVOS_GROUPED para el periodo
         ensure_grouped_data_for_period(period_str, progress_callback=progress_callback)
@@ -837,15 +837,16 @@ def run_quality_process_flow(
                     preview = stmt_str.split("\n")[0][:100] + "..." if len(stmt_str.split("\n")[0]) > 100 else stmt_str.split("\n")[0]
                     logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {preview}")
                     if progress_callback:
+                        pct = int((idx / len(statements)) * 100)
                         try:
                             progress_callback(
-                                f"   🔹 [{idx}/{len(statements)}] Ejecutando sentencia...",
+                                f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Procesando paso {idx} de {len(statements)} ({pct}%)",
                                 "info",
                                 progress=float(idx) / len(statements)
                             )
                         except TypeError:
                             progress_callback(
-                                f"   🔹 [{idx}/{len(statements)}] Ejecutando sentencia...",
+                                f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Procesando paso {idx} de {len(statements)} ({pct}%)",
                                 "info"
                             )
                     try:
@@ -881,14 +882,14 @@ def run_quality_process_flow(
             except Exception:
                 pass
             if progress_callback:
-                progress_callback("✅ Fase 4 completada exitosamente.", "success")
+                progress_callback("🏁 Fase 4 concluida exitosamente: Scripts SQL aplicados.", "success")
 
     # ----------------------------------------------------
     # PHASE 5: NTD PROCESS
     # ----------------------------------------------------
     if run_phase5:
         if progress_callback:
-            progress_callback("⚡ Fase 5: Ejecutando Proceso NTD (Not To Do)...", "info")
+            progress_callback("🚀 Fase 5 iniciando: Ejecución de Proceso NTD (Not To Do)...", "info")
             
         try:
             con = connect_teradata(td_user, td_password, host=host, logmech=logmech)
@@ -928,31 +929,28 @@ def run_quality_process_flow(
             # 5.2 Validation: check DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE
             if progress_callback:
                 progress_callback("🔍 Validando tabla de entrada de Observaciones (M_EXP_NTD_OBSERVACIONES_PRE)...", "info")
-                
             cursor.execute("SELECT COUNT(*) FROM DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE")
             row_obs = cursor.fetchone()
             count_obs = row_obs[0] if row_obs else 0
             if count_obs == 0:
                 raise ValueError("La tabla DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE está vacía. Proceso abortado.")
                 
-            # 5.3 Run 06_carga_ntd.sql script
-            script_rel_path = "modules/calidad/sql/06_carga_ntd.sql"
-            script_path = os.path.join(os.getcwd(), script_rel_path)
-            if not os.path.exists(script_path):
-                raise FileNotFoundError(f"Archivo de script SQL no encontrado: {script_rel_path}")
+            # 5.3 Execute 06_carga_ntd.sql
+            script_ntd_path = os.path.join(os.getcwd(), "modules", "calidad", "sql", "06_carga_ntd.sql")
+            if not os.path.exists(script_ntd_path):
+                raise FileNotFoundError(f"Archivo de script SQL no encontrado: {script_ntd_path}")
                 
-            friendly_name = get_friendly_script_name(script_path)
+            friendly_name = get_friendly_script_name(script_ntd_path)
             if progress_callback:
                 progress_callback(f"⚙️ Procesando: **{friendly_name}**...", "info")
                 
-            with open(script_path, "r", encoding="utf-8") as f:
+            with open(script_ntd_path, "r", encoding="utf-8") as f:
                 raw_sql = f.read()
                 
             prepared_sql = inject_variables(raw_sql, context)
             statements = parse_statements(prepared_sql)
             
-            logger.info(f"Se detectaron {len(statements)} sentencias en {os.path.basename(script_path)}")
-            
+            logger.info(f"Se detectaron {len(statements)} sentencias en {os.path.basename(script_ntd_path)}")
             for idx, stmt in enumerate(statements, 1):
                 stmt_str = stmt.strip()
                 if not stmt_str:
@@ -963,7 +961,7 @@ def run_quality_process_flow(
                     cursor.execute(stmt_str)
                 except Exception as stmt_err:
                     from infrastructure.database.sql_executor import SQLScriptExecutionError
-                    raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_str, stmt_err)
+                    raise SQLScriptExecutionError(os.path.basename(script_ntd_path), idx, stmt_str, stmt_err)
                     
             if progress_callback:
                 progress_callback(f"✅ Completado: **{friendly_name}**", "success")
@@ -973,17 +971,7 @@ def run_quality_process_flow(
                 progress_callback("💾 Procesamiento SQL de NTD ejecutado exitosamente. Guardando transacciones (Commit)...", "info")
             con.commit()
             if progress_callback:
-                progress_callback("🎉 ¡Proceso NTD (Fase 5) completado exitosamente!", "success")
-                
-            try:
-                from infrastructure.system.notifier import notify_desktop
-                notify_desktop(
-                    title="Uploader V2 - Calidad",
-                    message="¡Proceso NTD completado exitosamente!",
-                    duration_sec=5
-                )
-            except Exception as err:
-                logger.warning(f"No se pudo enviar la notificación de escritorio: {err}")
+                progress_callback("🏁 Fase 5 concluida exitosamente: Proceso NTD finalizado.", "success")
                 
         except Exception as e:
             if progress_callback:
@@ -998,3 +986,21 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
+
+    # Notificación de escritorio global al finalizar las fases solicitadas
+    try:
+        from infrastructure.system.notifier import notify_desktop
+        active_phases = []
+        if run_phase1: active_phases.append("Fase 1")
+        if run_phase2: active_phases.append("Fase 2 (Verint SA)")
+        if run_phase3: active_phases.append("Fase 3")
+        if run_phase4: active_phases.append("Fase 4")
+        if run_phase5: active_phases.append("Fase 5")
+        phases_label = ", ".join(active_phases) if active_phases else "Proceso de Calidad"
+        notify_desktop(
+            title="Uploader V2 - Calidad",
+            message=f"¡{phases_label} completada(s) exitosamente para el período {period_str}!",
+            duration_sec=5
+        )
+    except Exception as notify_err:
+        logger.warning(f"No se pudo enviar la notificación de escritorio: {notify_err}")

@@ -4,7 +4,7 @@
 --
 -- Características principales de esta versión:
 -- 1. Unificación en una sola consulta estructurada usando tablas volátiles.
--- 2. Carga directa de banderas sin CASE WHEN redundantes (se precalculan a 1/0 en la carga).
+-- 2. Inserción explícita por columnas en el orden exacto de REPORTE_RETENCION_CONVENIOS.
 -- 3. Uso de TO_CHAR y EXTRACT para fechas compatible con Teradata.
 -- 4. Eliminación de sentencias UPDATE secuenciales que consumen excesiva I/O.
 -- 5. Parámetro dinámico {PERIODO} compatible con el orquestador.
@@ -15,7 +15,35 @@
 -- -------------------------------------------------------------
 CREATE VOLATILE TABLE VT_RETENCION_STEP1 AS (
     SELECT 
-        s.*,
+        s.RET_CONVENIOS_COBRANZAS,
+        s.RET_CONVENIOS_COMPRA_DE_DEUDA,
+        s.RET_CONVENIOS_CONSULTAS_GENERALES,
+        s.RET_CONVENIOS_DEVOLUCION_CUOTAS,
+        s.RET_CONVENIOS_INFO_CAMPANAS,
+        s.RET_CONVENIOS_MAYOR_IMPORTE,
+        s.RET_CONVENIOS_MEDIOS_PROPIOS,
+        s.RET_CONVENIOS_OFF_MAVERICK,
+        s.RET_CONVENIOS_PEDIDOS_RECLAMOS,
+        s.RET_CONVENIOS_RET_AMPLIACION,
+        s.RET_CONVENIOS_RET_BAJA_TASA,
+        s.RET_CONVENIOS_SOL_CANCELACION,
+        s.RET_CONVENIOS_SOL_CRONOGRAMA,
+        s.RET_CONVENIOS_SOL_DEUDA_TOTAL,
+        s.RET_CONVENIOS_SOL_TASA_INTERES,
+        s.RET_CONVENIOS_TASA_INTERES,
+        s.TiempoLlamada,
+        s.TIEMPO_SILENCIO,
+        s.DniCliente,
+        s.RegistroAgente,
+        s.FechaLlamada,
+        s.NUM_TELEF,
+        s.DNIS,
+        s.conID,
+        s.Tipificacion,
+        s.IDContacto,
+        s.cti_BT_Segmento,
+        s.Area,
+
         -- Período dinámico basado en la fecha de la llamada
         TO_CHAR(s.FechaLlamada, 'YYYYMM') AS Periodo,
         
@@ -24,12 +52,12 @@ CREATE VOLATILE TABLE VT_RETENCION_STEP1 AS (
         CAST(s.TiempoLlamada AS FLOAT) / (24.0 * 3600.0) AS TIEMPO_LLAMADA_HH_MM_SS,
         CAST((s.TiempoLlamada - s.TIEMPO_SILENCIO) AS FLOAT) / (24.0 * 3600.0) AS TIEMPO_HABLADO_HH_MM_SS,
         
-        -- Determinación de la dirección de llamada según el Área
+        -- Determinación del flujo de llamada según el Área
         CASE  
             WHEN s.Area IN ('A_BE_CONVENIOS', 'C_CONVENIOS', 'C_CONVENIOS_PRV') THEN 'Entrante'
             WHEN s.Area IN ('TLV_CON_RET') THEN 'Saliente'
             ELSE NULL 
-        END AS Direccion,
+        END AS FLUJO,
         m.NOM_EJECUTIVO AS Empleado,
         
         -- Información de la vista de retención V_CNV_VISTA_RETENCION_BT
@@ -63,8 +91,7 @@ CREATE VOLATILE TABLE VT_RETENCION_STEP1 AS (
         AND s.RegistroAgente = b.primer_registro
         AND TO_CHAR(s.FechaLlamada, 'YYYYMM') = b.mes
 
-    --WHERE TO_CHAR(s.FechaLlamada, 'YYYYMM') = '{PERIODO}'
-    WHERE TO_CHAR(s.FechaLlamada, 'YYYYMM') = '202607'
+    WHERE TO_CHAR(s.FechaLlamada, 'YYYYMM') = '{PERIODO}'
 ) WITH DATA PRIMARY INDEX (conID) ON COMMIT PRESERVE ROWS;
 
 -- -------------------------------------------------------------
@@ -72,7 +99,54 @@ CREATE VOLATILE TABLE VT_RETENCION_STEP1 AS (
 -- -------------------------------------------------------------
 CREATE VOLATILE TABLE VT_RETENCION_FINAL AS (
     SELECT
-        t.*,
+        t.RET_CONVENIOS_COBRANZAS,
+        t.RET_CONVENIOS_COMPRA_DE_DEUDA,
+        t.RET_CONVENIOS_CONSULTAS_GENERALES,
+        t.RET_CONVENIOS_DEVOLUCION_CUOTAS,
+        t.RET_CONVENIOS_INFO_CAMPANAS,
+        t.RET_CONVENIOS_MAYOR_IMPORTE,
+        t.RET_CONVENIOS_MEDIOS_PROPIOS,
+        t.RET_CONVENIOS_OFF_MAVERICK,
+        t.RET_CONVENIOS_PEDIDOS_RECLAMOS,
+        t.RET_CONVENIOS_RET_AMPLIACION,
+        t.RET_CONVENIOS_RET_BAJA_TASA,
+        t.RET_CONVENIOS_SOL_CANCELACION,
+        t.RET_CONVENIOS_SOL_CRONOGRAMA,
+        t.RET_CONVENIOS_SOL_DEUDA_TOTAL,
+        t.RET_CONVENIOS_SOL_TASA_INTERES,
+        t.RET_CONVENIOS_TASA_INTERES,
+        t.TiempoLlamada,
+        t.TIEMPO_SILENCIO,
+        t.DniCliente,
+        t.RegistroAgente,
+        t.FechaLlamada,
+        t.NUM_TELEF,
+        t.DNIS,
+        t.conID,
+        t.Tipificacion,
+        t.IDContacto,
+        t.cti_BT_Segmento,
+        t.Area,
+        t.Periodo,
+        t.TIEMPO_SILENCIO_HH_MM_SS,
+        t.TIEMPO_LLAMADA_HH_MM_SS,
+        t.TIEMPO_HABLADO_HH_MM_SS,
+        t.FLUJO,
+        t.Empleado,
+        t.SEGMENTO,
+        t.FAMILIA,
+        t.MOTIVO,
+        t.RESPUESTA,
+        t.GESTION,
+        t.PLAZA,
+        t.AC_TASA,
+        t.AC_AMPLIACION,
+        t.TOTAL_RETENCIONES,
+        t.CLIENTE_GESTIONABLE,
+        t.CANCELACIONES_EFECTIVAS,
+        t.RETENCION_TASA,
+        t.RETENCION_MONTO,
+
         -- Clasificación de llamada según rango de duración
         CASE  
             WHEN t.TiempoLlamada BETWEEN 0 AND 180 THEN 'MENORES 3 MIN'
@@ -104,11 +178,6 @@ CREATE VOLATILE TABLE VT_RETENCION_FINAL AS (
         CASE WHEN (t.RET_CONVENIOS_COMPRA_DE_DEUDA = 1 OR t.RET_CONVENIOS_TASA_INTERES = 1 OR t.RET_CONVENIOS_MAYOR_IMPORTE = 1 OR t.RET_CONVENIOS_MEDIOS_PROPIOS = 1) THEN t.TIEMPO_LLAMADA_HH_MM_SS ELSE NULL END AS TiempoLlamada_cancelaciones,
         CASE WHEN (t.RET_CONVENIOS_COMPRA_DE_DEUDA = 1 OR t.RET_CONVENIOS_TASA_INTERES = 1 OR t.RET_CONVENIOS_MAYOR_IMPORTE = 1 OR t.RET_CONVENIOS_MEDIOS_PROPIOS = 1) THEN t.TIEMPO_SILENCIO_HH_MM_SS ELSE NULL END AS Tiemposilencio_cancelaciones,
         CASE WHEN (t.RET_CONVENIOS_COMPRA_DE_DEUDA = 1 OR t.RET_CONVENIOS_TASA_INTERES = 1 OR t.RET_CONVENIOS_MAYOR_IMPORTE = 1 OR t.RET_CONVENIOS_MEDIOS_PROPIOS = 1) THEN t.TIEMPO_HABLADO_HH_MM_SS ELSE NULL END AS Tiempohablado_cancelaciones,
-        
-        -- Duración y silencios específicos para ofertas cruzadas (Cross)
-        --CASE WHEN t.RET_CONVENIOS_OFF_MAVERICK = 1 THEN t.TIEMPO_LLAMADA_HH_MM_SS ELSE NULL END AS TiempoLlamada_Cross,
-        --CASE WHEN t.RET_CONVENIOS_OFF_MAVERICK = 1 THEN t.TIEMPO_SILENCIO_HH_MM_SS ELSE NULL END AS Tiemposilencio_Cross,
-        --CASE WHEN t.RET_CONVENIOS_OFF_MAVERICK = 1 THEN t.TIEMPO_HABLADO_HH_MM_SS ELSE NULL END AS Tiempohablado_Cross,
         
         -- Matriz de alertas de retención basada en prioridades
         CASE 
@@ -142,6 +211,135 @@ CREATE VOLATILE TABLE VT_RETENCION_FINAL AS (
 DELETE FROM DLAB_GEC.REPORTE_RETENCION_CONVENIOS 
 WHERE Periodo = '{PERIODO}';
 
--- 3.2 Insertar los nuevos registros procesados del mes
-INSERT INTO DLAB_GEC.REPORTE_RETENCION_CONVENIOS
-SELECT * FROM VT_RETENCION_FINAL;
+-- 3.2 Insertar los nuevos registros procesados del mes de forma detallada y ordenada
+INSERT INTO DLAB_GEC.REPORTE_RETENCION_CONVENIOS (
+    RET_CONVENIOS_COBRANZAS,
+    RET_CONVENIOS_COMPRA_DE_DEUDA,
+    RET_CONVENIOS_CONSULTAS_GENERALES,
+    RET_CONVENIOS_DEVOLUCION_CUOTAS,
+    RET_CONVENIOS_INFO_CAMPANAS,
+    RET_CONVENIOS_MAYOR_IMPORTE,
+    RET_CONVENIOS_MEDIOS_PROPIOS,
+    RET_CONVENIOS_OFF_MAVERICK,
+    RET_CONVENIOS_PEDIDOS_RECLAMOS,
+    RET_CONVENIOS_RET_AMPLIACION,
+    RET_CONVENIOS_RET_BAJA_TASA,
+    RET_CONVENIOS_SOL_CANCELACION,
+    RET_CONVENIOS_SOL_CRONOGRAMA,
+    RET_CONVENIOS_SOL_DEUDA_TOTAL,
+    RET_CONVENIOS_SOL_TASA_INTERES,
+    RET_CONVENIOS_TASA_INTERES,
+    TiempoLlamada,
+    TIEMPO_SILENCIO,
+    DniCliente,
+    RegistroAgente,
+    FechaLlamada,
+    NUM_TELEF,
+    DNIS,
+    conID,
+    Tipificacion,
+    IDContacto,
+    cti_BT_Segmento,
+    Area,
+    Periodo,
+    TIEMPO_SILENCIO_HH_MM_SS,
+    TIEMPO_LLAMADA_HH_MM_SS,
+    TIEMPO_HABLADO_HH_MM_SS,
+    FLUJO,
+    Empleado,
+    SEGMENTO,
+    FAMILIA,
+    MOTIVO,
+    RESPUESTA,
+    GESTION,
+    PLAZA,
+    AC_TASA,
+    AC_AMPLIACION,
+    TOTAL_RETENCIONES,
+    CLIENTE_GESTIONABLE,
+    CANCELACIONES_EFECTIVAS,
+    RETENCION_TASA,
+    RETENCION_MONTO,
+    RANGO_LLAMADA,
+    TiempoLlamada_retenciones,
+    Tiemposilencio_retenciones,
+    Tiempohablado_retenciones,
+    TOTAL_MOTIVOS_ANULACION,
+    TiempoLlamada_ofrecimiento,
+    Tiemposilencio_ofrecimiento,
+    Tiempohablado_ofrecimiento,
+    TiempoLlamada_POST_VENTA,
+    Tiemposilencio_POST_VENTA,
+    Tiempohablado_POST_VENTA,
+    TiempoLlamada_cancelaciones,
+    Tiemposilencio_cancelaciones,
+    Tiempohablado_cancelaciones,
+    ALERTAS_RETENCIONES
+)
+SELECT 
+    RET_CONVENIOS_COBRANZAS,
+    RET_CONVENIOS_COMPRA_DE_DEUDA,
+    RET_CONVENIOS_CONSULTAS_GENERALES,
+    RET_CONVENIOS_DEVOLUCION_CUOTAS,
+    RET_CONVENIOS_INFO_CAMPANAS,
+    RET_CONVENIOS_MAYOR_IMPORTE,
+    RET_CONVENIOS_MEDIOS_PROPIOS,
+    RET_CONVENIOS_OFF_MAVERICK,
+    RET_CONVENIOS_PEDIDOS_RECLAMOS,
+    RET_CONVENIOS_RET_AMPLIACION,
+    RET_CONVENIOS_RET_BAJA_TASA,
+    RET_CONVENIOS_SOL_CANCELACION,
+    RET_CONVENIOS_SOL_CRONOGRAMA,
+    RET_CONVENIOS_SOL_DEUDA_TOTAL,
+    RET_CONVENIOS_SOL_TASA_INTERES,
+    RET_CONVENIOS_TASA_INTERES,
+    TiempoLlamada,
+    TIEMPO_SILENCIO,
+    DniCliente,
+    RegistroAgente,
+    FechaLlamada,
+    NUM_TELEF,
+    DNIS,
+    conID,
+    Tipificacion,
+    IDContacto,
+    cti_BT_Segmento,
+    Area,
+    Periodo,
+    TIEMPO_SILENCIO_HH_MM_SS,
+    TIEMPO_LLAMADA_HH_MM_SS,
+    TIEMPO_HABLADO_HH_MM_SS,
+    FLUJO,
+    Empleado,
+    SEGMENTO,
+    FAMILIA,
+    MOTIVO,
+    RESPUESTA,
+    GESTION,
+    PLAZA,
+    AC_TASA,
+    AC_AMPLIACION,
+    TOTAL_RETENCIONES,
+    CLIENTE_GESTIONABLE,
+    CANCELACIONES_EFECTIVAS,
+    RETENCION_TASA,
+    RETENCION_MONTO,
+    RANGO_LLAMADA,
+    TiempoLlamada_retenciones,
+    Tiemposilencio_retenciones,
+    Tiempohablado_retenciones,
+    TOTAL_MOTIVOS_ANULACION,
+    TiempoLlamada_ofrecimiento,
+    Tiemposilencio_ofrecimiento,
+    Tiempohablado_ofrecimiento,
+    TiempoLlamada_POST_VENTA,
+    Tiemposilencio_POST_VENTA,
+    Tiempohablado_POST_VENTA,
+    TiempoLlamada_cancelaciones,
+    Tiemposilencio_cancelaciones,
+    Tiempohablado_cancelaciones,
+    ALERTAS_RETENCIONES
+FROM VT_RETENCION_FINAL
+WHERE ALERTAS_RETENCIONES IS NOT NULL
+AND FLUJO IS NOT NULL;
+

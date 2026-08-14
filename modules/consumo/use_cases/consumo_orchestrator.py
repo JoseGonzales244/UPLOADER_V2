@@ -260,50 +260,75 @@ def run_orchestration_flow(
         # FASE 2: INGESTA CD40K MANUAL
         # ----------------------------------------------------
         if run_phase2 and con:
-            cd40k_path = os.path.join(INPUT_BASE_CONSUMO_DIR, "CD40K_NEW.xlsx")
-            
-            if os.path.exists(cd40k_path):
-                msg_f2 = "📂 Fase 2: Cargando información manual de CD40K..."
-                logger.info(f"Phase 2: Processing manual CD40K Excel at {cd40k_path}")
+            msg_f2_start = "🚀 Fase 2 iniciando: Ingesta de información manual CD40K..."
+            logger.info(msg_f2_start)
+            if progress_callback:
+                progress_callback(msg_f2_start, "info")
+
+            cd40k_candidates = [
+                os.path.join(INPUT_BASE_CONSUMO_DIR, "CD40K_NEW.xlsx"),
+                os.path.join(INPUT_BASE_CONSUMO_DIR, "CD40K.xlsx")
+            ]
+            cd40k_path = None
+            for cand in cd40k_candidates:
+                if os.path.exists(cand) and os.path.getsize(cand) > 0:
+                    cd40k_path = cand
+                    break
+
+            if not cd40k_path:
+                glob_cd40k = glob.glob(os.path.join(INPUT_BASE_CONSUMO_DIR, "*CD40K*.xlsx"))
+                if glob_cd40k:
+                    cd40k_path = glob_cd40k[0]
+
+            if not cd40k_path or not os.path.exists(cd40k_path):
+                err_msg = f"❌ Error en Fase 2: No se encontró el archivo Excel manual CD40K en '{INPUT_BASE_CONSUMO_DIR}'. Se esperaba 'CD40K_NEW.xlsx' o 'CD40K.xlsx'. El proceso no puede continuar sin este insumo."
+                logger.error(err_msg)
                 if progress_callback:
-                    progress_callback(msg_f2, "info")
+                    progress_callback(err_msg, "error")
+                raise FileNotFoundError(err_msg)
+
+            msg_f2 = f"📂 Procesando archivo manual CD40K ({os.path.basename(cd40k_path)})..."
+            logger.info(f"Phase 2: Processing manual CD40K Excel at {cd40k_path}")
+            if progress_callback:
+                progress_callback(msg_f2, "info")
+            try:
+                from modules.calidad.use_cases.quality_orchestrator import refresh_excel_sharepoint_data
                 try:
-                    from modules.calidad.use_cases.quality_orchestrator import refresh_excel_sharepoint_data
-                    try:
-                        refresh_excel_sharepoint_data(cd40k_path, progress_callback)
-                    except Exception as refresh_err:
-                        logger.warning(f"SharePoint Excel refresh warning for CD40K: {refresh_err}")
-    
-                    df_cd40k = pl.read_excel(cd40k_path)
-                    template_cd40k = templates.get("P003-CD40K", {})
+                    refresh_excel_sharepoint_data(cd40k_path, progress_callback)
+                except Exception as refresh_err:
+                    logger.warning(f"SharePoint Excel refresh warning for CD40K: {refresh_err}")
+
+                df_cd40k = pl.read_excel(cd40k_path)
+                template_cd40k = templates.get("P003-CD40K", {})
+                
+                if template_cd40k:
+                    selections_cd40k = get_selections_from_template(df_cd40k, template_cd40k)
+                    df_cd40k_clean = clean_dataframe(
+                        df_cd40k,
+                        selections_cd40k,
+                        convertir_sin_acentos=True,
+                        transformar_varchar_latin=False,
+                        max_len_varchar=3000
+                    )
                     
-                    if template_cd40k:
-                        selections_cd40k = get_selections_from_template(df_cd40k, template_cd40k)
-                        df_cd40k_clean = clean_dataframe(
-                            df_cd40k,
-                            selections_cd40k,
-                            convertir_sin_acentos=True,
-                            transformar_varchar_latin=False,
-                            max_len_varchar=3000
-                        )
-                        
-                        logger.info(f"Uploading CD40K dataframe ({len(df_cd40k_clean)} rows) to Teradata 'DLAB_GEC.T_SP_CD40K'...")
-                        load_to_teradata(
-                            con=con,
-                            table_name="DLAB_GEC.T_SP_CD40K",
-                            df=df_cd40k_clean,
-                            selected_columns_config=selections_cd40k,
-                            clear_table=True,
-                            progress_callback=progress_callback
-                        )
-                        logger.info("CD40K table loaded successfully.")
-                        if progress_callback:
-                            progress_callback("✅ Fase 2 completada exitosamente.", "success")
-                except Exception as cd_err:
-                    msg_warn = f"⚠️ Advertencia al procesar la base manual CD40K: {cd_err}. Se continuará con el flujo."
-                    logger.error(f"Error processing CD40K manual Excel: {cd_err}")
+                    logger.info(f"Uploading CD40K dataframe ({len(df_cd40k_clean)} rows) to Teradata 'DLAB_GEC.T_SP_CD40K'...")
+                    load_to_teradata(
+                        con=con,
+                        table_name="DLAB_GEC.T_SP_CD40K",
+                        df=df_cd40k_clean,
+                        selected_columns_config=selections_cd40k,
+                        clear_table=True,
+                        progress_callback=progress_callback
+                    )
+                    logger.info("CD40K table loaded successfully.")
                     if progress_callback:
-                        progress_callback(msg_warn, "warning")
+                        progress_callback("🏁 Fase 2 concluida exitosamente: Base CD40K cargada en Teradata.", "success")
+            except Exception as cd_err:
+                msg_err = f"❌ Fallo crítico al procesar la base manual CD40K: {cd_err}"
+                logger.error(msg_err)
+                if progress_callback:
+                    progress_callback(msg_err, "error")
+                raise cd_err
 
         # ----------------------------------------------------
         # FASE 3: EXTRACCIÓN DE DESEMBOLSOS (SQL SERVER)

@@ -135,6 +135,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Solicitar permisos de notificación de escritorio si el navegador lo soporta
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  const wasRunningRef = useRef(false);
+
+  useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
     let socket;
@@ -144,7 +153,24 @@ function App() {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.running !== undefined) setIsRunning(data.running);
+          
+          // Detectar transición de ejecución finalizada para notificar al escritorio
+          if (wasRunningRef.current && data.running === false && data.message) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification('Uploader V2 - Proceso Finalizado', {
+                  body: data.message,
+                  icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📊</text></svg>'
+                });
+              } catch (e) {
+                console.warn('No se pudo emitir la notificación del navegador:', e);
+              }
+            }
+          }
+          if (data.running !== undefined) {
+            wasRunningRef.current = data.running;
+            setIsRunning(data.running);
+          }
           if (data.current_process !== undefined) setCurrentProcess(data.current_process || '');
 
           if (data.message) {
@@ -154,13 +180,32 @@ function App() {
 
             setLogs((prev) => {
               const newTime = data.timestamp || new Date().toLocaleTimeString();
-              const newText = data.message;
+              const rawText = data.message;
+              const isCarriageReturn = rawText.startsWith('\r');
+              const newText = rawText.replace(/^\r+/, '').trim();
               const newType = data.type || 'info';
 
               const getSig = (txt) => {
-                if (!txt || !txt.includes('Procesando paso')) return null;
-                const m = txt.match(/([a-zA-Z0-9_]+\.sql)/i) || txt.match(/^(.*?)[—\-]/);
-                return m ? m[1].toLowerCase() : txt;
+                if (!txt) return null;
+                const clean = txt.replace(/^\r+/, '').trim();
+                if (clean.includes('Procesando paso')) {
+                  const m = clean.match(/([a-zA-Z0-9_]+\.sql)/i) || clean.match(/^(.*?)[—\-]/);
+                  return m ? 'step_' + m[1].toLowerCase() : 'step_' + clean;
+                }
+                if (clean.includes('Cargando registros') || clean.includes('Procesando carga')) {
+                  return 'carga_registros';
+                }
+                if (clean.includes('Ejecutando sentencia') || clean.includes('Ejecutando:')) {
+                  return 'exec_sentencia';
+                }
+                if (clean.includes('Descargando') && (clean.includes('%') || clean.includes('insumo'))) {
+                  return 'descarga_progreso';
+                }
+                const progressMatch = clean.match(/^(.*?)(\d+%\s*|\(\d+[\/%]\d*\))/i);
+                if (progressMatch) {
+                  return 'prog_' + progressMatch[1].trim().toLowerCase();
+                }
+                return null;
               };
 
               if (prev.length > 0) {
@@ -171,7 +216,7 @@ function App() {
                 const sigNew = getSig(newText);
                 const sigLast = getSig(lastLog.text);
 
-                if (sigNew && sigLast && sigNew === sigLast) {
+                if ((sigNew && sigLast && sigNew === sigLast) || (isCarriageReturn && sigLast)) {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     time: newTime,

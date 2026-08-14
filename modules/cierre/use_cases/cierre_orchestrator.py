@@ -153,7 +153,8 @@ def run_cierre_process_flow(
                 preview = stmt.split("\n")[0][:90]
                 logger.info(f"   [{stmt_idx}/{len(statements)}] Exec: {preview}")
                 if progress_callback:
-                    progress_callback(f"   🔹 Sentencia {stmt_idx}/{len(statements)}: {preview}...", "info")
+                    pct = int((stmt_idx / len(statements)) * 100)
+                    progress_callback(f"⚙️ {friendly_name} — Procesando paso {stmt_idx} de {len(statements)} ({pct}%)", "info", progress=float(stmt_idx) / len(statements))
                 try:
                     cursor.execute(stmt)
                 except Exception as stmt_err:
@@ -172,6 +173,16 @@ def run_cierre_process_flow(
         if progress_callback:
             progress_callback(msg_success, "success", progress=1.0, phase=6)
             
+        try:
+            from infrastructure.system.notifier import notify_desktop
+            notify_desktop(
+                title="Uploader V2 - Cierre Mensual",
+                message=f"¡Cierre Mensual completado exitosamente para el período {periodo_cerrado}!",
+                duration_sec=5
+            )
+        except Exception as notify_err:
+            logger.warning(f"No se pudo enviar la notificación de escritorio: {notify_err}")
+
         return {
             "status": "success",
             "periodo_base": period_str,
