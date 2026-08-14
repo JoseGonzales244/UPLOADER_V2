@@ -188,7 +188,7 @@ function App() {
               const getSig = (txt) => {
                 if (!txt) return null;
                 const clean = txt.replace(/^\r+/, '').trim();
-                if (clean.includes('Procesando paso')) {
+                if (clean.includes('Paso ') || clean.includes('Procesando paso')) {
                   const m = clean.match(/([a-zA-Z0-9_]+\.sql)/i) || clean.match(/^(.*?)[—\-]/);
                   return m ? 'step_' + m[1].toLowerCase() : 'step_' + clean;
                 }
