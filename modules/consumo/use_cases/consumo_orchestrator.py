@@ -170,6 +170,8 @@ def run_orchestration_flow(
                 )
                 downloaded_files[insumo_key] = local_path
                 logger.info(f"Downloaded Insight insumo '{q_name}' successfully: {local_path}")
+                if progress_callback:
+                    progress_callback(f"✅ Descarga lista: {n_ejecutivo}", "success")
             except Exception as err:
                 msg_err = f"⚠️ No se pudo descargar el insumo '{n_ejecutivo}'. Se continuará con los datos disponibles."
                 logger.warning(f"Failed to download Insight insumo '{q_name}': {err}")
@@ -412,6 +414,11 @@ def run_orchestration_flow(
                     logger.error(f"Error extracting desembolsos from SQL Server: {desemb_err}")
                     if progress_callback:
                         progress_callback(f"⚠️ No se pudo obtener desembolsos de SQL Server: {desemb_err}", "warning")
+            else:
+                msg_skip = "ℹ️ Fase 3: Credenciales de SQL Server no configuradas en .env. Omitiendo extracción de desembolsos."
+                logger.info(msg_skip)
+                if progress_callback:
+                    progress_callback(msg_skip, "info")
 
         # ----------------------------------------------------
         # FASE 4: SCRIPTS SQL DE CONSUMO

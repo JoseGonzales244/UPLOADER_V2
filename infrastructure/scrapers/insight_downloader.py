@@ -135,18 +135,14 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         progress_callback=progress_callback
     )
     
-    if login_resp.status_code != 200:
+    if not login_resp.ok:
         raise RuntimeError(f"Fallo en login de Insight. Código de respuesta: {login_resp.status_code}")
-        
-    if progress_callback:
-        progress_callback("Obteniendo lista de consultas guardadas...")
         
     queries_url = "https://s425vp01/Insight/api/Insight/getQueries?areaId=GCI_PRD_Insight_TLVentas,GCI_PRD_Insight_ACOE"
     resp = _request_with_retry(
         session, "GET",
         queries_url,
-        verify=False,
-        progress_callback=progress_callback
+        verify=False
     )
     
     if resp.status_code != 200:
@@ -169,12 +165,7 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         
     if period_str:
         query_sql = _inject_period_to_query(query_name, query_sql, period_str)
-        if progress_callback:
-            progress_callback(f"Periodo '{period_str}' inyectado dinámicamente en consulta '{NOMBRE_QUERY}'.")
 
-    if progress_callback:
-        progress_callback(f"Ejecutando consulta '{NOMBRE_QUERY}' en el área '{area_id_used}'...")
-        
     url = "https://s425vp01/Insight/api/Insight/executeQuery"
     payload = {
         "queryDelimiter": "\t",
@@ -186,8 +177,7 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         session, "POST",
         url,
         json=payload,
-        verify=False,
-        progress_callback=progress_callback
+        verify=False
     )
     if resp.status_code != 200:
         raise RuntimeError(f"Error al ejecutar consulta: {resp.status_code}")
@@ -197,10 +187,6 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         raise RuntimeError(f"Respuesta inesperada de la consulta: {data}")
         
     file_id = data["data"]["nomArchivo"]
-    
-    if progress_callback:
-        progress_callback("Esperando que el archivo sea generado en Insight...")
-        
     export_url = f"https://s425vp01/Insight/api/Insight/exportData?fileId={file_id}"
     
     export_data = None
@@ -208,29 +194,22 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         export_resp = _request_with_retry(
             session, "GET",
             export_url,
-            verify=False,
-            progress_callback=progress_callback
+            verify=False
         )
         if export_resp.status_code == 200:
             export_data = export_resp.json()
             if export_data.get("data") is not None:
                 break
-        if progress_callback:
-            progress_callback(f"Esperando archivo... (intento {attempt+1}/20)")
         time.sleep(5)
         
     if not export_data or export_data.get("data") is None:
         raise TimeoutError("Límite de tiempo excedido esperando el archivo de Insight.")
         
     file_url = export_data["data"]["fileSource"]
-    if progress_callback:
-        progress_callback("Descargando archivo desde Insight...")
-        
     file_resp = _request_with_retry(
         session, "GET",
         file_url,
-        verify=False,
-        progress_callback=progress_callback
+        verify=False
     )
     if file_resp.status_code != 200:
         raise RuntimeError(f"Error al descargar archivo: {file_resp.status_code}")
@@ -243,9 +222,6 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
     
     with open(output_path, "wb") as f:
         f.write(file_resp.content)
-        
-    if progress_callback:
-        progress_callback(f"Descarga finalizada. Guardado en '{output_path}'.")
         
     return output_path
 

@@ -95,7 +95,7 @@ def get_friendly_script_name(script_path_or_name):
     return base_clean
 
 
-def execute_sql_script(con, script_path, params, progress_callback=None):
+def execute_sql_script(con, script_path, params, progress_callback=None, script_num=None, total_scripts=None):
     """
     Reads, parameterizes and executes all SQL statements in a script file.
     """
@@ -103,8 +103,10 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
         raise FileNotFoundError(f"Script SQL no encontrado: {script_path}")
 
     friendly_name = get_friendly_script_name(script_path)
+    prefix_num = f"[{script_num}/{total_scripts}] " if script_num and total_scripts else ""
+    
     if progress_callback:
-        progress_callback(f"⚙️ Procesando: **{friendly_name}**...", "info")
+        progress_callback(f"⚙️ {prefix_num}Procesando: **{friendly_name}**...", "info")
 
     with open(script_path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -140,7 +142,7 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
             logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {snippet}")
             if progress_callback:
                 pct = int((idx / len(statements)) * 100)
-                msg_str = f"⚙️ {friendly_name} ({os.path.basename(script_path)}) — Procesando paso {idx} de {len(statements)} ({pct}%)"
+                msg_str = f"⚙️ {prefix_num}{friendly_name} ({os.path.basename(script_path)}) — Paso {idx} de {len(statements)} ({pct}%)"
                 try:
                     progress_callback(msg_str, "info", progress=float(idx) / len(statements))
                 except TypeError:
@@ -169,7 +171,7 @@ def execute_sql_script(con, script_path, params, progress_callback=None):
                 raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_clean, err)
 
     if progress_callback:
-        progress_callback(f"✅ Completado: **{friendly_name}**", "success")
+        progress_callback(f"✅ {prefix_num}Completado: **{friendly_name}**", "success")
 
 
 def run_post_load_transformations(con, period_str, clear_consent=False, progress_callback=None, start_from_script=None):
@@ -193,7 +195,8 @@ def run_post_load_transformations(con, period_str, clear_consent=False, progress
         "TLF_NO_AUTORIZADO.sql"
     ]
 
-    if start_from_script:
+    mode_desc = "Secuencia Completa (6 scripts)"
+    if start_from_script and start_from_script.strip().lower() not in ["todo", "none", "null", ""]:
         clean_start = os.path.basename(start_from_script).lower()
         matched_idx = -1
         for idx, s in enumerate(scripts):
@@ -202,11 +205,16 @@ def run_post_load_transformations(con, period_str, clear_consent=False, progress
                 break
         if matched_idx != -1:
             scripts = scripts[matched_idx:]
+            mode_desc = f"Parcial (Desde {scripts[0]}, {len(scripts)} scripts)"
         else:
             if progress_callback:
                 progress_callback(f"⚠️ Advertencia: No se encontró el script '{start_from_script}' en la lista. Se ejecutarán todos.", "warning")
 
-    for script_name in scripts:
+    if progress_callback:
+        progress_callback(f"🚀 Fase 4: Iniciando ejecución SQL ({mode_desc})", "info")
+
+    total_s = len(scripts)
+    for idx_s, script_name in enumerate(scripts, 1):
         script_path = os.path.join(opt_sql_dir, script_name)
 
         if script_name == "CA_CONSENTIMIENTO_DIARIO.sql" and clear_consent:
@@ -224,12 +232,12 @@ def run_post_load_transformations(con, period_str, clear_consent=False, progress
             with open(temp_script_path, 'w', encoding='utf-8') as f:
                 f.write(uncommented)
             try:
-                execute_sql_script(con, temp_script_path, params, progress_callback)
+                execute_sql_script(con, temp_script_path, params, progress_callback, script_num=idx_s, total_scripts=total_s)
             finally:
                 if os.path.exists(temp_script_path):
                     os.remove(temp_script_path)
         else:
-            execute_sql_script(con, script_path, params, progress_callback)
+            execute_sql_script(con, script_path, params, progress_callback, script_num=idx_s, total_scripts=total_s)
 
     if progress_callback:
         progress_callback("✅ ¡Transformaciones SQL de Consumo completadas exitosamente en Teradata!", "success")

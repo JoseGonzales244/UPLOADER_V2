@@ -188,8 +188,6 @@ WHERE NUM_DOCUMENTO = B.CODDOC;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_TC COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO PRODUCTO: PP] 
@@ -402,8 +400,6 @@ AND B.RN = 1;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_PP COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO PRODUCTO: CD] 
@@ -600,8 +596,6 @@ WHERE NUM_DOCUMENTO = B.CODDOC;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_CD COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO PRODUCTO: EC] 
@@ -776,8 +770,6 @@ WHERE NUM_DOCUMENTO = B.CODDOC;
 
 
 ------------------------------- END ---------------------------------
-
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_EC COLUMN (NUM_DOCUMENTO);
 
 
 -- ========================================== 
@@ -984,8 +976,6 @@ AND B.ROWX = 1;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_CON COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO PRODUCTO: IL] 
@@ -1176,8 +1166,6 @@ AND B.ROWX = 1;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_IL COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO PRODUCTO: UPG] 
@@ -1353,8 +1341,6 @@ SET MONTO_APROB = B.MONTO_APROB, FECDESEMB = B.FECDESEMBOLSO, DIA = B.DIA
 WHERE NUM_DOCUMENTO = B.CODDOC;
 
 ------------------------------- END ---------------------------------
-
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_UPG COLUMN (NUM_DOCUMENTO);
 
 
 -- ========================================== 
@@ -1534,8 +1520,6 @@ WHERE NUM_DOCUMENTO = B.CODDOC;
 
 ------------------------------- END ---------------------------------
 
-COLLECT STATISTICS ON DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_TCA COLUMN (NUM_DOCUMENTO);
-
 
 -- ========================================== 
 -- [PROCESANDO UNIFICACION ALL Y TABLAS FINALES] 
@@ -1658,8 +1642,6 @@ SELECT
     CURRENT_TIMESTAMP(0) AS DATE_BK
 FROM DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_ALL;
 
-COLLECT STATISTICS ON DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO COLUMN (NUM_DOCUMENTO);
-
 
 -- [PASO 4]: Copiar a la tabla final de Calidad PBI (Data Flow TLF NO AUTO- CALIDAD)
 DELETE FROM DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO_CALIDAD ALL;
@@ -1695,5 +1677,3 @@ SELECT
 FROM DLAB_GEC.M_EXP_TLFNO_AUTORIZADO_ALL A
 INNER JOIN DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS B 
     ON A.REG_EJECUTIVO = B.REG_EJECUTIVO;
-
-COLLECT STATISTICS ON DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO_CALIDAD COLUMN (NUM_DOCUMENTO);

@@ -208,7 +208,20 @@ function App() {
                 return null;
               };
 
-              if (prev.length > 0) {
+              const isMilestone = newText.startsWith('✅') || 
+                                  newText.startsWith('🎉') || 
+                                  newText.startsWith('🏁') || 
+                                  newText.startsWith('⚡') || 
+                                  newText.startsWith('📡') || 
+                                  newText.startsWith('🚀') || 
+                                  newText.startsWith('📥') || 
+                                  newText.startsWith('❌') || 
+                                  newText.startsWith('⚠️') ||
+                                  newType === 'success' ||
+                                  newType === 'warning' ||
+                                  newType === 'error';
+
+              if (prev.length > 0 && !isMilestone) {
                 const lastLog = prev[prev.length - 1];
                 if (lastLog.text === newText) {
                   return prev;
@@ -216,7 +229,7 @@ function App() {
                 const sigNew = getSig(newText);
                 const sigLast = getSig(lastLog.text);
 
-                if ((sigNew && sigLast && sigNew === sigLast) || (isCarriageReturn && sigLast)) {
+                if (sigNew && sigLast && sigNew === sigLast) {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     time: newTime,

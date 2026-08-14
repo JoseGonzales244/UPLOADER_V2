@@ -559,7 +559,9 @@ class VerintAPIClient:
             
             if matching_reports:
                 all_ready = all(
-                    str(r.get("Status", "")) in ["1", "completed", "completado"] and r.get("URL") and str(r.get("URL")).strip().lower() != "null"
+                    (str(r.get("Status", "")) in ["1", "4", "completed", "completado", "ready"] or bool(r.get("URL")))
+                    and bool(r.get("URL")) 
+                    and str(r.get("URL")).strip().lower() not in ["", "none", "null"]
                     for r in matching_reports
                 )
                 if all_ready:
