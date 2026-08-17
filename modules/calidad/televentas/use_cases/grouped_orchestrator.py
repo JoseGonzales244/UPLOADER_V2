@@ -1,8 +1,16 @@
 import os
+import sys
 import re
 import glob
 import logging
+import argparse
 from pathlib import Path
+
+# Garantizar resolución de la raíz del proyecto en sys.path
+root_dir = Path(__file__).resolve().parents[4]
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
 from infrastructure.parsers.readers import read_excel_file
 from infrastructure.parsers.cleaners import clean_dataframe
@@ -240,3 +248,21 @@ def ensure_grouped_data_for_period(periodo: str, progress_callback=None) -> bool
     except Exception as err:
         log(f"💥 Fallo en la verificación/carga de TELEVENTAS_EJECUTIVOS_GROUPED: {err}", "error")
         raise err
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Procesar TELEVENTAS_EJECUTIVOS_GROUPED")
+    parser.add_argument("--periodo", required=True, help="Periodo en formato YYYYMM (ejemplo: 202608)")
+    parser.add_argument("--force", action="store_true", help="Forzar reprocesamiento (elimina y reprocesa el periodo)")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    def progress_cb(msg, level="info"):
+        print(f"[{level.upper()}] {msg}")
+
+    if args.force:
+        process_televentas_grouped(args.periodo, force_reprocess=True, progress_callback=progress_cb)
+    else:
+        ensure_grouped_data_for_period(args.periodo, progress_callback=progress_cb)
+
