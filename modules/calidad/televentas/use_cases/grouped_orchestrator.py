@@ -252,8 +252,8 @@ def ensure_grouped_data_for_period(periodo: str, progress_callback=None) -> bool
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Procesar TELEVENTAS_EJECUTIVOS_GROUPED")
-    parser.add_argument("--periodo", required=True, help="Periodo en formato YYYYMM (ejemplo: 202608)")
-    parser.add_argument("--force", action="store_true", help="Forzar reprocesamiento (elimina y reprocesa el periodo)")
+    parser.add_argument("--periodo", "--PERIODO", dest="periodo", required=True, help="Periodo en formato YYYYMM (ejemplo: 202608)")
+    parser.add_argument("--force", "--FORCE", dest="force", action="store_true", help="Forzar reprocesamiento (elimina y reprocesa el periodo)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

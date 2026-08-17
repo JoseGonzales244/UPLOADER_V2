@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Forzar reproceso/corrección manual de TELEVENTAS_EJECUTIVOS_GROUPED para un periodo.")
-    parser.add_argument("--periodo", required=True, help="Periodo en formato YYYYMM (ejemplo: 202608)")
+    parser.add_argument("--periodo", "--PERIODO", dest="periodo", required=True, help="Periodo en formato YYYYMM (ejemplo: 202608)")
     args = parser.parse_args()
 
     periodo = args.periodo.strip()
