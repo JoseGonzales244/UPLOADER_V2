@@ -4584,5 +4584,139 @@
             "Tipo de dato": "VARCHAR(255)",
             "Nuevo nombre": "Area"
         }
+    },
+    "P031-PILOTO_NO_VENTA": {
+        "ID de contacto": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "BIGINT",
+            "Nuevo nombre": "ID_CONTACTO"
+        },
+        "cti_BT_Numero_Dni": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "VARCHAR(20)",
+            "Nuevo nombre": "DNI"
+        },
+        "cti_AGENTID": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "VARCHAR(15)",
+            "Nuevo nombre": "REG_EV"
+        },
+        "Empleado": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "VARCHAR(100)",
+            "Nuevo nombre": "NOM_ASESOR"
+        },
+        "Area": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "VARCHAR(50)",
+            "Nuevo nombre": "COLA"
+        },
+        "Tipificacion": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "VARCHAR(100)",
+            "Nuevo nombre": "TIPIFICACION"
+        },
+        "Hora local de inicio": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "TIMESTAMP",
+            "Nuevo nombre": "FECHA_LLAMADA"
+        },
+        "Duración (segundos)": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "INTEGER",
+            "Nuevo nombre": "DURACION"
+        },
+        "Tiempo total en silencio (seg)": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "INTEGER",
+            "Nuevo nombre": "T_SILENCIO"
+        },
+        "% de tiempo en silencio": {
+            "Añadir": true,
+            "Null:0/No Null:1": false,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "PCT_SILENCIO"
+        },
+        "TRSV_GC_ManejaObjeciones": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "MDO_GENERAL"
+        },
+        "TLV - Exp.Compra - Manejo Objeciones": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "MDO_TLV"
+        },
+        "TLV - Exp. de Compra - PPE - MDO - Tasa alta": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_TASA_ALTA"
+        },
+        "TLV - Exp. de Compra - NAC - LO PENSARÁ": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_LO_PENSARA"
+        },
+        "TLV - Exp. Compra - TC - OBJ - Sin interés": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_SIN_INTERES"
+        },
+        "TLV - Exp. de Compra - NAC - Productos en otro banco": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_COMPETENCIA"
+        },
+        "TLV - Exp. de Compra - NAC - deudas por pagar": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_ENDEUDAMIENTO"
+        },
+        "TLV - Exp.Compra - CL - OCUPADO": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_OCUPADO"
+        },
+        "TLV - Exp. de Compra - NAC - MALA EXPERIENCIA": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_MALA_EXP"
+        },
+        "TLV - Exp. de Compra - UPG - NAC - Costo Membresía": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "OBJ_MEMBRESIA"
+        },
+        "TRSV_GC_Cierre": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "CIERRE_TRANSV"
+        },
+        "TLV - Ventas - Cierre": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "CIERRE_TLV"
+        }
     }
 }
