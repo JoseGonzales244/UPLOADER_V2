@@ -33,6 +33,7 @@ def _should_use_manual_excel_reader(selected_template: str | None) -> bool:
         selected_template == "P001-CALIDAD_SA"
         or selected_template == "P030-RETENCION_CONVENIOS"
         or selected_template == "P025-SA_TCAD"
+        or selected_template == "P031-PILOTO_NO_VENTA"
     )
 
 
