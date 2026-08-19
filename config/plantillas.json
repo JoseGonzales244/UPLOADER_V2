@@ -4494,6 +4494,18 @@
             "Tipo de dato": "INTEGER",
             "Nuevo nombre": "RET_CONVENIOS_TASA_INTERES"
         },
+        "RT_CONV_PLAZA_VEA": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "INTEGER",
+            "Nuevo nombre": "RET_CONVENIOS_PLAZA_VEA"
+        },
+        "RT_CONV_UTP": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "INTEGER",
+            "Nuevo nombre": "RET_CONVENIOS_UTP"
+        },
         "Duración (segundos)": {
             "Añadir": true,
             "Null:0/No Null:1": false,
