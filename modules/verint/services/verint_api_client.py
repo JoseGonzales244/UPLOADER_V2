@@ -602,7 +602,7 @@ class VerintAPIClient:
         from_fmt = "2026-01-01T00:00:00.0000000+00:00"
         to_fmt = "2026-12-31T23:59:59.0000000+00:00"
 
-    def convert_to_qdi_by_call_id(self, call_id: str, days: int = 240) -> Optional[str]:
+    def convert_to_qdi_by_call_id(self, call_id: str, days: int = 365) -> Optional[str]:
         """
         Invoca el endpoint oficial /Ultra/api/SearchServices/ConvertToQDI de Verint
         con el elemento SwitchCallID para obtener el XML QDI generado por el servidor.
@@ -668,7 +668,7 @@ class VerintAPIClient:
             self.init_speech_session(instance_id=instance_id)
 
         # 1. Obtener QDI oficial de Verint
-        qdi_xml = self.convert_to_qdi_by_call_id(call_id)
+        qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=365)
         if not qdi_xml:
             logger.warning(f"No se pudo generar QDI oficial para call_id={call_id}")
             return None
@@ -680,18 +680,23 @@ class VerintAPIClient:
 
         # 3. Obtener contacto real del resultado
         contacts_res = self.get_contacts_result_set(limit=5, page=1)
-        data_obj = contacts_res.get("Data", {})
-        contacts_list = data_obj.get("Contacts", []) if isinstance(data_obj, dict) else []
+        data_obj = contacts_res.get("Data") or {}
+        contacts_list = data_obj.get("Contacts") or []
 
         if not contacts_list:
             logger.warning(f"No se hallaron contactos en Verint para CONID='{call_id}'")
             return None
 
         contact = contacts_list[0]
+        if not isinstance(contact, dict):
+            return None
+
         db_sid = contact.get("DbsId", 247)
         sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
-        channel_val = contact.get("Channel", 0) or contact.get("ChannelId", 0) or 258758270
-        start_time_val = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-07-16T22:04:48.977Z"
+        channel_val = contact.get("Channel") or contact.get("ChannelId") or 258758270
+        start_time_raw = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-07-16T22:04:48.977Z"
+        start_time_str = str(start_time_raw).strip()
+        local_date_str = (start_time_str[:10] if len(start_time_str) >= 10 else "2026-07-16") + "T00:00:00.000Z"
 
         url = f"{self.base_url}/SpeechAnalytics/Services/Transcription/TranscriptionService.svc/GetInteractionTranscription"
         headers = {
@@ -710,8 +715,8 @@ class VerintAPIClient:
             },
             "channel": channel_val,
             "module": 999502,
-            "startTime": start_time_val,
-            "localDate": start_time_val[:10] + "T00:00:00.000Z",
+            "startTime": start_time_str,
+            "localDate": local_date_str,
             "categoriesIds": [],
             "queryTerms": "",
             "editCategory": None,
@@ -727,10 +732,15 @@ class VerintAPIClient:
             "redactionStatus": 0
         }
 
-        res = self.session.post(url, json=payload, headers=headers)
-        if res.status_code == 200:
-            return res.json()
-            return None
+        try:
+            res = self.session.post(url, json=payload, headers=headers)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                logger.error(f"Error HTTP {res.status_code} al consultar GetInteractionTranscription: {res.text[:200]}")
+        except Exception as e_post:
+            logger.error(f"Excepción en GetInteractionTranscription: {e_post}")
+        return None
 
     def close(self):
         self.session.close()
