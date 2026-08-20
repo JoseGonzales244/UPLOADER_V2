@@ -211,7 +211,14 @@ class VerintAPIClient:
             "maxStarRank": 0,
             "sorters": None
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers["xsrfToken"] = self.xsrf_token
+            headers["impact360authtoken"] = self.xsrf_token
         res = self.session.post(url, json=payload, headers=headers)
         if res.status_code == 200:
             try:
@@ -684,16 +691,15 @@ class VerintAPIClient:
         Obtiene la transcripción JSON de una llamada por CONID (call_id) siguiendo
         el ciclo de vida completo de Verint:
         1. ConvertToQDI -> Obtiene el XML oficial.
-        2. SetFilterAsSearch -> Aplica el filtro en la sesión.
+        2. SetFilterAsSearch -> Aplica el filtro en la sesión activa.
         3. GetCurrentResultSetDocsAmount -> Compila el Result Set en el servidor.
         4. GetContactsResultSet -> Obtiene la llamada real compilada.
         5. GetInteractionTranscription -> Descarga el diálogo transcrito.
         """
-        # Sesión limpia y fresca por cada búsqueda (elimina al 100% el caché residual)
-        self.speech_session_id = None
-        if not self.init_speech_session(instance_id=instance_id):
-            logger.warning(f"No se pudo inicializar sesión limpia en Verint para call_id={call_id}")
-            return None
+        if not self.speech_session_id:
+            if not self.init_speech_session(instance_id=instance_id):
+                logger.warning(f"No se pudo inicializar sesión en Verint para call_id={call_id}")
+                return None
 
         # 1. Obtener QDI oficial de Verint
         qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=365)
