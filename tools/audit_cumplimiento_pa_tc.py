@@ -72,6 +72,8 @@ EXCEL_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026.xlsx"
 BACKUP_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
 
 
+from modules.genesys.config import PROFILE_DIR, GENESYS_URL, CDP_URL
+
 class GenesysAPIResolver:
     """Resuelve conversationId y fecha de llamada mediante la API REST v2 de Genesys."""
 
@@ -81,23 +83,79 @@ class GenesysAPIResolver:
         self.user_id_cache: Dict[str, str] = {}
 
     def connect_and_get_token(self) -> Optional[str]:
-        """Obtiene el Bearer Token activo desde la sesión de Chrome en puerto CDP 9222."""
+        """Obtiene el Bearer Token activo replicando el mecanismo del módulo Genesys."""
+        logger.info("[GENESYS] Inicializando conexión con Chrome / Genesys Cloud...")
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                try:
-                    browser = p.chromium.connect_over_cdp(self.browser_bot.cdp_url)
-                    page = self.browser_bot._obtener_page_principal(browser)
-                    if page:
-                        token = self.browser_bot._extraer_bearer_token(page)
-                        if token:
-                            self.token = token
-                            logger.info("[GENESYS] ✓ Bearer Token capturado exitosamente de Chrome CDP.")
-                            return token
-                except Exception as e:
-                    logger.warning(f"[GENESYS] No se pudo conectar a Chrome CDP ({self.browser_bot.cdp_url}): {e}")
+                browser = None
+                page = None
+
+                # 1. Auto-lanzar Chrome CDP con perfil persistente si no está activo
+                if self.browser_bot._lanzar_chrome_cdp_automatico():
+                    try:
+                        # Reemplazar localhost por 127.0.0.1 para evitar ECONNREFUSED en IPv6
+                        cdp_url = self.browser_bot.cdp_url.replace("localhost", "127.0.0.1")
+                        browser = p.chromium.connect_over_cdp(cdp_url)
+                        logger.info(f"[GENESYS] ✓ Conectado a Chrome vía CDP ({cdp_url})")
+                        page = self.browser_bot._obtener_page_principal(browser)
+                    except Exception as e:
+                        logger.warning(f"[GENESYS] Error en conexión CDP: {e}")
+
+                # 2. Fallback a persistent context si no se conectó por CDP
+                if not page:
+                    user_data_dir = str(PROFILE_DIR)
+                    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"[GENESYS] Abriendo Chrome con perfil persistente ({PROFILE_DIR.name})...")
+                    try:
+                        context = p.chromium.launch_persistent_context(
+                            user_data_dir=user_data_dir,
+                            channel="chrome",
+                            headless=False,
+                            args=["--start-maximized"]
+                        )
+                    except Exception:
+                        context = p.chromium.launch_persistent_context(
+                            user_data_dir=user_data_dir,
+                            headless=False,
+                            args=["--start-maximized"]
+                        )
+                    page = context.pages[0] if context.pages else context.new_page()
+                    page.goto(GENESYS_URL)
+                    time.sleep(3)
+
+                # 3. Detectar pantalla de login y esperar autenticación
+                if page:
+                    def _es_url_login(url_str: str) -> bool:
+                        u = url_str.lower()
+                        return any(d in u for d in ["microsoftonline.com", "login.live.com", "accounts.google.com", "login.windows.net"]) or "/login" in u or "login?" in u
+
+                    if _es_url_login(page.url):
+                        logger.info("🔑 [GENESYS] Sesión no iniciada o expirada.")
+                        logger.info("👉 Por favor inicia sesión en la ventana de Chrome que se ha abierto (esperando hasta 5 min)...")
+                        start_time = time.time()
+                        while time.time() - start_time < 300:
+                            if page.is_closed():
+                                logger.warning("[GENESYS] Ventana cerrada por el usuario.")
+                                break
+                            try:
+                                curr = page.url.lower()
+                                if not _es_url_login(curr) and ("purecloud" in curr or "genesys" in curr or "mypurecloud" in curr):
+                                    logger.info("[GENESYS] ✓ Login completado exitosamente.")
+                                    break
+                            except Exception:
+                                pass
+                            time.sleep(2)
+
+                    token = self.browser_bot._extraer_bearer_token(page)
+                    if token:
+                        self.token = token
+                        logger.info("[GENESYS] ✓ Bearer Token capturado exitosamente.")
+                        return token
+                    else:
+                        logger.warning("[GENESYS] No se pudo extraer el Bearer Token de la página.")
         except Exception as e:
-            logger.error(f"[GENESYS] Error cargando Playwright CDP: {e}")
+            logger.error(f"[GENESYS] Error en inicialización de navegador: {e}", exc_info=True)
         return None
 
     def resolve_user_id(self, reg_ev: str) -> Optional[str]:
