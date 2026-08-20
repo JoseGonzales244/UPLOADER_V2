@@ -4,6 +4,7 @@ import json
 import logging
 import datetime
 import random
+import uuid
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import httpx
@@ -418,9 +419,14 @@ class VerintAPIClient:
             self.init_speech_session(instance_id=instance_id)
 
         url = f"{self.base_url}/SpeechAnalytics/Services/Filter/FilterService.svc/SetFilterAsSearch"
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "accept": "application/json",
+            "x-requested-with": "XMLHttpRequest"
+        }
         if self.xsrf_token:
             headers["xsrfToken"] = self.xsrf_token
+            headers["impact360authtoken"] = self.xsrf_token
             
         speech_session_payload = {
             "InstanceId": instance_id,
@@ -589,10 +595,44 @@ class VerintAPIClient:
         if not self.speech_session_id:
             self.init_speech_session(instance_id=247115)
 
+        now_iso = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        guid_str = str(uuid.uuid4())
+        
+        # Fecha amplia para la búsqueda por ID único de llamada
+        from_fmt = "2026-01-01T00:00:00.0000000+00:00"
+        to_fmt = "2026-12-31T23:59:59.0000000+00:00"
+
         qdi_xml = f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <GUID>{guid_str}</GUID>
+  <creationTime>{now_iso}.0000000+00:00</creationTime>
+  <MajorVersion>0</MajorVersion>
+  <MinorVersion>0</MinorVersion>
   <QueryType>Session</QueryType>
   <DataSource>Unified</DataSource>
   <Direction>Full</Direction>
+  <Security>
+    <QDIRestrictionFlags ETMFilters="Active" MultiChannelApp="Active" PersonalTag="Inactive" />
+    <IsAgentQuery>false</IsAgentQuery>
+    <World>CCQ</World>
+    <QueryPurpose>SEARCH</QueryPurpose>
+  </Security>
+  <UserPreferences>
+    <NumberOfReturnedRows>100</NumberOfReturnedRows>
+    <TimeZone>UserTime</TimeZone>
+    <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
+  </UserPreferences>
+  <OrderDef>
+    <TimeOfDateBegin>00:00:00</TimeOfDateBegin>
+    <TimeOfDateEnd>00:00:00</TimeOfDateEnd>
+    <From>{from_fmt}</From>
+    <To>{to_fmt}</To>
+    <RefFrom>0001-01-01T00:00:00.0000000+00:00</RefFrom>
+    <RefTo>0001-01-01T00:00:00.0000000+00:00</RefTo>
+    <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
+    <RangeInDays>0</RangeInDays>
+    <FieldRelation>Segment</FieldRelation>
+    <TimeOfDayID>-1</TimeOfDayID>
+  </OrderDef>
   <Fields>
     <Field xsi:type="QDIFieldExtended">
       <Values>
@@ -604,11 +644,20 @@ class VerintAPIClient:
       </SessionName>
       <Operator>contains</Operator>
       <FieldRelation>Segment</FieldRelation>
+      <IsExtendedCustomData>false</IsExtendedCustomData>
     </Field>
   </Fields>
+  <ComplexFields />
+  <Random>
+    <IsRandom>false</IsRandom>
+    <PickRowOutOfEvery>10</PickRowOutOfEvery>
+  </Random>
 </QDI>"""
 
-        self.set_filter_as_search(qdi_xml, instance_id=247115)
+        if not self.set_filter_as_search(qdi_xml, instance_id=247115):
+            logger.warning(f"No se pudo vincular la búsqueda en Verint para CONID='{call_id}'")
+            return None
+
         contacts_res = self.get_contacts_result_set(limit=5, page=1)
         data_obj = contacts_res.get("Data", {})
         contacts_list = data_obj.get("Contacts", []) if isinstance(data_obj, dict) else []

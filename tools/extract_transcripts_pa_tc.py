@@ -208,56 +208,48 @@ def main():
     total_rows = ws.max_row
     total_casos = total_rows - 1
 
-    # 1. Iniciar Genesys
+    # =========================================================================
+    # 📌 FASE 1: BARRIDO COMPLETO EN GENESYS (1 A 35 CASOS)
+    # =========================================================================
+    logger.info("\n" + "=" * 75)
+    logger.info("🚀 [FASE 1/2] BARRIDO 100% EN GENESYS CLOUD (OBTENCIÓN DE IDs)")
+    logger.info("=" * 75)
+
     browser_bot = GenesysBrowserAutomation()
     genesys_ext = GenesysExtractor(browser_bot)
     token = genesys_ext.get_token()
 
-    # 2. Iniciar Verint
-    logger.info("[VERINT] Conectando a Verint WFO API...")
-    verint_user = os.getenv("VERINT_USER")
-    verint_pass = os.getenv("VERINT_PASS")
-    verint_client = VerintAPIClient(username=verint_user, password=verint_pass)
-    verint_ready = verint_client.login()
-    if verint_ready:
-        logger.info("[VERINT] ✓ Sesión en Verint activa.")
-    else:
-        logger.warning("[VERINT] ⚠️ No se pudo iniciar sesión en Verint API.")
-
     teradata_svc = TeradataService()
-
-    transcripciones_guardadas = 0
     ids_encontrados = 0
 
-    index_data = []
+    if token:
+        for row_idx in range(2, total_rows + 1):
+            dni_raw = ws.cell(row=row_idx, column=col_dni).value
+            reg_raw = ws.cell(row=row_idx, column=col_reg).value
+            ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
+            fec_adq_raw = ws.cell(row=row_idx, column=col_fec_adq).value
+            saved_call_id = ws.cell(row=row_idx, column=col_id_llamada).value
 
-    for row_idx in range(2, total_rows + 1):
-        dni_raw = ws.cell(row=row_idx, column=col_dni).value
-        reg_raw = ws.cell(row=row_idx, column=col_reg).value
-        ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
-        fec_adq_raw = ws.cell(row=row_idx, column=col_fec_adq).value
-        saved_call_id = ws.cell(row=row_idx, column=col_id_llamada).value
+            if not dni_raw:
+                continue
 
-        if not dni_raw:
-            continue
+            dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
+            reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
 
-        dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
-        reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
+            # Si ya tiene un ID de Genesys válido guardado previamente, lo respetamos
+            if saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]:
+                ids_encontrados += 1
+                continue
 
-        fec_dt = fec_adq_raw if isinstance(fec_adq_raw, datetime) else (datetime.combine(fec_adq_raw, datetime.min.time()) if isinstance(fec_adq_raw, date) else None)
-        if not fec_dt:
-            try:
-                fec_dt = datetime.strptime(str(fec_adq_raw)[:10], "%Y-%m-%d")
-            except Exception:
-                fec_dt = datetime(2026, 4, 1)
+            fec_dt = fec_adq_raw if isinstance(fec_adq_raw, datetime) else (datetime.combine(fec_adq_raw, datetime.min.time()) if isinstance(fec_adq_raw, date) else None)
+            if not fec_dt:
+                try:
+                    fec_dt = datetime.strptime(str(fec_adq_raw)[:10], "%Y-%m-%d")
+                except Exception:
+                    fec_dt = datetime(2026, 4, 1)
 
-        logger.info(f"\n--- [Caso {row_idx - 1}/{total_casos}] DNI: {dni_8} | Agente: {reg_clean} ({ejec_raw}) | Fecha ADQ: {fec_dt.strftime('%Y-%m-%d')} ---")
+            logger.info(f"[GENESYS {row_idx - 1}/{total_casos}] DNI: {dni_8} | Agente: {reg_clean} ({ejec_raw}) | Fecha ADQ: {fec_dt.strftime('%Y-%m-%d')}...")
 
-        call_id = saved_call_id if (saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]) else None
-        fec_llamada = ws.cell(row=row_idx, column=col_fec_llamada).value
-
-        # PASO 1: Buscar ID en Genesys si no existe
-        if not call_id and token:
             dummy_sol = [SolicitudAudio(nombre_archivo=f"REQ_{dni_8}", dni=dni_8, reg_ev=reg_clean)]
             enriquecidas = teradata_svc.enriquecer_solicitudes(dummy_sol)
             telefonos = enriquecidas[0].telefonos if enriquecidas else []
@@ -272,71 +264,116 @@ def main():
             else:
                 logger.warning(f"   ⚠️ No encontrado en Genesys.")
 
-        # PASO 2: Descargar Transcripción en Verint con el ID Llamada
-        transcript_text = ""
-        if call_id and verint_ready:
-            try:
-                res_data = verint_client.get_interaction_transcription_api(str(call_id).strip())
-                if res_data and isinstance(res_data, dict):
-                    result_obj = res_data.get("GetInteractionTranscriptionResult") or {}
-                    data_obj = result_obj.get("Data") or {}
-                    sequences = data_obj.get("WordsSequences") or []
+            if (row_idx - 1) % 5 == 0:
+                wb.save(EXCEL_FILE)
 
-                    lines = []
-                    for seq in sequences:
-                        if not isinstance(seq, dict):
-                            continue
-                        speaker = "Asesor" if seq.get("SpeakerName") == "Agent" else "Cliente"
-                        start_ms = seq.get("StartTime", 0)
-                        total_sec = int(start_ms) // 1000
-                        mins = total_sec // 60
-                        secs = total_sec % 60
-                        ts_str = f"{mins:02d}:{secs:02d}"
-                        words = " ".join([w.get("WordText", "") for w in seq.get("Words", []) if isinstance(w, dict) and w.get("WordText")]).strip()
-                        if words:
-                            lines.append(f"[{ts_str}] {speaker}: {words}")
+        wb.save(EXCEL_FILE)
+        wb.save(BACKUP_FILE)
+        logger.info(f"\n[FASE 1 COMPLETADA] {ids_encontrados}/{total_casos} IDs de llamada guardados en Excel.")
+    else:
+        logger.warning("[FASE 1] ⚠️ No se pudo obtener sesión de Genesys. Continuando a Verint con los IDs existentes...")
 
-                    if lines:
-                        transcript_text = "\n".join(lines)
-                        file_name = f"TRANSCRIPT_DNI_{dni_8}_{call_id}.txt"
-                        out_path = OUTPUT_TRANSCRIPTS_DIR / file_name
-                        with open(out_path, "w", encoding="utf-8") as f_out:
-                            f_out.write(transcript_text)
-                        transcripciones_guardadas += 1
-                        logger.info(f"   💾 Transcripción guardada: {file_name} ({len(lines)} turnos)")
-            except Exception as e_v:
-                logger.error(f"   ❌ Error descargando transcripción en Verint: {e_v}")
+    # =========================================================================
+    # 📌 FASE 2: BARRIDO COMPLETO EN VERINT API (1 A 35 CASOS)
+    # =========================================================================
+    logger.info("\n" + "=" * 75)
+    logger.info("🎯 [FASE 2/2] BARRIDO 100% EN VERINT API (DESCARGA DE TRANSCRIPCIONES)")
+    logger.info("=" * 75)
 
-        index_data.append({
-            "fila": row_idx,
-            "dni": dni_8,
-            "agente": reg_clean,
-            "ejecutivo": str(ejec_raw),
-            "fecha_adq": fec_dt.strftime("%Y-%m-%d"),
-            "id_llamada": str(call_id) if call_id else None,
-            "fecha_llamada": str(fec_llamada) if fec_llamada else None,
-            "archivo_transcripcion": f"TRANSCRIPT_DNI_{dni_8}_{call_id}.txt" if transcript_text else None
-        })
+    verint_user = os.getenv("VERINT_USER")
+    verint_pass = os.getenv("VERINT_PASS")
+    verint_client = VerintAPIClient(username=verint_user, password=verint_pass)
+    verint_ready = verint_client.login()
 
-        if (row_idx - 1) % 5 == 0:
-            wb.save(EXCEL_FILE)
+    transcripciones_guardadas = 0
+    index_data = []
 
-    wb.save(EXCEL_FILE)
-    wb.save(BACKUP_FILE)
+    if verint_ready:
+        logger.info("[VERINT] ✓ Sesión en Verint WFO activa.")
+        for row_idx in range(2, total_rows + 1):
+            dni_raw = ws.cell(row=row_idx, column=col_dni).value
+            call_id = ws.cell(row=row_idx, column=col_id_llamada).value
+            fec_llamada = ws.cell(row=row_idx, column=col_fec_llamada).value
+            reg_raw = ws.cell(row=row_idx, column=col_reg).value
+            ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
+            fec_adq_raw = ws.cell(row=row_idx, column=col_fec_adq).value
 
-    # Guardar índice JSON
-    index_file = OUTPUT_TRANSCRIPTS_DIR / "transcripciones_index.json"
-    with open(index_file, "w", encoding="utf-8") as f_idx:
-        json.dump(index_data, f_idx, indent=2, ensure_ascii=False)
+            if not dni_raw:
+                continue
+
+            dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
+            reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
+            call_id_str = str(call_id).strip() if call_id and str(call_id).strip() not in ["", "7464", "None"] else None
+
+            logger.info(f"[VERINT {row_idx - 1}/{total_casos}] DNI: {dni_8} | ID Llamada: {call_id_str}...")
+
+            transcript_text = ""
+            if call_id_str:
+                try:
+                    res_data = verint_client.get_interaction_transcription_api(call_id_str)
+                    if res_data and isinstance(res_data, dict):
+                        result_obj = res_data.get("GetInteractionTranscriptionResult") or {}
+                        data_obj = result_obj.get("Data") or {}
+                        sequences = data_obj.get("WordsSequences") or []
+
+                        lines = []
+                        for seq in sequences:
+                            if not isinstance(seq, dict):
+                                continue
+                            speaker = "Asesor" if seq.get("SpeakerName") == "Agent" else "Cliente"
+                            start_ms = seq.get("StartTime", 0)
+                            total_sec = int(start_ms) // 1000
+                            mins = total_sec // 60
+                            secs = total_sec % 60
+                            ts_str = f"{mins:02d}:{secs:02d}"
+                            words = " ".join([w.get("WordText", "") for w in seq.get("Words", []) if isinstance(w, dict) and w.get("WordText")]).strip()
+                            if words:
+                                lines.append(f"[{ts_str}] {speaker}: {words}")
+
+                        if lines:
+                            transcript_text = "\n".join(lines)
+                            file_name = f"TRANSCRIPT_DNI_{dni_8}_{call_id_str}.txt"
+                            out_path = OUTPUT_TRANSCRIPTS_DIR / file_name
+                            with open(out_path, "w", encoding="utf-8") as f_out:
+                                f_out.write(transcript_text)
+                            transcripciones_guardadas += 1
+                            logger.info(f"   💾 Transcripción guardada: {file_name} ({len(lines)} turnos)")
+                        else:
+                            logger.warning(f"   ⚠️ Sin líneas de diálogo en Verint para {call_id_str}.")
+                    else:
+                        logger.warning(f"   ⚠️ Verint no devolvió datos para {call_id_str}.")
+                except Exception as e_v:
+                    logger.error(f"   ❌ Error descargando en Verint: {e_v}")
+            else:
+                logger.warning(f"   ⚠️ Omitido: sin ID de llamada de Genesys.")
+
+            index_data.append({
+                "fila": row_idx,
+                "dni": dni_8,
+                "agente": reg_clean,
+                "ejecutivo": str(ejec_raw),
+                "fecha_adq": str(fec_adq_raw)[:10] if fec_adq_raw else None,
+                "id_llamada": call_id_str,
+                "fecha_llamada": str(fec_llamada) if fec_llamada else None,
+                "archivo_transcripcion": f"TRANSCRIPT_DNI_{dni_8}_{call_id_str}.txt" if transcript_text else None
+            })
+
+        # Guardar índice JSON
+        index_file = OUTPUT_TRANSCRIPTS_DIR / "transcripciones_index.json"
+        with open(index_file, "w", encoding="utf-8") as f_idx:
+            json.dump(index_data, f_idx, indent=2, ensure_ascii=False)
+
+        logger.info(f"\n[FASE 2 COMPLETADA] {transcripciones_guardadas} transcripciones guardadas en '{OUTPUT_TRANSCRIPTS_DIR.name}'.")
+    else:
+        logger.error("[VERINT] ❌ No se pudo autenticar en Verint WFO.")
 
     logger.info("\n" + "=" * 75)
-    logger.info("✅ EXTRACCIÓN DE DATOS Y TRANSCRIPCIONES FINALIZADA:")
-    logger.info(f"   • Total Casos Procesados          : {total_casos}")
-    logger.info(f"   • IDs Identificados en Genesys    : {ids_encontrados}")
-    logger.info(f"   • Transcripciones Descargadas     : {transcripciones_guardadas}")
-    logger.info(f"   • Carpeta de Salida               : {OUTPUT_TRANSCRIPTS_DIR}")
-    logger.info(f"   • Índice Guardado                 : {index_file}")
-    logger.info(f"   • Excel Actualizado               : {EXCEL_FILE}")
+    logger.info("✅ PROCESO DE EXTRACCIÓN TOTAL FINALIZADO:")
+    logger.info(f"   • Total Casos               : {total_casos}")
+    logger.info(f"   • IDs Obtenidos en Genesys  : {ids_encontrados}")
+    logger.info(f"   • Transcripciones en Verint : {transcripciones_guardadas}")
+    logger.info(f"   • Excel Actualizado         : {EXCEL_FILE}")
+    logger.info(f"   • Carpeta Transcripciones   : {OUTPUT_TRANSCRIPTS_DIR}")
     logger.info("=" * 75)
 
 

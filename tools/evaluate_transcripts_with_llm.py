@@ -3,7 +3,7 @@
 EVALUADOR IA DE TRANSCRIPCIONES (PAGO AUTOMÁTICO TARJETAS DE CRÉDITO)
 =============================================================================
 Objetivo: 
-  Lee las transcripciones extraídas en 'data/transcripciones_pa/' 
+  Lee las transcripciones extraídas en 'transcripciones_pa/' 
   y evalúa con Gemini si se ofreció y si el cliente aceptó/rechazó
   la afiliación al Pago Automático, actualizando 'Solicitud Cumplimiento TC 2026.xlsx'.
 =============================================================================
@@ -35,10 +35,38 @@ logger = logging.getLogger("EvaluadorIAPA")
 
 from infrastructure.llm.gemini_client import GeminiClient
 
-TRANSCRIPTS_DIR = PROJECT_ROOT / "data" / "transcripciones_pa"
-INDEX_FILE = TRANSCRIPTS_DIR / "transcripciones_index.json"
+TRANSCRIPTS_DIRS = [
+    PROJECT_ROOT / "transcripciones_pa",
+    PROJECT_ROOT / "data" / "transcripciones_pa"
+]
+
 EXCEL_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026.xlsx"
-BACKUP_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
+AUDITED_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
+
+
+def find_transcript_file(dni_8: str, call_id: Optional[str]) -> Optional[Path]:
+    """Busca el archivo .txt de transcripción para un DNI o CallID en las carpetas posibles."""
+    for base_dir in TRANSCRIPTS_DIRS:
+        if not base_dir.exists():
+            continue
+
+        if call_id and str(call_id).strip() not in ["", "None", "7464"]:
+            direct_match = base_dir / f"TRANSCRIPT_DNI_{dni_8}_{call_id}.txt"
+            if direct_match.exists():
+                return direct_match
+
+        # Búsqueda por patrón de DNI
+        for f in base_dir.glob(f"TRANSCRIPT_DNI_{dni_8}_*.txt"):
+            return f
+        for f in base_dir.glob(f"TRANSCRIPT_DNI_*{dni_8}*.txt"):
+            return f
+
+        # Búsqueda por CallID
+        if call_id and len(str(call_id)) > 10:
+            for f in base_dir.glob(f"*{call_id}*.txt"):
+                return f
+
+    return None
 
 
 def evaluate_text_with_gemini(full_text: str, llm_client: GeminiClient) -> Dict[str, Any]:
@@ -70,7 +98,7 @@ Responde estrictamente en formato JSON:
     try:
         response_str = llm_client.generate_content_with_retry(
             prompt=prompt,
-            model_name="gemini-2.5-flash",
+            model_name="gemini-2.5-flash-lite",
             temperature=0.0,
             response_json=True
         )
@@ -106,17 +134,19 @@ Responde estrictamente en formato JSON:
 
 
 def main():
-    if not EXCEL_FILE.exists():
-        logger.critical(f"❌ No se encontró '{EXCEL_FILE}'")
+    target_excel = AUDITED_FILE if AUDITED_FILE.exists() else EXCEL_FILE
+    if not target_excel.exists():
+        logger.critical(f"❌ No se encontró ningún archivo Excel ('{EXCEL_FILE}' ni '{AUDITED_FILE}')")
         return
 
     logger.info("=" * 75)
-    logger.info("   EVALUADOR IA DE TRANSCRIPCIONES (PAGO AUTOMÁTICO TC)")
+    logger.info("   INICIANDO EVALUACIÓN IA DE TRANSCRIPCIONES (PAGO AUTOMÁTICO TC)")
+    logger.info(f"   Archivo Base : {target_excel.name}")
     logger.info("=" * 75)
 
-    llm = GeminiClient(default_model="gemini-2.5-flash")
+    llm = GeminiClient(default_model="gemini-2.5-flash-lite")
 
-    wb = openpyxl.load_workbook(EXCEL_FILE)
+    wb = openpyxl.load_workbook(target_excel)
     ws = wb.active
 
     headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
@@ -124,10 +154,15 @@ def main():
     col_dni = col_map.get("NRO DOCUMENTO", 4)
     col_res = col_map.get("RESULTADO", 7)
     col_id_llamada = col_map.get("ID LLAMADA", 8)
+    col_fec_llamada = col_map.get("FECHA LLAMADA", 9)
 
     total_rows = ws.max_row
     evaluados = 0
-    auditados_exito = 0
+    auditados_con_transcripcion = 0
+    no_aceptados = 0
+    aceptados = 0
+    no_ofrecidos = 0
+    pendientes_manual = 0
 
     for row_idx in range(2, total_rows + 1):
         dni_raw = ws.cell(row=row_idx, column=col_dni).value
@@ -139,45 +174,50 @@ def main():
         dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
         call_id = str(call_id_raw).strip() if call_id_raw else ""
 
-        # Buscar archivo de transcripción
-        matched_file = None
-        if call_id and call_id not in ["", "None", "7464"]:
-            candidate = TRANSCRIPTS_DIR / f"TRANSCRIPT_DNI_{dni_8}_{call_id}.txt"
-            if candidate.exists():
-                matched_file = candidate
-
-        if not matched_file:
-            # Buscar cualquier archivo para ese DNI
-            for f in TRANSCRIPTS_DIR.glob(f"TRANSCRIPT_DNI_{dni_8}_*.txt"):
-                matched_file = f
-                break
+        matched_file = find_transcript_file(dni_8, call_id)
 
         evaluados += 1
         if matched_file and matched_file.exists():
             text_content = matched_file.read_text(encoding="utf-8")
-            logger.info(f"\n--- [Caso {evaluados}/{total_rows - 1}] Evaluando DNI {dni_8} ({matched_file.name}) ---")
+            logger.info(f"\n--- [Caso {evaluados}/{total_rows - 1}] DNI: {dni_8} | Archivo: {matched_file.name} ---")
             eval_res = evaluate_text_with_gemini(text_content, llm)
 
             resultado_texto = eval_res["resultado_formateado"]
-            logger.info(f"🎯 Dictamen: {resultado_texto}")
-            logger.info(f"   Cita    : '{eval_res.get('cita')}'")
-            logger.info(f"   Motivo  : {eval_res.get('explicacion')}")
+            estado = eval_res["estado"]
+
+            if estado == "NO_ACEPTA":
+                no_aceptados += 1
+            elif estado == "ACEPTA":
+                aceptados += 1
+            elif estado == "NO_OFRECIDO":
+                no_ofrecidos += 1
+            else:
+                pendientes_manual += 1
+
+            logger.info(f"🎯 Dictamen : {resultado_texto}")
+            logger.info(f"   Cita     : '{eval_res.get('cita')}'")
+            logger.info(f"   Motivo   : {eval_res.get('explicacion')}")
 
             ws.cell(row=row_idx, column=col_res, value=resultado_texto)
-            auditados_exito += 1
+            auditados_con_transcripcion += 1
         else:
-            logger.warning(f"--- [Caso {evaluados}/{total_rows - 1}] DNI {dni_8}: Sin transcripción en '{TRANSCRIPTS_DIR.name}' ---")
+            logger.warning(f"--- [Caso {evaluados}/{total_rows - 1}] DNI {dni_8}: Sin transcripción en carpetas ---")
             ws.cell(row=row_idx, column=col_res, value="REVISIÓN MANUAL PENDIENTE")
+            pendientes_manual += 1
 
     wb.save(EXCEL_FILE)
-    wb.save(BACKUP_FILE)
+    wb.save(AUDITED_FILE)
 
     logger.info("\n" + "=" * 75)
-    logger.info("✅ EVALUACIÓN DE TRANSCRIPCIONES FINALIZADA:")
-    logger.info(f"   • Total Casos Evaluados     : {evaluados}")
-    logger.info(f"   • Auditados con Éxito       : {auditados_exito}")
-    logger.info(f"   • Archivo Excel Actualizado : {EXCEL_FILE}")
-    logger.info(f"   • Respaldo                  : {BACKUP_FILE}")
+    logger.info("✅ EVALUACIÓN DE TRANSCRIPCIONES FINALIZADA EXITOSAMENTE:")
+    logger.info(f"   • Total Casos Evaluados          : {evaluados}")
+    logger.info(f"   • Con Transcripción Auditada IA  : {auditados_con_transcripcion}")
+    logger.info(f"   • 🔴 Clientes que NO Aceptan     : {no_aceptados}")
+    logger.info(f"   • 🟢 Clientes que Aceptan        : {aceptados}")
+    logger.info(f"   • ⚪ No se Ofreció PA            : {no_ofrecidos}")
+    logger.info(f"   • ⚠️ Pendientes Escucha Manual   : {pendientes_manual}")
+    logger.info(f"   • Excel Principal Guardado       : {EXCEL_FILE}")
+    logger.info(f"   • Excel Respaldo Guardado        : {AUDITED_FILE}")
     logger.info("=" * 75)
 
 
