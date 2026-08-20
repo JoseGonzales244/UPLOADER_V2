@@ -653,11 +653,15 @@ class VerintAPIClient:
 
     def get_interaction_transcription_api(self, call_id: str, instance_id: int = 247115) -> Optional[Dict[str, Any]]:
         """
-        Obtiene la transcripción JSON completa de una llamada por CONID (call_id) usando
-        el endpoint nativo ConvertToQDI -> SetFilterAsSearch -> GetContactsResultSet -> GetInteractionTranscription.
+        Obtiene la transcripción JSON de una llamada por CONID (call_id).
+        Inicializa una sesión nueva en cada consulta para evitar que Verint devuelva
+        contactos en caché de la llamada anterior.
         """
-        if not self.speech_session_id:
-            self.init_speech_session(instance_id=instance_id)
+        # Sesión limpia y fresca por cada búsqueda (elimina al 100% el caché residual)
+        self.speech_session_id = None
+        if not self.init_speech_session(instance_id=instance_id):
+            logger.warning(f"No se pudo inicializar sesión limpia en Verint para call_id={call_id}")
+            return None
 
         # 1. Obtener QDI oficial de Verint
         qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=365)
