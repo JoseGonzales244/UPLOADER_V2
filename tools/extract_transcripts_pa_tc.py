@@ -290,6 +290,10 @@ def main():
 
     if verint_ready:
         logger.info("[VERINT] ✓ Sesión en Verint WFO activa.")
+        
+        # 1. Recopilar todos los IDs de llamada válidos
+        all_cases = []
+        all_cids = []
         for row_idx in range(2, total_rows + 1):
             dni_raw = ws.cell(row=row_idx, column=col_dni).value
             call_id = ws.cell(row=row_idx, column=col_id_llamada).value
@@ -305,16 +309,32 @@ def main():
             reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
             call_id_str = str(call_id).strip() if call_id and str(call_id).strip() not in ["", "7464", "None"] else None
 
-            logger.info(f"[VERINT {row_idx - 1}/{total_casos}] DNI: {dni_8} | ID Llamada: {call_id_str}...")
+            all_cases.append({
+                "fila": row_idx,
+                "dni": dni_8,
+                "agente": reg_clean,
+                "ejecutivo": str(ejec_raw),
+                "fecha_adq": str(fec_adq_raw)[:10] if fec_adq_raw else None,
+                "id_llamada": call_id_str,
+                "fecha_llamada": str(fec_llamada) if fec_llamada else None
+            })
+            if call_id_str:
+                all_cids.append(call_id_str)
 
+        for case_info in all_cases:
+            row_idx = case_info["fila"]
+            dni_8 = case_info["dni"]
+            call_id_str = case_info["id_llamada"]
+            
             transcript_text = ""
             if call_id_str:
+                logger.info(f"[VERINT {row_idx - 1}/{total_casos}] DNI: {dni_8} | ID Llamada: {call_id_str}...")
                 try:
                     res_data = verint_client.get_interaction_transcription_api(call_id_str)
                     if res_data and isinstance(res_data, dict):
                         result_obj = res_data.get("GetInteractionTranscriptionResult") or {}
-                        data_obj = result_obj.get("Data") or {}
-                        sequences = data_obj.get("WordsSequences") or []
+                        data_trans = result_obj.get("Data") or {}
+                        sequences = data_trans.get("WordsSequences") or []
 
                         lines = []
                         for seq in sequences:
@@ -347,16 +367,8 @@ def main():
             else:
                 logger.warning(f"   ⚠️ Omitido: sin ID de llamada de Genesys.")
 
-            index_data.append({
-                "fila": row_idx,
-                "dni": dni_8,
-                "agente": reg_clean,
-                "ejecutivo": str(ejec_raw),
-                "fecha_adq": str(fec_adq_raw)[:10] if fec_adq_raw else None,
-                "id_llamada": call_id_str,
-                "fecha_llamada": str(fec_llamada) if fec_llamada else None,
-                "archivo_transcripcion": f"TRANSCRIPT_DNI_{dni_8}_{call_id_str}.txt" if transcript_text else None
-            })
+            case_info["archivo_transcripcion"] = f"TRANSCRIPT_DNI_{dni_8}_{call_id_str}.txt" if transcript_text else None
+            index_data.append(case_info)
 
         # Guardar índice JSON
         index_file = OUTPUT_TRANSCRIPTS_DIR / "transcripciones_index.json"

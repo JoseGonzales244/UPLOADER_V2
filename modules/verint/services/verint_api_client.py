@@ -602,62 +602,83 @@ class VerintAPIClient:
         from_fmt = "2026-01-01T00:00:00.0000000+00:00"
         to_fmt = "2026-12-31T23:59:59.0000000+00:00"
 
-        qdi_xml = f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <GUID>{guid_str}</GUID>
-  <creationTime>{now_iso}.0000000+00:00</creationTime>
-  <MajorVersion>0</MajorVersion>
-  <MinorVersion>0</MinorVersion>
-  <QueryType>Session</QueryType>
-  <DataSource>Unified</DataSource>
-  <Direction>Full</Direction>
-  <Security>
-    <QDIRestrictionFlags ETMFilters="Active" MultiChannelApp="Active" PersonalTag="Inactive" />
-    <IsAgentQuery>false</IsAgentQuery>
-    <World>CCQ</World>
-    <QueryPurpose>SEARCH</QueryPurpose>
-  </Security>
-  <UserPreferences>
-    <NumberOfReturnedRows>100</NumberOfReturnedRows>
-    <TimeZone>UserTime</TimeZone>
-    <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
-  </UserPreferences>
-  <OrderDef>
-    <TimeOfDateBegin>00:00:00</TimeOfDateBegin>
-    <TimeOfDateEnd>00:00:00</TimeOfDateEnd>
-    <From>{from_fmt}</From>
-    <To>{to_fmt}</To>
-    <RefFrom>0001-01-01T00:00:00.0000000+00:00</RefFrom>
-    <RefTo>0001-01-01T00:00:00.0000000+00:00</RefTo>
-    <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
-    <RangeInDays>0</RangeInDays>
-    <FieldRelation>Segment</FieldRelation>
-    <TimeOfDayID>-1</TimeOfDayID>
-  </OrderDef>
-  <Fields>
-    <Field xsi:type="QDIFieldExtended">
-      <Values>
-        <Value>{call_id}</Value>
-      </Values>
-      <SessionName>
-        <FieldID>5</FieldID>
-        <Name>CUSTOM_DATA_STRING</Name>
-      </SessionName>
-      <Operator>contains</Operator>
-      <FieldRelation>Segment</FieldRelation>
-      <IsExtendedCustomData>false</IsExtendedCustomData>
-    </Field>
-  </Fields>
-  <ComplexFields />
-  <Random>
-    <IsRandom>false</IsRandom>
-    <PickRowOutOfEvery>10</PickRowOutOfEvery>
-  </Random>
-</QDI>"""
+    def convert_to_qdi_by_call_id(self, call_id: str, days: int = 240) -> Optional[str]:
+        """
+        Invoca el endpoint oficial /Ultra/api/SearchServices/ConvertToQDI de Verint
+        con el elemento SwitchCallID para obtener el XML QDI generado por el servidor.
+        """
+        url = f"{self.base_url}/Ultra/api/SearchServices/ConvertToQDI"
+        headers = {
+            "Accept": "text/xml",
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers["Impact360AuthToken"] = self.xsrf_token
+            headers["xsrfToken"] = self.xsrf_token
 
-        if not self.set_filter_as_search(qdi_xml, instance_id=247115):
+        payload = {
+            "RootElements": [
+                {"Id": "SearchType", "Params": {"Type": "Interactions"}},
+                {"Id": "InteractionTypes", "Params": {"Calls": True, "Emails": True, "Chats": True}}
+            ],
+            "Sections": [
+                {
+                    "Id": "Metadata",
+                    "Categories": [
+                        {
+                            "Id": "DateRange",
+                            "Elements": [
+                                {"Id": "DateRangeCalls", "Params": {"Type": "TheLast", "Days": days}}
+                            ]
+                        },
+                        {
+                            "Id": "Switches",
+                            "Elements": [
+                                {
+                                    "Id": "SwitchCallID",
+                                    "Params": {
+                                        "Value": str(call_id).strip(),
+                                        "EnableFileList": "true"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "Name": "SASearchServices"
+        }
+
+        try:
+            res = self.session.post(url, json=payload, headers=headers)
+            if res.status_code == 200 and res.text:
+                return res.text
+            logger.error(f"ConvertToQDI falló (HTTP {res.status_code}): {res.text[:200]}")
+        except Exception as e:
+            logger.error(f"Error en ConvertToQDI: {e}")
+        return None
+
+    def get_interaction_transcription_api(self, call_id: str, instance_id: int = 247115) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene la transcripción JSON completa de una llamada por CONID (call_id) usando
+        el endpoint nativo ConvertToQDI -> SetFilterAsSearch -> GetContactsResultSet -> GetInteractionTranscription.
+        """
+        if not self.speech_session_id:
+            self.init_speech_session(instance_id=instance_id)
+
+        # 1. Obtener QDI oficial de Verint
+        qdi_xml = self.convert_to_qdi_by_call_id(call_id)
+        if not qdi_xml:
+            logger.warning(f"No se pudo generar QDI oficial para call_id={call_id}")
+            return None
+
+        # 2. Vincular la búsqueda activa
+        if not self.set_filter_as_search(qdi_xml, instance_id=instance_id):
             logger.warning(f"No se pudo vincular la búsqueda en Verint para CONID='{call_id}'")
             return None
 
+        # 3. Obtener contacto real del resultado
         contacts_res = self.get_contacts_result_set(limit=5, page=1)
         data_obj = contacts_res.get("Data", {})
         contacts_list = data_obj.get("Contacts", []) if isinstance(data_obj, dict) else []
@@ -684,7 +705,7 @@ class VerintAPIClient:
 
         payload = {
             "instanceContext": {
-                "InstanceId": 247115,
+                "InstanceId": instance_id,
                 "ApplicationId": "c6b76d91-5291-4928-f3ec-b97a8d2921b3"
             },
             "channel": channel_val,
@@ -709,8 +730,6 @@ class VerintAPIClient:
         res = self.session.post(url, json=payload, headers=headers)
         if res.status_code == 200:
             return res.json()
-        else:
-            logger.error(f"Error HTTP {res.status_code} al consultar GetInteractionTranscription: {res.text[:200]}")
             return None
 
     def close(self):
