@@ -53,7 +53,7 @@ class VerintAPIClient:
         self.xsrf_token = None
         self.impact360_token = None
         self.instance_id = 247115
-        self.app_id = "37dd24f2-129c-47c2-bea8-cf1064663284"
+        self.app_id = "e9cf0296-0580-4e22-c88d-1de0258fb48b"
         self.speech_session_id = None
         
         # --- Auto Cookie & Token Harvester (Playwright SSO headless si caché expiró) ---
@@ -191,7 +191,7 @@ class VerintAPIClient:
             "InstanceId": self.instance_id,
             "SessionId": self.speech_session_id or "",
             "sessionConfiguration": {"IsSpeakerSeparation": True},
-            "id": "SpeechAnalytics.model.session.ApplicationSession-1",
+            "id": "SpeechAnalytics.model.session.ApplicationSession-2",
             "ApplicationId": self.app_id
         }
 
@@ -651,11 +651,43 @@ class VerintAPIClient:
             logger.error(f"Error en ConvertToQDI: {e}")
         return None
 
+    def get_current_result_set_docs_amount(self) -> int:
+        """
+        Invoca ContactsService.svc/GetCurrentResultSetDocsAmount para forzar
+        a Verint a compilar y contar el result set del filtro activo.
+        """
+        url = f"{self.base_url}/SpeechAnalytics/Services/Contacts/ContactsService.svc/GetCurrentResultSetDocsAmount"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers["xsrfToken"] = self.xsrf_token
+            headers["impact360authtoken"] = self.xsrf_token
+
+        payload = {"session": self._get_speech_session_payload()}
+        try:
+            res = self.session.post(url, json=payload, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                res_obj = data.get("GetCurrentResultSetDocsAmountResult") or {}
+                total = res_obj.get("TotalCount", 0)
+                logger.info(f"   [Verint DocsAmount] Total llamadas halladas: {total}")
+                return total
+        except Exception as e:
+            logger.error(f"Error en GetCurrentResultSetDocsAmount: {e}")
+        return 0
+
     def get_interaction_transcription_api(self, call_id: str, instance_id: int = 247115) -> Optional[Dict[str, Any]]:
         """
-        Obtiene la transcripción JSON de una llamada por CONID (call_id).
-        Inicializa una sesión nueva en cada consulta para evitar que Verint devuelva
-        contactos en caché de la llamada anterior.
+        Obtiene la transcripción JSON de una llamada por CONID (call_id) siguiendo
+        el ciclo de vida completo de Verint:
+        1. ConvertToQDI -> Obtiene el XML oficial.
+        2. SetFilterAsSearch -> Aplica el filtro en la sesión.
+        3. GetCurrentResultSetDocsAmount -> Compila el Result Set en el servidor.
+        4. GetContactsResultSet -> Obtiene la llamada real compilada.
+        5. GetInteractionTranscription -> Descarga el diálogo transcrito.
         """
         # Sesión limpia y fresca por cada búsqueda (elimina al 100% el caché residual)
         self.speech_session_id = None
@@ -674,7 +706,13 @@ class VerintAPIClient:
             logger.warning(f"No se pudo vincular la búsqueda en Verint para CONID='{call_id}'")
             return None
 
-        # 3. Obtener contacto real del resultado
+        # 3. Compilar el Result Set en el servidor de Verint (Paso indispensable)
+        total_docs = self.get_current_result_set_docs_amount()
+        if total_docs == 0:
+            logger.warning(f"Verint confirmó 0 llamadas para CONID='{call_id}'")
+            return None
+
+        # 4. Obtener contacto real del resultado compilado
         contacts_res = self.get_contacts_result_set(limit=5, page=1)
         data_obj = contacts_res.get("Data") or {}
         contacts_list = data_obj.get("Contacts") or []
@@ -683,24 +721,9 @@ class VerintAPIClient:
             logger.warning(f"No se hallaron contactos en Verint para CONID='{call_id}'")
             return None
 
-        # Validación estricta del contacto (cero fallbacks ciegos a contactos residuales)
-        matched_contact = None
-        for c in contacts_list:
-            if not isinstance(c, dict):
-                continue
-            c_text = str(c).lower()
-            if str(call_id).lower() in c_text or str(c.get("Sid")) == str(call_id):
-                matched_contact = c
-                break
-
-        if not matched_contact:
-            if len(contacts_list) == 1:
-                matched_contact = contacts_list[0]
-            else:
-                logger.warning(f"Ningún contacto en el resultado coincide con call_id='{call_id}'")
-                return None
-
-        contact = matched_contact
+        contact = contacts_list[0]
+        if not isinstance(contact, dict):
+            return None
 
         db_sid = contact.get("DbsId", 247)
         sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
