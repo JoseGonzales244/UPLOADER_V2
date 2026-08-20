@@ -428,16 +428,8 @@ class VerintAPIClient:
             headers["xsrfToken"] = self.xsrf_token
             headers["impact360authtoken"] = self.xsrf_token
             
-        speech_session_payload = {
-            "InstanceId": instance_id,
-            "SessionId": self.speech_session_id or "",
-            "sessionConfiguration": {"IsSpeakerSeparation": True},
-            "id": "SpeechAnalytics.model.session.ApplicationSession-2",
-            "ApplicationId": "129eee08-a5b6-4e26-c00d-27d3663975ee"
-        }
-        
         payload = {
-            "session": speech_session_payload,
+            "session": self._get_speech_session_payload(),
             "filterQDI": qdi_xml
         }
         
@@ -687,9 +679,24 @@ class VerintAPIClient:
             logger.warning(f"No se hallaron contactos en Verint para CONID='{call_id}'")
             return None
 
-        contact = contacts_list[0]
-        if not isinstance(contact, dict):
-            return None
+        # Validación estricta del contacto (cero fallbacks ciegos a contactos residuales)
+        matched_contact = None
+        for c in contacts_list:
+            if not isinstance(c, dict):
+                continue
+            c_text = str(c).lower()
+            if str(call_id).lower() in c_text or str(c.get("Sid")) == str(call_id):
+                matched_contact = c
+                break
+
+        if not matched_contact:
+            if len(contacts_list) == 1:
+                matched_contact = contacts_list[0]
+            else:
+                logger.warning(f"Ningún contacto en el resultado coincide con call_id='{call_id}'")
+                return None
+
+        contact = matched_contact
 
         db_sid = contact.get("DbsId", 247)
         sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
@@ -711,7 +718,7 @@ class VerintAPIClient:
         payload = {
             "instanceContext": {
                 "InstanceId": instance_id,
-                "ApplicationId": "c6b76d91-5291-4928-f3ec-b97a8d2921b3"
+                "ApplicationId": self.app_id
             },
             "channel": channel_val,
             "module": 999502,
