@@ -415,23 +415,25 @@ def process_audit():
     col_id_llamada = col_map.get("ID LLAMADA", 8)
     col_fec_llamada = col_map.get("FECHA LLAMADA", 9)
 
-    # 1. Inicializar Servicios
-    auditor = PagoAutomaticoAuditor()
-    verint_ready = auditor.init_services()
+    total_rows = ws.max_row
+    total_casos = total_rows - 1
+
+    # =========================================================================
+    # 📌 FASE 1: BARRIDO COMPLETO EN GENESYS CLOUD (RECUPERACIÓN DE ID LLAMADA)
+    # =========================================================================
+    logger.info("\n" + "=" * 75)
+    logger.info("🚀 [FASE 1/2] BARRIDO EN GENESYS CLOUD: OBTENIENDO TODOS LOS IDs DE LLAMADA")
+    logger.info("=" * 75)
 
     browser_bot = GenesysBrowserAutomation()
     genesys_resolver = GenesysAPIResolver(browser_bot)
     genesys_token = genesys_resolver.connect_and_get_token()
 
     teradata_svc = TeradataService()
+    ids_encontrados_genesys = 0
 
-    total_rows = ws.max_row
-    procesados = 0
-    auditados_exito = 0
-    pendientes_manual = 0
-
-    for row_idx in range(2, total_rows + 1):
-        try:
+    if genesys_token:
+        for row_idx in range(2, total_rows + 1):
             dni_raw = ws.cell(row=row_idx, column=col_dni).value
             reg_raw = ws.cell(row=row_idx, column=col_reg).value
             ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
@@ -441,9 +443,13 @@ def process_audit():
             if not dni_raw:
                 continue
 
-            # Normalización obligatoria a 8 dígitos con ceros
             dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
             reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
+
+            # Si ya tiene un ID válido previo, no consultar nuevamente
+            if saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]:
+                ids_encontrados_genesys += 1
+                continue
 
             fec_dt = fec_adq_raw if isinstance(fec_adq_raw, datetime) else (datetime.combine(fec_adq_raw, datetime.min.time()) if isinstance(fec_adq_raw, date) else None)
             if not fec_dt:
@@ -452,56 +458,76 @@ def process_audit():
                 except Exception:
                     fec_dt = datetime(2026, 4, 1)
 
-            procesados += 1
-            logger.info(f"\n--- [Caso {procesados}/{total_rows - 1}] DNI: {dni_8} | Agente: {reg_clean} ({ejec_raw}) | Fec ADQ: {fec_dt.strftime('%Y-%m-%d')} ---")
+            logger.info(f"[FASE 1 - Caso {row_idx - 1}/{total_casos}] Consultando Genesys para DNI {dni_8} | Agente: {reg_clean} ({ejec_raw})...")
 
-            call_id = saved_call_id if (saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]) else None
-            fec_llamada = ws.cell(row=row_idx, column=col_fec_llamada).value
+            # 1. Teléfonos vinculados
+            dummy_sol = [SolicitudAudio(nombre_archivo=f"REQ_{dni_8}", dni=dni_8, reg_ev=reg_clean)]
+            enriquecidas = teradata_svc.enriquecer_solicitudes(dummy_sol)
+            telefonos = enriquecidas[0].telefonos if enriquecidas else []
 
-            # PASO 1: Búsqueda en Genesys REST API si no tenemos ID llamada previo
-            if not call_id and genesys_token:
-                # Obtener teléfonos del cliente para el DNI (8 dígitos)
-                dummy_sol = [SolicitudAudio(nombre_archivo=f"REQ_{dni_8}", dni=dni_8, reg_ev=reg_clean)]
-                enriquecidas = teradata_svc.enriquecer_solicitudes(dummy_sol)
-                telefonos = enriquecidas[0].telefonos if enriquecidas else []
+            # 2. Búsqueda REST
+            user_id = genesys_resolver.resolve_user_id(reg_clean)
+            call_id, fec_llamada = genesys_resolver.search_conversation(user_id, telefonos, fec_dt)
 
-                user_id = genesys_resolver.resolve_user_id(reg_clean)
-                call_id, fec_llamada = genesys_resolver.search_conversation(user_id, telefonos, fec_dt)
-
-            # PASO 2: Extracción de Transcripción en Verint con el ID Llamada
-            transcript = []
-            if call_id and verint_ready:
-                transcript = auditor.get_transcript_by_call_id(str(call_id).strip())
-
-            # PASO 3: Evaluación Focalizada con IA
-            if transcript:
-                eval_res = auditor.evaluate_pago_automatico(transcript)
-                resultado_texto = eval_res["resultado_formateado"]
-                logger.info(f"🎯 Dictamen: {resultado_texto} (Cita: {eval_res.get('cita', '')})")
-
-                ws.cell(row=row_idx, column=col_res, value=resultado_texto)
+            if call_id:
                 ws.cell(row=row_idx, column=col_id_llamada, value=str(call_id))
                 if fec_llamada:
                     ws.cell(row=row_idx, column=col_fec_llamada, value=str(fec_llamada))
-                auditados_exito += 1
+                ids_encontrados_genesys += 1
+                logger.info(f"   ✓ ID Llamada: {call_id} | Fecha: {fec_llamada}")
             else:
-                logger.warning(f"⚠️ Sin transcripción para DNI {dni_8} (call_id={call_id}).")
-                ws.cell(row=row_idx, column=col_res, value="REVISIÓN MANUAL PENDIENTE")
-                if call_id:
-                    ws.cell(row=row_idx, column=col_id_llamada, value=str(call_id))
-                if fec_llamada:
-                    ws.cell(row=row_idx, column=col_fec_llamada, value=str(fec_llamada))
-                pendientes_manual += 1
+                logger.warning(f"   ⚠️ No se halló llamada en Genesys para DNI {dni_8}.")
 
-            if procesados % 5 == 0:
-                wb.save(EXCEL_FILE)
-                logger.debug(f"[CHECKPOINT] Guardado en {EXCEL_FILE.name} (Caso {procesados}).")
+        wb.save(EXCEL_FILE)
+        logger.info(f"\n[FASE 1 COMPLETADA] {ids_encontrados_genesys}/{total_casos} IDs de llamada listos en Excel.")
+    else:
+        logger.warning("[FASE 1] ⚠️ No se pudo obtener sesión de Genesys. Continuando con IDs previamente guardados...")
 
-        except Exception as e_row:
-            logger.error(f"❌ Error en fila {row_idx}: {e_row}", exc_info=True)
-            ws.cell(row=row_idx, column=col_res, value="REVISIÓN MANUAL PENDIENTE (Error técnico)")
+    # =========================================================================
+    # 📌 FASE 2: EXTRACCIÓN EN VERINT API Y AUDITORÍA FOCALIZADA CON IA
+    # =========================================================================
+    logger.info("\n" + "=" * 75)
+    logger.info("🎯 [FASE 2/2] DESCARGA DE TRANSCRIPCIONES EN VERINT API Y EVALUACIÓN IA")
+    logger.info("=" * 75)
+
+    auditor = PagoAutomaticoAuditor()
+    verint_ready = auditor.init_services()
+
+    auditados_exito = 0
+    pendientes_manual = 0
+
+    for row_idx in range(2, total_rows + 1):
+        dni_raw = ws.cell(row=row_idx, column=col_dni).value
+        reg_raw = ws.cell(row=row_idx, column=col_reg).value
+        call_id = ws.cell(row=row_idx, column=col_id_llamada).value
+
+        if not dni_raw:
+            continue
+
+        dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
+        logger.info(f"\n[FASE 2 - Caso {row_idx - 1}/{total_casos}] Auditando DNI {dni_8} | ID Llamada: {call_id}...")
+
+        transcript = []
+        if call_id and str(call_id).strip() not in ["", "7464", "None"] and verint_ready:
+            transcript = auditor.get_transcript_by_call_id(str(call_id).strip())
+
+        if transcript:
+            eval_res = auditor.evaluate_pago_automatico(transcript)
+            resultado_texto = eval_res["resultado_formateado"]
+            logger.info(f"🎯 Dictamen IA: {resultado_texto} (Cita: '{eval_res.get('cita', '')}')")
+
+            ws.cell(row=row_idx, column=col_res, value=resultado_texto)
+            auditados_exito += 1
+        else:
+            logger.warning(f"⚠️ Sin transcripción en Verint para DNI {dni_8} (call_id={call_id}).")
+            ws.cell(row=row_idx, column=col_res, value="REVISIÓN MANUAL PENDIENTE")
             pendientes_manual += 1
 
+        if (row_idx - 1) % 5 == 0:
+            wb.save(EXCEL_FILE)
+            logger.debug(f"[CHECKPOINT] Progreso guardado en {EXCEL_FILE.name}.")
+
+    # Guardado final
     wb.save(EXCEL_FILE)
     wb.save(BACKUP_FILE)
 
@@ -509,10 +535,11 @@ def process_audit():
     logger.info("\n" + "=" * 75)
     logger.info("✅ AUDITORÍA FINALIZADA:")
     logger.info(f"   • Tiempo Total              : {elapsed:.1f} s")
-    logger.info(f"   • Casos Procesados          : {procesados}")
-    logger.info(f"   • Resueltos con Éxito       : {auditados_exito}")
+    logger.info(f"   • Total Casos               : {total_casos}")
+    logger.info(f"   • IDs Recuperados Genesys   : {ids_encontrados_genesys}")
+    logger.info(f"   • Auditados con Éxito (IA)  : {auditados_exito}")
     logger.info(f"   • Pendientes Escucha Manual : {pendientes_manual}")
-    logger.info(f"   • Excel Guardado            : {EXCEL_FILE}")
+    logger.info(f"   • Excel Actualizado         : {EXCEL_FILE}")
     logger.info(f"   • Respaldo                  : {BACKUP_FILE}")
     logger.info(f"   • Log Completo              : {LOG_FILE}")
     logger.info("=" * 75)
