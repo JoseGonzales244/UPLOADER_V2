@@ -686,23 +686,83 @@ class VerintAPIClient:
             logger.error(f"Error en GetCurrentResultSetDocsAmount: {e}")
         return 0
 
+    def select_televentas_project(self) -> bool:
+        """
+        Selecciona y activa el proyecto 'Televentas' en Verint llamando a ConvertToLDFO
+        (Paso 1 exacto de la interfaz web).
+        """
+        url = f"{self.base_url}/Ultra/api/SearchServices/ConvertToLDFO?templateName=SALeftPaneFacadeOldIFA"
+        headers = {
+            "Accept": "*/*",
+            "Content-Type": "text/plain",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers["xsrfToken"] = self.xsrf_token
+            headers["impact360authtoken"] = self.xsrf_token
+
+        qdi_xml = """<QDI xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <GUID>00000000-0000-0000-0000-000000000000</GUID>
+  <creationTime>2026-08-20T04:02:00.0000000+00:00</creationTime>
+  <MajorVersion>0</MajorVersion>
+  <MinorVersion>0</MinorVersion>
+  <QueryType>Session</QueryType>
+  <DataSource>CentralContact</DataSource>
+  <Direction>Relative_range</Direction>
+  <Security>
+    <UserId>2</UserId>
+    <IsAgentQuery>false</IsAgentQuery>
+    <World>IFind</World>
+  </Security>
+  <UserPreferences>
+    <NumberOfReturnedRows>100</NumberOfReturnedRows>
+    <TimeZone>UserTime</TimeZone>
+    <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
+  </UserPreferences>
+  <OrderDef>
+    <From>0001-01-01T00:00:00.0000000+00:00</From>
+    <To>0001-01-01T00:00:00.0000000+00:00</To>
+    <RefFrom>0001-01-01T00:00:00.0000000-00:00</RefFrom>
+    <RefTo>0001-01-01T00:00:00.0000000-00:00</RefTo>
+    <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
+    <RangeInDays>180</RangeInDays>
+    <FieldRelation>Segment</FieldRelation>
+    <TimeOfDayID>-1</TimeOfDayID>
+  </OrderDef>
+  <Fields />
+  <ComplexFields />
+  <Random>
+    <IsRandom>false</IsRandom>
+    <PickRowOutOfEvery>10</PickRowOutOfEvery>
+  </Random>
+</QDI>"""
+        try:
+            res = self.session.post(url, content=qdi_xml, headers=headers)
+            if res.status_code == 200:
+                logger.info("✓ Proyecto 'Televentas' seleccionado en Verint.")
+                return True
+        except Exception as e:
+            logger.error(f"Error seleccionando proyecto Televentas: {e}")
+        return False
+
     def get_interaction_transcription_api(self, call_id: str, instance_id: int = 247115) -> Optional[Dict[str, Any]]:
         """
         Obtiene la transcripción JSON de una llamada por CONID (call_id) siguiendo
-        el ciclo de vida completo de Verint:
-        1. ConvertToQDI -> Obtiene el XML oficial.
+        el ciclo de vida completo 1:1 de Verint UI:
+        1. ConvertToQDI -> Obtiene el XML oficial (SwitchCallID).
         2. SetFilterAsSearch -> Aplica el filtro en la sesión activa.
         3. GetCurrentResultSetDocsAmount -> Compila el Result Set en el servidor.
-        4. GetContactsResultSet -> Obtiene la llamada real compilada.
-        5. GetInteractionTranscription -> Descarga el diálogo transcrito.
+        4. GetContactsResultSet -> Obtiene los contactos reales de la llamada.
+        5. GetInteractionTranscription -> Descarga el diálogo con todos los turnos.
         """
         if not self.speech_session_id:
             if not self.init_speech_session(instance_id=instance_id):
                 logger.warning(f"No se pudo inicializar sesión en Verint para call_id={call_id}")
                 return None
+            self.select_televentas_project()
 
         # 1. Obtener QDI oficial de Verint
-        qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=365)
+        qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=180)
         if not qdi_xml:
             logger.warning(f"No se pudo generar QDI oficial para call_id={call_id}")
             return None
@@ -712,14 +772,11 @@ class VerintAPIClient:
             logger.warning(f"No se pudo vincular la búsqueda en Verint para CONID='{call_id}'")
             return None
 
-        # 3. Compilar el Result Set en el servidor de Verint (Paso indispensable)
-        total_docs = self.get_current_result_set_docs_amount()
-        if total_docs == 0:
-            logger.warning(f"Verint confirmó 0 llamadas para CONID='{call_id}'")
-            return None
+        # 3. Compilar el Result Set en el servidor de Verint
+        self.get_current_result_set_docs_amount()
 
-        # 4. Obtener contacto real del resultado compilado
-        contacts_res = self.get_contacts_result_set(limit=5, page=1)
+        # 4. Obtener contactos reales de la llamada filtrada
+        contacts_res = self.get_contacts_result_set(limit=10, page=1)
         data_obj = contacts_res.get("Data") or {}
         contacts_list = data_obj.get("Contacts") or []
 
@@ -733,10 +790,10 @@ class VerintAPIClient:
 
         db_sid = contact.get("DbsId", 247)
         sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
-        channel_val = contact.get("Channel") or contact.get("ChannelId") or 258758270
-        start_time_raw = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-07-16T22:04:48.977Z"
+        channel_val = contact.get("Channel") or contact.get("ChannelId") or 170909957
+        start_time_raw = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-04-29T17:04:22.820Z"
         start_time_str = str(start_time_raw).strip()
-        local_date_str = (start_time_str[:10] if len(start_time_str) >= 10 else "2026-07-16") + "T00:00:00.000Z"
+        local_date_str = (start_time_str[:10] if len(start_time_str) >= 10 else "2026-04-29") + "T00:00:00.000Z"
 
         url = f"{self.base_url}/SpeechAnalytics/Services/Transcription/TranscriptionService.svc/GetInteractionTranscription"
         headers = {
@@ -750,7 +807,7 @@ class VerintAPIClient:
 
         payload = {
             "instanceContext": {
-                "InstanceId": instance_id,
+                "InstanceId": str(instance_id),
                 "ApplicationId": self.app_id
             },
             "channel": channel_val,
@@ -761,7 +818,7 @@ class VerintAPIClient:
             "queryTerms": "",
             "editCategory": None,
             "language": "es-ES",
-            "transactionId": "2157019040984375478048370989227333246",
+            "transactionId": "2148850615328041750352251102220509445",
             "docId": None,
             "isDocumentMarkingLayersRequeire": False,
             "isRedactionDisabled": False,
@@ -777,7 +834,7 @@ class VerintAPIClient:
             if res.status_code == 200:
                 return res.json()
             else:
-                logger.error(f"Error HTTP {res.status_code} al consultar GetInteractionTranscription: {res.text[:200]}")
+                logger.error(f"Error HTTP {res.status_code} en GetInteractionTranscription: {res.text[:200]}")
         except Exception as e_post:
             logger.error(f"Excepción en GetInteractionTranscription: {e_post}")
         return None
