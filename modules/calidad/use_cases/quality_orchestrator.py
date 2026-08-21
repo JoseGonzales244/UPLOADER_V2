@@ -532,8 +532,30 @@ def run_quality_process_flow(
         if True:
             if progress_callback:
                 progress_callback("🧹 Cargando Evaluaciones de Insight a Teradata...", "info")
-                
-            df_insight = pl.read_csv(local_insight_path, separator='\t', infer_schema_length=0, truncate_ragged_lines=True)
+            try:
+                df_insight = pl.read_csv(
+                    local_insight_path,
+                    separator='\t',
+                    infer_schema_length=0,
+                    truncate_ragged_lines=True,
+                    quote_char=None,
+                    ignore_errors=True
+                )
+                logger.info(f"✓ Evaluaciones de Insight leídas exitosamente: {len(df_insight)} filas, {len(df_insight.columns)} columnas.")
+            except Exception as err_tsv:
+                logger.warning(f"Error primario leyendo TSV de Evaluaciones ({err_tsv}). Intentando fallback con encoding latin-1...")
+                try:
+                    df_insight = pl.read_csv(
+                        local_insight_path,
+                        separator='\t',
+                        infer_schema_length=0,
+                        truncate_ragged_lines=True,
+                        ignore_errors=True,
+                        encoding='latin1'
+                    )
+                except Exception as err_fallback:
+                    logger.error(f"❌ Error crítico leyendo Evaluaciones de Insight '{local_insight_path}': {err_fallback}", exc_info=True)
+                    raise RuntimeError(f"Error de formato (CSV malformed) en '{os.path.basename(local_insight_path)}': {err_fallback}")
             template_insight = templates.get("P008-INSIGHT_07_EVALUATIONS", {})
             if not template_insight:
                 raise ValueError("No se encontró la plantilla P008-INSIGHT_07_EVALUATIONS en plantillas.json.")

@@ -219,14 +219,44 @@ def run_orchestration_flow(
                     continue
                     
                 msg_clean = f"🧹 Procesando y limpiando datos de {n_ejecutivo}..."
-                logger.info(f"Cleaning dataframe for '{q_name}' from path {local_path}...")
+                logger.info(f"Limpiando y leyendo archivo para '{q_name}' desde: {local_path} ({os.path.getsize(local_path)} bytes)...")
                 if progress_callback:
                     progress_callback(msg_clean, "info")
                     
-                df = pl.read_csv(local_path, separator='\t', infer_schema_length=0, truncate_ragged_lines=True)
+                try:
+                    # quote_char=None es indispensable para TSV de Insight con comillas sin cerrar dentro de comentarios
+                    df = pl.read_csv(
+                        local_path,
+                        separator='\t',
+                        infer_schema_length=0,
+                        truncate_ragged_lines=True,
+                        quote_char=None,
+                        ignore_errors=True
+                    )
+                    logger.info(f"✓ '{q_name}' leído exitosamente: {len(df)} filas, {len(df.columns)} columnas.")
+                except Exception as err_tsv:
+                    logger.warning(f"Error primario leyendo TSV con quote_char=None ({err_tsv}). Intentando fallback con encoding latin-1...")
+                    try:
+                        df = pl.read_csv(
+                            local_path,
+                            separator='\t',
+                            infer_schema_length=0,
+                            truncate_ragged_lines=True,
+                            ignore_errors=True,
+                            encoding='latin1'
+                        )
+                        logger.info(f"✓ '{q_name}' leído exitosamente con fallback: {len(df)} filas.")
+                    except Exception as err_fallback:
+                        logger.error(
+                            f"❌ Error crítico leyendo archivo TSV de Insight '{local_path}':\n"
+                            f"Detalle: {err_fallback}\n"
+                            f"Tamaño archivo: {os.path.getsize(local_path)} bytes.",
+                            exc_info=True
+                        )
+                        raise RuntimeError(f"Error de formato (CSV malformed) en '{os.path.basename(local_path)}': {err_fallback}")
                 
                 if df.is_empty():
-                    logger.warning(f"File '{local_path}' is empty. Skipping load.")
+                    logger.warning(f"El archivo '{local_path}' está vacío. Omitiendo carga.")
                     continue
                 
                 template_config = templates.get(t_key, {})
