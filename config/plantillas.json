@@ -4112,7 +4112,7 @@
             "Tipo de dato": "VARCHAR(255)",
             "Nuevo nombre": "CONID"
         },
-        "TLV - Exp.Compra - GT - Ofrecimiento Adicional": {
+        "PRT_TCA_GC_Ofrecimiento": {
             "Añadir": true,
             "Null:0/No Null:1": true,
             "Tipo de dato": "FLOAT",

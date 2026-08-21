@@ -95,7 +95,7 @@ WHERE hist.MESINGRESOEXPEDADQ_DSC >= '202608'
   AND hist.ESTADOSOLICITUD_CD = 3;
 
 -- =============================================================================
--- VISTA FUNNEL TCAD
+-- VISTA FUNNEL TCAD (Optimizada y Simplificada)
 -- =============================================================================
 REPLACE VIEW DLAB_GEC.V_FNL_TCAD_SIMPLE AS
 WITH base AS (
@@ -117,6 +117,7 @@ WITH base AS (
     FROM DLAB_GEC.V_EXP_VENTAS_TC_TCAD
 ),
 sa_dia AS (
+    -- Agrupa llamadas del día por asesor y DNI para evitar duplicados en el cruce
     SELECT
         LPAD(TRIM(DNI), 8, '0') AS CODDOC,
         TRIM(REG_EV) AS CODPROMOT,
@@ -128,22 +129,8 @@ sa_dia AS (
     FROM DLAB_GEC.M_EXP_DATA_TCAD_SA
     GROUP BY 1, 2, 3
 ),
-speech AS (
-    SELECT
-        base.CODDOC,
-        base.CODPROMOT,
-        base.FECHA_VENTA_TC,
-        COALESCE(sa_dia.OFRE_TCAD, 0) AS OFRE_TCAD,
-        COALESCE(sa_dia.OFRE_360, 0) AS OFRE_360,
-        COALESCE(sa_dia.OFER_A, 0) AS OFER_A,
-        COALESCE(sa_dia.OFER_B, 0) AS OFER_B
-    FROM base
-    LEFT JOIN sa_dia
-        ON sa_dia.CODDOC = base.CODDOC
-       AND sa_dia.CODPROMOT = base.CODPROMOT
-       AND sa_dia.FECHA_LLAMADA = base.FECHA_VENTA_TC
-),
 tcad AS (
+    -- Agrupa ventas de adicionales por cliente
     SELECT
         base.CODDOC,
         MAX(t.TCAD_VENDIDA) AS VENTA_TCAD_FLAG,
@@ -160,6 +147,17 @@ tcad AS (
     LEFT JOIN DLAB_GEC.V_FCT_TCAD AS t
         ON t.CODDOC = base.CODDOC
     GROUP BY base.CODDOC
+),
+seg AS (
+    -- Agrupa ventas de seguros por cliente y asesor
+    SELECT
+        LPAD(TRIM(DNI_TITULAR), 8, '0') AS CODDOC,
+        TRIM(CODPROMOT) AS CODPROMOT,
+        MESVENTA AS PERIODO,
+        1 AS VENTA_SEG_FLAG
+    FROM E_DW_VIEWS_DLAB.V_DLAB_CGR_SEGUROS_VENTAS
+    WHERE PRODUCTO = 'IBK - SEGURO PROTECCION DE TARJETAS 360'
+    GROUP BY 1, 2, 3
 )
 SELECT
     base.PERIODO,
@@ -170,21 +168,32 @@ SELECT
     base.NOMBRE_EJECUTIVO,
     base.NOMSUPER,
     base.VENTA_TC,
-    speech.OFRE_TCAD,
-    speech.OFRE_360,
-    speech.OFER_A,
-    speech.OFER_B,
-    COALESCE(tcad.VENTA_TCAD_FLAG, 0) AS VENTA_TCAD_FLAG,
-    COALESCE(tcad.CANT_TCAD, 0) AS CANT_TCAD,
-    COALESCE(tcad.ACTIVA_TCAD_FLAG, 0) AS ACTIVA_TCAD_FLAG,
-    COALESCE(tcad.CANT_TCAD_ACTIVADA, 0) AS CANT_TCAD_ACTIVADA
+    
+    -- Ofrecimientos directos desde sa_dia
+    COALESCE(sa_dia.OFRE_TCAD, 0) AS OFRE_TCAD,
+    COALESCE(sa_dia.OFRE_360, 0)  AS OFRE_360,
+    COALESCE(sa_dia.OFER_A, 0)    AS OFER_A,
+    COALESCE(sa_dia.OFER_B, 0)    AS OFER_B,
+    
+    -- Ventas Cross TC Adicional
+    COALESCE(tcad.VENTA_TCAD_FLAG, 0)    AS VENTA_TCAD_FLAG,
+    COALESCE(tcad.CANT_TCAD, 0)          AS CANT_TCAD,
+    COALESCE(tcad.ACTIVA_TCAD_FLAG, 0)   AS ACTIVA_TCAD_FLAG,
+    COALESCE(tcad.CANT_TCAD_ACTIVADA, 0) AS CANT_TCAD_ACTIVADA,
+    
+    -- Ventas Cross Seguros 360
+    COALESCE(seg.VENTA_SEG_FLAG, 0)      AS VENTA_SEG_FLAG
 FROM base
-LEFT JOIN speech
-    ON speech.CODDOC = base.CODDOC
-   AND speech.CODPROMOT = base.CODPROMOT
-   AND speech.FECHA_VENTA_TC = base.FECHA_VENTA_TC
+LEFT JOIN sa_dia
+    ON sa_dia.CODDOC = base.CODDOC
+   AND sa_dia.CODPROMOT = base.CODPROMOT
+   AND sa_dia.FECHA_LLAMADA = base.FECHA_VENTA_TC
 LEFT JOIN tcad
-    ON tcad.CODDOC = base.CODDOC;
+    ON tcad.CODDOC = base.CODDOC
+LEFT JOIN seg
+    ON seg.CODDOC = base.CODDOC
+   AND seg.CODPROMOT = base.CODPROMOT
+   AND seg.PERIODO = base.PERIODO;
 
 -- =============================================================================
 -- VISTA FACT TCAD

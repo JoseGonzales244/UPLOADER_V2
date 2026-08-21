@@ -47,7 +47,8 @@ def setup_logging(
         handler.close()
 
     logger.setLevel(level)
-    logger.propagate = True if name else False
+    # Evitar duplicación de logs: si este logger ya tiene sus propios handlers, no debe propagar al root logger
+    logger.propagate = False
 
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     sensitive_filter = SensitiveDataFilter()
@@ -63,15 +64,7 @@ def setup_logging(
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
-    # También configurar el root logger si se configuró un logger nombrado
-    if name != "":
-        root_logger = logging.getLogger()
-        root_logger.setLevel(level)
-        if not root_logger.handlers:
-            root_logger.addHandler(console_handler)
-            root_logger.addHandler(file_handler)
-
-    # Silenciar warnings ruidosos de librerías de terceros (fastexcel)
+    # Silenciar warnings ruidosos de librerías de terceros
     logging.getLogger("fastexcel").setLevel(logging.ERROR)
 
     return logger
