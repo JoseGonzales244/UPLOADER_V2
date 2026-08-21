@@ -149,14 +149,14 @@ tcad AS (
     GROUP BY base.CODDOC
 ),
 seg AS (
-    -- Agrupa ventas de seguros por cliente y asesor
+    -- Agrupa ventas de seguros por cliente y asesor desde la tabla local de DLAB_GEC
     SELECT
-        LPAD(TRIM(DNI_TITULAR), 8, '0') AS CODDOC,
+        LPAD(TRIM(CODDOC), 8, '0') AS CODDOC,
         TRIM(CODPROMOT) AS CODPROMOT,
-        MESVENTA AS PERIODO,
+        MESDESEMBOLSO AS PERIODO,
         1 AS VENTA_SEG_FLAG
-    FROM E_DW_VIEWS_DLAB.V_DLAB_CGR_SEGUROS_VENTAS
-    WHERE PRODUCTO = 'IBK - SEGURO PROTECCION DE TARJETAS 360'
+    FROM DLAB_GEC.M_EXP_VENTAS_SEG
+    WHERE PRODUCTO LIKE '%360%'
     GROUP BY 1, 2, 3
 )
 SELECT
