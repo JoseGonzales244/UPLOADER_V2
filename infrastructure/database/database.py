@@ -21,6 +21,23 @@ def load_credentials():
         "teradata_logmech": env_logmech or "LDAP"
     }
 
+def load_desnegret_credentials():
+    """
+    Carga las credenciales específicas para DLAB_DESNEGRET desde .env.
+    """
+    load_dotenv()
+    env_user = os.getenv("TERADATA_USER_DESNEGRET")
+    env_password = os.getenv("TERADATA_PASSWORD_DESNEGRET")
+    env_host = os.getenv("TERADATA_HOST_DESNEGRET") or os.getenv("TERADATA_HOST") or "IBKTD"
+    env_logmech = os.getenv("TERADATA_LOGMECH_DESNEGRET") or os.getenv("TERADATA_LOGMECH") or "LDAP"
+    
+    return {
+        "teradata_user": env_user or "",
+        "teradata_password": env_password or "",
+        "teradata_host": env_host,
+        "teradata_logmech": env_logmech
+    }
+
 def connect_teradata(user, password, host='IBKTD', logmech='TD2'):
     """Establishes connection to the Teradata database."""
     return teradatasql.connect(
