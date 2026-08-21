@@ -13,8 +13,11 @@ ACCESOS_EXPERIENCIA.txt
 modules/genesys/.chrome_genesys_profile/
 data/verint_browser_profile/
 
-# Carpetas de datos sensibles y descargas
+# Carpetas de datos sensibles, transcripciones y descargas
 transcripciones/
+transcripciones_pa/
+data/transcripciones_pa/
+data/**/*.txt
 downloads/
 Auditorias Wsp/
 *.docx
@@ -30,6 +33,9 @@ logs/
 
 # Archivos de entrada o datos temporales pesados/sensibles
 *.xlsx
+!Diccionario_Categorias_Verint.xlsx
+!*diccionario*categoria*.xlsx
+!data/**/Diccionario_Categorias_Verint.xlsx
 *.csv
 !data/input/proceso_calidad/*.csv
 

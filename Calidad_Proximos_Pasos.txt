@@ -1,0 +1,237 @@
+Calidad Staff - Notas para Second Brain
+Dolencias Operativas del Equipo de Calidad
+Evaluación de llamadas
+
+Registro manual en múltiples herramientas:
+
+PureCloud
+Excel
+Correos a supervisores
+
+No cuentan con información actualizada del cliente en el flujo principal.
+
+Deben ingresar a Visión para completar la validación.
+Reclamos
+Derivaciones incorrectas desde Televentas.
+Los reclamos suelen llegar vencidos o cerca del vencimiento.
+Se vuelven urgencias operativas.
+
+Problemas adicionales
+
+Gestión de conformidades lenta.
+Requiere seguimiento constante a responsables.
+El detalle del reclamo se registra en Excel propio y no en PIU.
+Auditorías
+Requerimientos urgentes de SBS interrumpen el trabajo planificado.
+Escuchas focalizadas
+Se realizan entre 50 y 100 escuchas por piloto para validar precisión.
+Blacklist
+Carmen valida caso por caso.
+Debe ingresar a cada llamada desde PowerApps.
+Visión de Plataforma Web + Sofía
+Referencia de diseño
+Plataforma web similar al diseño "2x" de Juanca.
+Esfuerzo estimado: 2 semanas.
+Flujo Propuesto
+Procesamiento
+Diego descarga y procesa llamadas.
+Sofía analiza la información.
+Sofía genera resultados por:
+Equipo
+Ejecutivo
+Los resultados se publican automáticamente en la plataforma web.
+Evaluación
+Yane y Karim ingresan a la web.
+Revisan y tipifican las llamadas seleccionadas.
+Selección de llamadas
+Diego define el modelo analítico para determinar qué llamadas revisar.
+Dashboard para Ejecutivos
+Alcance
+Entre 120 y 200 usuarios.
+Información disponible
+
+Cada ejecutivo podrá visualizar:
+
+Nota actual.
+Historial de llamadas.
+Funnel de desempeño.
+Perfil individual.
+Evolución futura
+Análisis de palabras clave.
+Identificación de patrones de rebate.
+Medición de efectividad por speech.
+Rol de Sofía en Calidad
+
+Además de la evaluación automática:
+
+Apoya escuchas focalizadas.
+Aplica análisis más riguroso:
+Validación de protocolo.
+Validación de reclamos.
+Flujo de Reclamos en la Plataforma
+Gestión
+
+Reclamos derivados ingresan automáticamente a la plataforma.
+
+Los jefes reciben:
+
+Reclamos asignados.
+Evaluaciones.
+Reevaluaciones.
+
+Flujo de atención:
+
+Jefe asigna supervisor.
+Supervisor responde dentro del SLA definido.
+
+Escalamiento:
+
+Si no se responde a tiempo:
+Escala automáticamente a Cristian.
+Escala automáticamente al manager.
+Objetivos
+Eliminar reclamos vencidos.
+Definir mecanismo de prevención y escalamiento.
+Base de conocimiento
+Administrada con Sofía.
+Centraliza respuestas y aprendizajes.
+Rol de Diego
+Conectar reclamos derivados.
+Gestionar envío de respuestas.
+Soporte, Capacitación y Gestión de No-Todos
+Escala propuesta de consecuencias
+No-Todo 1
+Capacitación.
+No-Todo 2
+Capacitación.
+No-Todo 3
+Examen escrito obligatorio.
+Si no aprueba:
+Desvinculación.
+No-Todo 4
+Suspensión.
+Regla Especial
+Si un ejecutivo reincide en un No-Todo 1:
+Escala directamente a No-Todo 3.
+Problema actual
+No existe trazabilidad clara del aprendizaje.
+El proceso termina en la sanción sin medir mejora posterior.
+Pendiente
+Definir la escala junto a:
+Yane
+Karim
+Gestión de Speech
+Problema
+
+Los cambios de speech consumen tiempo operativo significativo al equipo de Calidad.
+
+Propuesta de Gobierno
+
+El área solicitante debe:
+
+Gestionar el cambio.
+Obtener todas las aprobaciones necesarias.
+Entregar el cambio listo para implementación.
+Posibles áreas aprobadoras
+Legal
+Conducta de Mercado
+Otras áreas regulatorias
+
+Calidad únicamente implementa el cambio aprobado.
+
+Inteligencia Artificial
+Copilot
+Agente especializado para generar recomendaciones de speech.
+Independiente de Sofía.
+Tabla de Vigencia de Speech
+Estructura propuesta
+Mes
+Equipo
+Speech
+Estado de aprobación
+Fecha inicio
+Fecha fin
+Proceso mensual
+Revisar speech vigente.
+Duplicar si no existen cambios.
+Notificar equipos.
+Obtener confirmación.
+Uso por Sofía
+Determinar qué speech estaba vigente en cada período.
+Calcular efectividad y resultados asociados al speech.
+Backlog / Próximos Pasos
+1. Revisar tiempos de planificación con Carolina
+
+Responsable: Diego
+
+Objetivo:
+
+Entender por qué los tiempos de dotación son tan holgados.
+Involucrar a las áreas responsables del proceso.
+2. Mejorar PowerApps de Blacklist
+
+Responsable: Diego
+
+Objetivo:
+
+Incorporar filtros adicionales.
+Reducir validaciones manuales.
+
+Meta:
+
+Que la descripción ingresada por el ejecutivo sea suficiente para validar casos sin escuchar cada llamada.
+
+Coordinación:
+
+Janet.
+3. Definir escala de No-Todos
+
+Responsable: Diego
+
+Participantes:
+
+Yane
+Karim
+
+Objetivo:
+
+Establecer criterios.
+Definir consecuencias.
+Formalizar escalamiento por reincidencia.
+4. Crear tabla de vigencia de speech
+
+Responsable: Diego
+
+Campos mínimos:
+
+Plain Text
+1
+Mes
+2
+Equipo
+3
+Speech
+4
+Aprobación
+5
+Fecha Inicio
+6
+Fecha Fin
+Mostrar más líneas
+
+Objetivo:
+
+Servir como fuente oficial para Sofía.
+Facilitar notificaciones mensuales.
+5. Definir regla de aprobación de cambios de speech
+
+Objetivo:
+
+Formalizar flujo de aprobaciones previo a Calidad.
+
+Definir:
+
+Áreas participantes.
+Responsables.
+Evidencias requeridas.
+SLA de aprobación.
