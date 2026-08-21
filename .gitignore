@@ -27,7 +27,6 @@ logs/
 *.log
 
 # Scripts SQL de módulos
-*.sql
 !modules/**/*.sql
 !modules/**/**/*.sql
 
