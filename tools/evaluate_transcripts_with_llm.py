@@ -98,7 +98,7 @@ Responde estrictamente en formato JSON:
     try:
         response_str = llm_client.generate_content_with_retry(
             prompt=prompt,
-            model_name="gemini-2.5-flash-lite",
+            model_name="gemini-3.1-flash-lite",
             temperature=0.0,
             response_json=True
         )
@@ -144,7 +144,7 @@ def main():
     logger.info(f"   Archivo Base : {target_excel.name}")
     logger.info("=" * 75)
 
-    llm = GeminiClient(default_model="gemini-2.5-flash-lite")
+    llm = GeminiClient(default_model="gemini-3.1-flash-lite")
 
     wb = openpyxl.load_workbook(target_excel)
     ws = wb.active
@@ -200,10 +200,15 @@ def main():
 
             ws.cell(row=row_idx, column=col_res, value=resultado_texto)
             auditados_con_transcripcion += 1
+            time.sleep(3)  # Pausa de cortesía para respetar Rate Limits de Gemini
         else:
             logger.warning(f"--- [Caso {evaluados}/{total_rows - 1}] DNI {dni_8}: Sin transcripción en carpetas ---")
             ws.cell(row=row_idx, column=col_res, value="REVISIÓN MANUAL PENDIENTE")
             pendientes_manual += 1
+
+        # Guardado progresivo cada 5 casos
+        if evaluados % 5 == 0:
+            wb.save(AUDITED_FILE)
 
     wb.save(EXCEL_FILE)
     wb.save(AUDITED_FILE)

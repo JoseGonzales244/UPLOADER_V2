@@ -22,15 +22,22 @@ logger = logging.getLogger("VerintDownloader")
 def main():
     load_dotenv()
     
-    excel_audit = BASE_DIR / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
-    excel_main = BASE_DIR / "Solicitud Cumplimiento TC 2026.xlsx"
-    excel_file = excel_audit if excel_audit.exists() else excel_main
+    # Soporte para pasar archivo Excel y carpeta de salida por argumento CLI
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        excel_file = Path(sys.argv[1].strip())
+    else:
+        excel_audit = BASE_DIR / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
+        excel_main = BASE_DIR / "Solicitud Cumplimiento TC 2026.xlsx"
+        excel_file = excel_audit if excel_audit.exists() else excel_main
     
     if not excel_file.exists():
         logger.error(f"No se encontró el archivo Excel en: {excel_file}")
         return
 
-    output_dir = BASE_DIR / "data" / "transcripciones_pa"
+    if len(sys.argv) > 2 and sys.argv[2].strip():
+        output_dir = Path(sys.argv[2].strip())
+    else:
+        output_dir = BASE_DIR / "data" / "transcripciones_pa"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 75)

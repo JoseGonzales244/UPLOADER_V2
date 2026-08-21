@@ -586,25 +586,62 @@ class VerintAPIClient:
             
         raise RuntimeError(f"Timeout de {timeout_minutes} minutos agotado esperando el reporte '{report_name}' en Verint.")
             
-    def get_interaction_transcription_api(self, call_id: str) -> Optional[Dict[str, Any]]:
+    def convert_to_qdi_by_call_id(self, call_id: str, days: int = 365) -> str:
         """
-        Obtiene la transcripción JSON completa de una llamada por CONID (call_id) vía API REST directa.
-        Retorna la estructura deserializada con WordsSequences (Hablantes Agent/Customer, Timestamps y Texto).
+        Construye el XML QDI apuntando a CUSTOM_DATA_STRING (FieldID 5 / Custom Data String 5),
+        donde Genesys y la ingesta de Interbank indexan el CONID / UUID de la llamada.
         """
-        if not self.speech_session_id:
-            self.init_speech_session(instance_id=247115)
-
-        now_iso = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        clean_id = str(call_id).strip()
         guid_str = str(uuid.uuid4())
+        now_iso = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.0000000+00:00")
         
-        # Fecha amplia para la búsqueda por ID único de llamada
-        from_fmt = "2026-01-01T00:00:00.0000000+00:00"
-        to_fmt = "2026-12-31T23:59:59.0000000+00:00"
+        return f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <GUID>{guid_str}</GUID>
+  <creationTime>{now_iso}</creationTime>
+  <MajorVersion>0</MajorVersion>
+  <MinorVersion>0</MinorVersion>
+  <QueryType>Session</QueryType>
+  <DataSource>Unified</DataSource>
+  <Direction>Full</Direction>
+  <Security>
+    <QDIRestrictionFlags ETMFilters="Active" MultiChannelApp="Active" PersonalTag="Inactive" />
+    <IsAgentQuery>false</IsAgentQuery>
+    <World>CCQ</World>
+    <QueryPurpose>SEARCH</QueryPurpose>
+  </Security>
+  <UserPreferences>
+    <NumberOfReturnedRows>100</NumberOfReturnedRows>
+    <TimeZone>UserTime</TimeZone>
+    <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
+  </UserPreferences>
+  <OrderDef>
+    <From>2026-01-01T00:00:00.0000000+00:00</From>
+    <To>2026-12-31T23:59:59.0000000+00:00</To>
+    <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
+    <RangeInDays>{days}</RangeInDays>
+    <FieldRelation>Segment</FieldRelation>
+    <TimeOfDayID>-1</TimeOfDayID>
+  </OrderDef>
+  <Fields>
+    <Field xsi:type="QDIFieldExtended">
+      <Values>
+        <Value>{clean_id}</Value>
+      </Values>
+      <SessionName>
+        <FieldID>5</FieldID>
+        <Name>CUSTOM_DATA_STRING</Name>
+      </SessionName>
+      <Operator>contains</Operator>
+      <FieldRelation>Segment</FieldRelation>
+      <IsExtendedCustomData>true</IsExtendedCustomData>
+    </Field>
+  </Fields>
+</QDI>"""
 
-    def convert_to_qdi_by_call_id(self, call_id: str, days: int = 365) -> Optional[str]:
+    def convert_to_qdi_by_switch_id(self, call_id: str, days: int = 365) -> Optional[str]:
         """
-        Invoca el endpoint oficial /Ultra/api/SearchServices/ConvertToQDI de Verint
-        con el elemento SwitchCallID para obtener el XML QDI generado por el servidor.
+        Fallback: Invoca el endpoint oficial /Ultra/api/SearchServices/ConvertToQDI de Verint
+        con el elemento SwitchCallID para PBX/Conmutador.
         """
         url = f"{self.base_url}/Ultra/api/SearchServices/ConvertToQDI"
         headers = {
@@ -653,9 +690,9 @@ class VerintAPIClient:
             res = self.session.post(url, json=payload, headers=headers)
             if res.status_code == 200 and res.text:
                 return res.text
-            logger.error(f"ConvertToQDI falló (HTTP {res.status_code}): {res.text[:200]}")
+            logger.debug(f"ConvertToQDI SwitchCallID retornó HTTP {res.status_code}")
         except Exception as e:
-            logger.error(f"Error en ConvertToQDI: {e}")
+            logger.debug(f"Error en ConvertToQDI SwitchCallID: {e}")
         return None
 
     def get_current_result_set_docs_amount(self) -> int:
@@ -747,74 +784,157 @@ class VerintAPIClient:
 
     def get_interaction_transcription_api(self, call_id: str, instance_id: int = 247115) -> Optional[Dict[str, Any]]:
         """
-        Obtiene la transcripción JSON de una llamada por CONID (call_id) siguiendo
-        el ciclo de vida completo 1:1 de Verint UI:
-        1. ConvertToQDI -> Obtiene el XML oficial (SwitchCallID).
-        2. SetFilterAsSearch -> Aplica el filtro en la sesión activa.
-        3. GetCurrentResultSetDocsAmount -> Compila el Result Set en el servidor.
-        4. GetContactsResultSet -> Obtiene los contactos reales de la llamada.
-        5. GetInteractionTranscription -> Descarga el diálogo con todos los turnos.
+        Obtiene la transcripción JSON real de una llamada por su ID de llamada (SWITCH_CALL_ID / CONID)
+        siguiendo el flujo 100% nativo de Verint Speech Analytics:
+        1. Construye el QDI de búsqueda en Speech Analytics (CentralContact / IFind / SWITCH_CALL_ID).
+        2. Aplica el filtro con ConvertToLDFO y SetFilterAsSearch en la sesión activa.
+        3. Obtiene el resultado con GetContactsResultSet. Si no hay contactos, retorna None (sin duplicar).
+        4. Invoca GetContactPlayerData para obtener el Channel, StartTime exacto y CategoriesIds.
+        5. Invoca GetInteractionTranscription para descargar todos los turnos del diálogo.
         """
+        clean_cid = str(call_id).strip()
         if not self.speech_session_id:
             if not self.init_speech_session(instance_id=instance_id):
-                logger.warning(f"No se pudo inicializar sesión en Verint para call_id={call_id}")
+                logger.warning(f"No se pudo inicializar sesión en Verint para call_id={clean_cid}")
                 return None
             self.select_televentas_project()
 
-        # 1. Obtener QDI oficial de Verint
-        qdi_xml = self.convert_to_qdi_by_call_id(call_id, days=180)
-        if not qdi_xml:
-            logger.warning(f"No se pudo generar QDI oficial para call_id={call_id}")
+        # 1. XML QDI para Speech Analytics (Televentas)
+        qdi_speech = f"""<QDI xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <GUID>00000000-0000-0000-0000-000000000000</GUID>
+  <creationTime>2026-08-20T04:02:00.0000000+00:00</creationTime>
+  <MajorVersion>0</MajorVersion>
+  <MinorVersion>0</MinorVersion>
+  <QueryType>Session</QueryType>
+  <DataSource>CentralContact</DataSource>
+  <Direction>Relative_range</Direction>
+  <Security>
+    <UserId>2</UserId>
+    <IsAgentQuery>false</IsAgentQuery>
+    <World>IFind</World>
+  </Security>
+  <UserPreferences>
+    <NumberOfReturnedRows>100</NumberOfReturnedRows>
+    <TimeZone>UserTime</TimeZone>
+    <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
+  </UserPreferences>
+  <OrderDef>
+    <From>0001-01-01T00:00:00.0000000+00:00</From>
+    <To>0001-01-01T00:00:00.0000000+00:00</To>
+    <RefFrom>0001-01-01T00:00:00.0000000-00:00</RefFrom>
+    <RefTo>0001-01-01T00:00:00.0000000-00:00</RefTo>
+    <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
+    <RangeInDays>365</RangeInDays>
+    <FieldRelation>Segment</FieldRelation>
+    <TimeOfDayID>-1</TimeOfDayID>
+  </OrderDef>
+  <Fields>
+    <Field>
+      <Values>
+        <Value>{clean_cid}</Value>
+      </Values>
+      <SessionName>
+        <FieldID>0</FieldID>
+        <Name>SWITCH_CALL_ID</Name>
+      </SessionName>
+      <Operator>equal</Operator>
+      <FieldRelation>Segment</FieldRelation>
+    </Field>
+  </Fields>
+  <ComplexFields />
+  <Random>
+    <IsRandom>false</IsRandom>
+    <PickRowOutOfEvery>10</PickRowOutOfEvery>
+  </Random>
+</QDI>"""
+
+        # 2. Aplicar en Speech Analytics
+        url_ldfo = f"{self.base_url}/Ultra/api/SearchServices/ConvertToLDFO?templateName=SALeftPaneFacadeOldIFA"
+        headers_ldfo = {
+            "Accept": "*/*",
+            "Content-Type": "text/plain",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        if self.xsrf_token:
+            headers_ldfo["Impact360AuthToken"] = self.xsrf_token
+            headers_ldfo["xsrfToken"] = self.xsrf_token
+
+        try:
+            self.session.post(url_ldfo, content=qdi_speech, headers=headers_ldfo)
+        except Exception as e:
+            logger.debug(f"Error en ConvertToLDFO: {e}")
+
+        if not self.set_filter_as_search(qdi_speech, instance_id=instance_id):
+            logger.warning(f"No se pudo vincular la búsqueda en Verint para SWITCH_CALL_ID='{clean_cid}'")
             return None
 
-        # 2. Vincular la búsqueda activa
-        if not self.set_filter_as_search(qdi_xml, instance_id=instance_id):
-            logger.warning(f"No se pudo vincular la búsqueda en Verint para CONID='{call_id}'")
+        # 3. Obtener contactos filtrados
+        c_res = self.get_contacts_result_set(limit=5, page=1)
+        data_obj = c_res.get("Data") or {}
+        contacts = data_obj.get("Contacts") or []
+
+        if not contacts:
+            logger.warning(f"⚠️ Verint no devolvió contactos para SWITCH_CALL_ID='{clean_cid}'.")
             return None
 
-        # 3. Compilar el Result Set en el servidor de Verint
-        self.get_current_result_set_docs_amount()
+        contact = contacts[0]
+        sid = int(contact.get("SID") or contact.get("Sid") or contact.get("DocumentId") or 0)
+        dbs_id = contact.get("DbsId", 247)
+        agent_name = contact.get("Agent", "Desconocido")
+        local_time_str = contact.get("LocalStartTime", "")
 
-        # 4. Obtener contactos reales de la llamada filtrada
-        contacts_res = self.get_contacts_result_set(limit=10, page=1)
-        data_obj = contacts_res.get("Data") or {}
-        contacts_list = data_obj.get("Contacts") or []
+        logger.info(f"   ✓ Interacción localizada: Asesor='{agent_name}', Fecha={local_time_str}, SID={sid}")
 
-        if not contacts_list:
-            logger.warning(f"No se hallaron contactos en Verint para CONID='{call_id}'")
-            return None
-
-        contact = contacts_list[0]
-        if not isinstance(contact, dict):
-            return None
-
-        db_sid = contact.get("DbsId", 247)
-        sid_val = int(contact.get("Sid") or contact.get("DocumentId") or 0)
-        channel_val = contact.get("Channel") or contact.get("ChannelId") or 170909957
-        start_time_raw = contact.get("StartTime") or contact.get("StartTimeUTC") or "2026-04-29T17:04:22.820Z"
-        start_time_str = str(start_time_raw).strip()
-        local_date_str = (start_time_str[:10] if len(start_time_str) >= 10 else "2026-04-29") + "T00:00:00.000Z"
-
-        url = f"{self.base_url}/SpeechAnalytics/Services/Transcription/TranscriptionService.svc/GetInteractionTranscription"
-        headers = {
+        # 4. Obtener metadatos de audio exactos (GetContactPlayerData)
+        headers_json = {
             "accept": "application/json",
             "content-type": "application/json",
             "x-requested-with": "XMLHttpRequest"
         }
         if self.xsrf_token:
-            headers["xsrfToken"] = self.xsrf_token
-            headers["impact360authtoken"] = self.xsrf_token
+            headers_json["impact360authtoken"] = self.xsrf_token
+            headers_json["xsrfToken"] = self.xsrf_token
 
-        payload = {
+        url_player = f"{self.base_url}/SpeechAnalytics/Services/Contacts/ContactsService.svc/GetContactPlayerData"
+        player_payload = {
+            "session": self._get_speech_session_payload(),
+            "corpusId": contact.get("CorpusId", 60),
+            "docId": str(contact.get("DocumentId")),
+            "sid": sid,
+            "dbsId": dbs_id,
+            "playerContext": 0
+        }
+        
+        try:
+            res_p = self.session.post(url_player, json=player_payload, headers=headers_json)
+            player_data = res_p.json().get("GetContactPlayerDataResult", {}).get("Data", {}) if res_p.status_code == 200 else {}
+        except Exception:
+            player_data = {}
+
+        start_ms = player_data.get("StartTime") or contact.get("RealStartTime")
+        if start_ms:
+            dt = datetime.datetime.fromtimestamp(start_ms / 1000.0, datetime.timezone.utc)
+            start_iso = dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            local_iso = dt.strftime("%Y-%m-%d") + "T00:00:00.000Z"
+        else:
+            start_iso = "2026-04-29T17:04:22.820Z"
+            local_iso = "2026-04-29T00:00:00.000Z"
+
+        channel_val = player_data.get("Channel") or contact.get("Channel") or 170909957
+        cat_ids = player_data.get("CategoriesIds") or []
+
+        # 5. Descargar transcripción (GetInteractionTranscription)
+        url_trans = f"{self.base_url}/SpeechAnalytics/Services/Transcription/TranscriptionService.svc/GetInteractionTranscription"
+        payload_trans = {
             "instanceContext": {
                 "InstanceId": str(instance_id),
-                "ApplicationId": self.app_id
+                "ApplicationId": self.app_id or "2b0890f2-2473-4954-d6a9-dd29ca588b82"
             },
             "channel": channel_val,
             "module": 999502,
-            "startTime": start_time_str,
-            "localDate": local_date_str,
-            "categoriesIds": [],
+            "startTime": start_iso,
+            "localDate": local_iso,
+            "categoriesIds": cat_ids,
             "queryTerms": "",
             "editCategory": None,
             "language": "es-ES",
@@ -824,17 +944,23 @@ class VerintAPIClient:
             "isRedactionDisabled": False,
             "hideTranscriptionWrapperViewOn": False,
             "isOutOfSpeechContext": False,
-            "dbSid": db_sid,
-            "sid": sid_val,
+            "dbSid": dbs_id,
+            "sid": sid,
             "redactionStatus": 0
         }
 
         try:
-            res = self.session.post(url, json=payload, headers=headers)
-            if res.status_code == 200:
-                return res.json()
+            res_t = self.session.post(url_trans, json=payload_trans, headers=headers_json)
+            if res_t.status_code == 200:
+                res_data = res_t.json()
+                trans_res = res_data.get("GetInteractionTranscriptionResult") or {}
+                if trans_res.get("Success"):
+                    return res_data
+                else:
+                    err_msg = trans_res.get("ErrorDetails", {}).get("LocalizedMessageKey")
+                    logger.warning(f"Verint GetInteractionTranscription devolvió Success=False ({err_msg}) para SID={sid}")
             else:
-                logger.error(f"Error HTTP {res.status_code} en GetInteractionTranscription: {res.text[:200]}")
+                logger.error(f"Error HTTP {res_t.status_code} en GetInteractionTranscription: {res_t.text[:200]}")
         except Exception as e_post:
             logger.error(f"Excepción en GetInteractionTranscription: {e_post}")
         return None

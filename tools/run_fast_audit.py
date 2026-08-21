@@ -29,7 +29,7 @@ def run():
     wb = openpyxl.load_workbook(target_excel)
     ws = wb.active
 
-    llm = GeminiClient(default_model="gemini-2.5-flash-lite")
+    llm = GeminiClient(default_model="gemini-3.1-flash-lite")
 
     cache = {}
     total_rows = ws.max_row
@@ -83,7 +83,7 @@ TRANSCRIPCIÓN:
 Responde en JSON:
 {{"estado": "NO_ACEPTA" | "ACEPTA" | "NO_OFRECIDO", "timestamp_cliente": "mm:ss" | null, "cita": "...", "explicacion": "..."}}"""
                 try:
-                    res_str = llm.generate_content_with_retry(prompt=prompt, model_name="gemini-2.5-flash-lite", response_json=True)
+                    res_str = llm.generate_content_with_retry(prompt=prompt, model_name="gemini-3.1-flash-lite", response_json=True)
                     res_json = json.loads(res_str)
                     estado = str(res_json.get("estado")).upper()
                     ts = res_json.get("timestamp_cliente")

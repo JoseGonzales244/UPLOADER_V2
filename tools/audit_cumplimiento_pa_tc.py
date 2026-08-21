@@ -248,7 +248,7 @@ class PagoAutomaticoAuditor:
         """Inicializa conexiones a Verint API y cliente LLM."""
         logger.info("[INIT] Inicializando cliente LLM Gemini...")
         try:
-            self.llm_client = GeminiClient(default_model="gemini-2.5-flash")
+            self.llm_client = GeminiClient(default_model="gemini-3.1-flash-lite")
             logger.info("[INIT] ✓ Cliente LLM Gemini configurado.")
         except Exception as e:
             logger.error(f"[INIT] ❌ Error inicializando Gemini: {e}")
@@ -354,7 +354,7 @@ Responde estrictamente en formato JSON:
             try:
                 response_str = self.llm_client.generate_content_with_retry(
                     prompt=prompt,
-                    model_name="gemini-2.5-flash",
+                    model_name="gemini-3.1-flash-lite",
                     temperature=0.0,
                     response_json=True
                 )
