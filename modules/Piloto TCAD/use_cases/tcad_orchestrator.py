@@ -1,9 +1,15 @@
 import os
+import sys
 import re
 import datetime
 import logging
 from pathlib import Path
 import polars as pl
+
+# Asegurar que la raíz del proyecto esté en sys.path para ejecuciones directas por CLI
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from infrastructure.database.database import (
     load_credentials,
@@ -300,6 +306,10 @@ def run_tcad_monthly_ingest(period_str: str = None, con=None, progress_callback=
 
 
 if __name__ == "__main__":
-    import sys
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S"
+    )
     p = sys.argv[1] if len(sys.argv) > 1 else None
     run_tcad_monthly_ingest(p)
