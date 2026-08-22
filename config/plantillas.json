@@ -4130,7 +4130,7 @@
             "Tipo de dato": "FLOAT",
             "Nuevo nombre": "TCAD_B"
         },
-        "SEG_360_GC_Ofrecimiento": {
+        "TLV - Exp.Compra - Ofrecimiento Cross Seguro TC": {
             "Añadir": true,
             "Null:0/No Null:1": true,
             "Tipo de dato": "FLOAT",
