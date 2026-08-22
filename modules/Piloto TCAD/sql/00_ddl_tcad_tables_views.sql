@@ -149,14 +149,14 @@ tcad AS (
     GROUP BY base.CODDOC
 ),
 seg AS (
-    -- Agrupa ventas de seguros por cliente y asesor desde la tabla local de DLAB_GEC
+    -- Agrupa ventas de Seguro 360 (GESTION = 'STC') por cliente y asesor
     SELECT
         LPAD(TRIM(CODDOC), 8, '0') AS CODDOC,
         TRIM(CODPROMOT) AS CODPROMOT,
         MESDESEMBOLSO AS PERIODO,
         1 AS VENTA_SEG_FLAG
     FROM DLAB_GEC.M_EXP_VENTAS_SEG
-    WHERE PRODUCTO LIKE '%360%'
+    WHERE GESTION = 'STC'
     GROUP BY 1, 2, 3
 )
 SELECT
