@@ -52,6 +52,7 @@ flowchart TD
 - 📥 **INPUTS**:
   - **Servicio / API**: Plataforma Insight (PureCloud).
   - **Formato Origen**: Archivos de texto delimitados por tabulaciones (`.tsv`) descargados temporalmente.
+  - **Estrategia de Lectura**: Lectura robusta con Polars (`quote_char=None`, `truncate_ragged_lines=True`, `ignore_errors=True`) y fallback de codificación `latin-1` ante posibles inconsistencias de comillas en campos de texto libre.
   - **Insumos Requeridos**:
     1. `TRAFICO_GENESYS` (Plantilla `P009-INSIGHT_01_TRAFICO_GENESYS`)
     2. `CONV_ATTRIBUTES` (Plantilla `P010-INSIGHT_02_CONV_ATTRIBUTES`)

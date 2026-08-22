@@ -52,6 +52,7 @@ flowchart TD
 - 📥 **INPUTS**:
   - **Plataforma Origen**: Insight (PureCloud).
   - **Formato Origen**: Archivo `.tsv` / `.csv` descargado mediante automatización.
+  - **Estrategia de Lectura**: Lectura robusta con Polars (`quote_char=None`, `truncate_ragged_lines=True`, `ignore_errors=True`) y fallback de codificación `latin-1` para manejar comillas sin cerrar en comentarios de auditoría.
   - **Plantilla de Mapeo**: `P008-INSIGHT_07_EVALUATIONS` en `plantillas.json`.
 
 - 📤 **OUTPUTS**:

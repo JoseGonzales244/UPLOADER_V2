@@ -54,7 +54,8 @@ Esto iniciará el servidor Uvicorn FastAPI en `http://127.0.0.1:8000` y abrirá 
 - ⚡ **[FLUJO_CONSUMO.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CONSUMO.md)**: Detalle del proceso PBI Base Consumo (Fases 1 a 5, inputs/outputs por fase).
 - 📊 **[FLUJO_CALIDAD.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CALIDAD.md)**: Detalle del proceso PBI Evaluaciones Calidad (Fases 1 a 5, inputs/outputs por fase).
 - 🔒 **[FLUJO_CIERRE.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CIERRE.md)**: Detalle del Modo Cierre Mensual (idempotencia DELETE+INSERT, inputs/outputs por script).
-- 🚀 **[FLUJO_PILOTOS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_PILOTOS.md)**: Detalle de Piloto TCAD (Tarjetas Adicionales) y Piloto No Venta (Objeciones Speech Analytics).
+- 🚀 **[FLUJO_PILOTOS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_PILOTOS.md)**: Detalle de Piloto TCAD (Tarjetas Adicionales & Seguros 360) y Piloto No Venta (Objeciones Speech Analytics).
+- 📈 **[FLUJO_ENCUESTAS_NPS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_ENCUESTAS_NPS.md)**: Pipeline analítico parametrizado de Encuestas NPS IVR y cruce de colocaciones por producto.
 - 🎧 **[FLUJO_AUDIOS_Y_CARGA.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_AUDIOS_Y_CARGA.md)**: Descarga de Audios Genesys/Outlook e Ingesta a Teradata.
 - 🗺️ **[MAPA_FLUJO_EJECUCION_BOTONES.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/MAPA_FLUJO_EJECUCION_BOTONES.md)**: Mapeo de botones de la interfaz web hacia endpoints FastAPI y scripts SQL.
 - 🔄 **[PLAN_TRANSICION.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/PLAN_TRANSICION.md)**: **Plan completo de handover** — dependencias, credenciales, accesos, procedimiento de instalación y agenda de traspaso.
@@ -73,8 +74,11 @@ PLATAFORMA_CALIDAD_TELEVENTAS/
 │   ├── FLUJO_CONSUMO.md
 │   ├── FLUJO_CALIDAD.md
 │   ├── FLUJO_CIERRE.md
+│   ├── FLUJO_PILOTOS.md
+│   ├── FLUJO_ENCUESTAS_NPS.md
 │   ├── FLUJO_AUDIOS_Y_CARGA.md
-│   └── MAPA_FLUJO_EJECUCION_BOTONES.md
+│   ├── MAPA_FLUJO_EJECUCION_BOTONES.md
+│   └── PLAN_TRANSICION.md
 ├── backend/
 │   ├── main.py                 <-- Servidor FastAPI con WebSockets y REST API
 │   └── __init__.py
