@@ -268,8 +268,10 @@ def _run_consumo_task(req: ConsumoRequest):
             start_from_script=req.start_script
         )
     except Exception as e:
+        from infrastructure.system.friendly_errors import format_friendly_error
+        friendly_err = format_friendly_error(e, context="Flujo de Consumo")
         logger.error(f"Error en flujo de Consumo: {e}")
-        send_progress_update(f"❌ Error en flujo de Consumo: {e}", "error")
+        send_progress_update(f"❌ Error en flujo de Consumo: {friendly_err}", "error")
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
@@ -330,9 +332,11 @@ def _run_calidad_task(req: CalidadRequest):
                 stop_checker=is_stop_requested
             )
     except Exception as e:
+        from infrastructure.system.friendly_errors import format_friendly_error
         proc_label = "Cierre Mensual" if req.solo_cierre else "flujo de Calidad"
+        friendly_err = format_friendly_error(e, context=proc_label)
         logger.error(f"Error en {proc_label}: {e}")
-        send_progress_update(f"❌ Error en {proc_label}: {e}", "error")
+        send_progress_update(f"❌ Error en {proc_label}: {friendly_err}", "error")
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
@@ -392,8 +396,10 @@ def _run_audios_task(req: AudioRequest):
         else:
             send_progress_update("🎉 ¡Proceso de descarga de audios completado!", "success", progress=1.0)
     except Exception as e:
+        from infrastructure.system.friendly_errors import format_friendly_error
+        friendly_err = format_friendly_error(e, context="Descarga de Audios Genesys")
         logger.error(f"Error en descarga de audios: {e}")
-        send_progress_update(f"❌ Error en proceso de audios: {e}", "error")
+        send_progress_update(f"❌ Error en proceso de audios: {friendly_err}", "error")
     finally:
         process_state["running"] = False
         process_state["current_process"] = None
@@ -563,8 +569,10 @@ def _run_upload_task(
                 logger.warning(f"Advertencia al ejecutar automatización de GROUPED tras P021: {grouped_err}")
                 send_progress_update(f"⚠️ Ingesta P021 completada, pero ocurrió una advertencia al agrupar: {grouped_err}", "warning")
     except Exception as e:
+        from infrastructure.system.friendly_errors import format_friendly_error
+        friendly_err = format_friendly_error(e, context=teradata_table)
         logger.exception(f"Error en ingesta a Teradata ({teradata_table}): {e}")
-        send_progress_update(f"❌ Error en ingesta a Teradata: {e}", "error")
+        send_progress_update(f"❌ Error en ingesta a Teradata: {friendly_err}", "error")
     finally:
         if os.path.exists(tmp_path):
             try:

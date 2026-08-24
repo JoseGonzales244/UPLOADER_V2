@@ -586,13 +586,13 @@ def run_quality_process_flow(
                     clear_table=True,
                     progress_callback=progress_callback
                 )
+                if progress_callback:
+                    progress_callback("🏁 Fase 1 concluida exitosamente: Evaluaciones Insight cargadas.", "success")
             finally:
                 try:
                     con.close()
                 except Exception:
                     pass
-                if progress_callback:
-                    progress_callback("🏁 Fase 1 concluida exitosamente: Evaluaciones Insight cargadas.", "success")
                 
     # ----------------------------------------------------
     # PHASE 2: DOWNLOAD & INGEST VERINT (SPEECH ANALYTICS)
@@ -606,11 +606,21 @@ def run_quality_process_flow(
         if not all_files:
             all_files = sorted(glob.glob(os.path.join(INPUT_PROCESO_CALIDAD_DIR, "Export_Calidad_*.xls")))
             
-        # Only keep files that were downloaded/modified today
+        def _is_valid_verint_file(fpath: str) -> bool:
+            try:
+                if not os.path.exists(fpath) or os.path.getsize(fpath) < 1000:
+                    return False
+                with open(fpath, "rb") as fp:
+                    header = fp.read(8)
+                return header.startswith(b"PK\x03\x04") or header.startswith(b"\xd0\xcf\x11\xe0")
+            except Exception:
+                return False
+
+        # Only keep files that were downloaded/modified today and are valid Excel/ZIP
         today_date = datetime.date.today()
         existing_verint_files = [
             f for f in all_files
-            if datetime.date.fromtimestamp(os.path.getmtime(f)) == today_date and os.path.getsize(f) > 0
+            if datetime.date.fromtimestamp(os.path.getmtime(f)) == today_date and _is_valid_verint_file(f)
         ]
             
         if existing_verint_files:
@@ -731,13 +741,13 @@ def run_quality_process_flow(
                     )
                     # Only clear table on the first partition, append subsequent partitions
                     clear_table = False
+                if progress_callback:
+                    progress_callback("🏁 Fase 2 concluida exitosamente: Speech Analytics Verint cargado en Teradata.", "success")
             finally:
                 try:
                     con.close()
                 except Exception:
                     pass
-                if progress_callback:
-                    progress_callback("🏁 Fase 2 concluida exitosamente: Speech Analytics Verint cargado en Teradata.", "success")
 
     # ----------------------------------------------------
     # PHASE 3: INGEST LOCAL ACCION_TOMADA EXCEL
@@ -792,13 +802,13 @@ def run_quality_process_flow(
                 clear_table=True,
                 progress_callback=progress_callback
             )
+            if progress_callback:
+                progress_callback("🏁 Fase 3 concluida exitosamente: Acciones Tomadas cargadas en Teradata.", "success")
         finally:
             try:
                 con.close()
             except Exception:
                 pass
-            if progress_callback:
-                progress_callback("🏁 Fase 3 concluida exitosamente: Acciones Tomadas cargadas en Teradata.", "success")
 
     # ----------------------------------------------------
     # PHASE 4: EXECUTE SQL TRANSFORMATION SCRIPTS
@@ -889,6 +899,8 @@ def run_quality_process_flow(
                 
             # Escribir la marca de timestamp en conector_calidad.txt únicamente si se ejecutó la Fase 4 (SQL Scripts)
             _write_powerbi_timestamp_file("conector_calidad.txt")
+            if progress_callback:
+                progress_callback("🏁 Fase 4 concluida exitosamente: Scripts SQL aplicados.", "success")
                 
         except Exception as e:
             if progress_callback:
@@ -903,8 +915,6 @@ def run_quality_process_flow(
                 con.close()
             except Exception:
                 pass
-            if progress_callback:
-                progress_callback("🏁 Fase 4 concluida exitosamente: Scripts SQL aplicados.", "success")
 
     # ----------------------------------------------------
     # PHASE 5: NTD PROCESS

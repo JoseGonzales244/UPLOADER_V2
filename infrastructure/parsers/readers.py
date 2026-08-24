@@ -1,3 +1,4 @@
+import os
 import io
 import re
 import pandas as pd
@@ -84,8 +85,37 @@ def _read_excel_with_openpyxl(uploaded_file) -> pl.DataFrame | None:
     return pl.DataFrame(data_rows, schema=header_names, orient="row", infer_schema_length=None)
 
 
+def _validate_excel_source(uploaded_file):
+    """Valida que el archivo exista, tenga contenido y coincida con la firma binaria de un Excel (.xlsx o .xls)."""
+    filename = uploaded_file if isinstance(uploaded_file, str) else getattr(uploaded_file, "name", "archivo_excel.xlsx")
+    if isinstance(uploaded_file, str):
+        if not os.path.exists(uploaded_file):
+            raise FileNotFoundError(f"No se encontró el archivo Excel: {uploaded_file}")
+        size = os.path.getsize(uploaded_file)
+        if size == 0:
+            raise ValueError(f"El archivo Excel '{os.path.basename(uploaded_file)}' está vacío (0 bytes).")
+        with open(uploaded_file, "rb") as f:
+            header = f.read(16)
+    else:
+        content = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file
+        if len(content) == 0:
+            raise ValueError(f"El archivo Excel '{filename}' está vacío (0 bytes).")
+        header = content[:16]
+
+    # Valid zip starts with PK\x03\x04, legacy XLS starts with \xD0\xCF\x11\xE0
+    is_zip = header.startswith(b"PK\x03\x04") or header.startswith(b"PK\x05\x06") or header.startswith(b"PK\x07\x08")
+    is_xls = header.startswith(b"\xd0\xcf\x11\xe0")
+    if not (is_zip or is_xls):
+        if header.strip().startswith(b"<!DOC") or header.strip().startswith(b"<html") or header.strip().startswith(b"<?xml"):
+            raise ValueError(f"El archivo '{os.path.basename(filename)}' no es un Excel válido (contiene una respuesta de error HTML/XML del servidor).")
+        raise ValueError(f"El archivo '{os.path.basename(filename)}' no tiene un formato Excel válido (.xlsx corrupto o incompleto).")
+
+
 def read_excel_file(uploaded_file, selected_template: str | None = None, templates: dict | None = None) -> pl.DataFrame:
     """Reads Excel files (.xlsx, .xls) using the high-performance calamine engine or openpyxl for templates with header on row 29."""
+    _validate_excel_source(uploaded_file)
+    filename = os.path.basename(uploaded_file) if isinstance(uploaded_file, str) else getattr(uploaded_file, "name", "archivo_excel.xlsx")
+
     if _should_use_manual_excel_reader(selected_template):
         source = uploaded_file if isinstance(uploaded_file, str) else (uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file)
         try:
@@ -95,11 +125,16 @@ def read_excel_file(uploaded_file, selected_template: str | None = None, templat
             if df is not None:
                 return df
 
-    if isinstance(uploaded_file, str):
-        df = pl.read_excel(uploaded_file, engine="calamine")
-    else:
-        df = pl.read_excel(uploaded_file.getvalue(), engine="calamine")
-    return df
+    try:
+        if isinstance(uploaded_file, str):
+            df = pl.read_excel(uploaded_file, engine="calamine")
+        else:
+            df = pl.read_excel(uploaded_file.getvalue(), engine="calamine")
+        return df
+    except Exception as err:
+        from infrastructure.system.friendly_errors import format_friendly_error
+        friendly_msg = format_friendly_error(err, context=filename)
+        raise ValueError(friendly_msg) from err
 
 
 def read_csv_file(uploaded_file) -> pl.DataFrame:
