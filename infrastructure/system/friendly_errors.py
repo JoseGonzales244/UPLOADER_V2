@@ -82,11 +82,15 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
             "Verifique las credenciales ingresadas o el archivo de configuración .env."
         )
 
-    # 7. Error de Teradata 2801 / Conexión / VPN / Timeout (WinError 10060 / 10061)
-    if any(k in raw_msg.lower() for k in ["error 2801", "10060", "10061", "connection refused", "timed out", "host unreachable", "network unreachable"]):
+    # 7. Error de Teradata 2801 / 395 / 528 / Conexión / VPN / Timeout (WinError 10060 / 10061 / wsarecv)
+    if any(k in raw_msg.lower() for k in [
+        "error 2801", "error 395", "error 528", "08s01", "wsarecv", "failure receiving message header",
+        "read tcp", "10060", "10061", "connection refused", "connection reset", "timed out",
+        "host unreachable", "network unreachable"
+    ]):
         return (
-            "No se pudo establecer conexión con el servidor de Teradata. "
-            "Verifique que su equipo esté conectado a la VPN de Interbank o a la red corporativa."
+            "Se perdió la conexión con el servidor de Teradata durante la transferencia de datos. "
+            "Verifique la estabilidad de su conexión a la VPN de Interbank o reintente la ejecución."
         )
 
     # 8. Error de Verint WFO (Sesión / Autenticación / Timeout)

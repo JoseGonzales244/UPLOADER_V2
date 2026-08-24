@@ -42,6 +42,15 @@ class TestFriendlyErrors(unittest.TestCase):
         friendly = format_friendly_error(conn_error)
         self.assertIn("VPN", friendly)
 
+    def test_teradata_batch_tcp_disconnect_error(self):
+        err = (
+            "[Teradata SQL Driver] [Error 528] [SQLState HY000] A failure occurred while executing rows 4642 through 5000 of a batch request. "
+            "Caused by [Error 395] [SQLState 08S01] Failure receiving message header. "
+            "Caused by read tcp 192.168.18.190:49985->10.11.240.35:1025: wsarecv: Se produjo un error durante el intento de conexión..."
+        )
+        friendly = format_friendly_error(err)
+        self.assertIn("conexión con el servidor de Teradata", friendly)
+
     def test_permission_error(self):
         perm_error = "[Errno 13] Permission denied: 'data/input/proceso_calidad/ACCION_TOMADA.xlsx'"
         friendly = format_friendly_error(perm_error)
