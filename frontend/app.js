@@ -222,22 +222,26 @@ function App() {
                                   newType === 'warning' ||
                                   newType === 'error';
 
-              if (prev.length > 0 && !isMilestone) {
+              if (!newText) return prev;
+
+              if (prev.length > 0) {
                 const lastLog = prev[prev.length - 1];
                 if (lastLog.text === newText) {
                   return prev;
                 }
-                const sigNew = getSig(newText);
-                const sigLast = getSig(lastLog.text);
+                if (!isMilestone) {
+                  const sigNew = getSig(newText);
+                  const sigLast = getSig(lastLog.text);
 
-                if (sigNew && sigLast && sigNew === sigLast) {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    time: newTime,
-                    text: newText,
-                    type: newType
-                  };
-                  return updated;
+                  if (sigNew && sigLast && sigNew === sigLast) {
+                    const updated = [...prev];
+                    updated[updated.length - 1] = {
+                      time: newTime,
+                      text: newText,
+                      type: newType
+                    };
+                    return updated;
+                  }
                 }
               }
 
