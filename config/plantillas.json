@@ -4135,6 +4135,12 @@
             "Null:0/No Null:1": true,
             "Tipo de dato": "FLOAT",
             "Nuevo nombre": "OFRE_360"
+        },
+        "Piloto TCAD campaña": {
+            "Añadir": true,
+            "Null:0/No Null:1": true,
+            "Tipo de dato": "FLOAT",
+            "Nuevo nombre": "FLG_NEW_SPEECH_TCAD"
         }
     },
     "P026-CROSS_TCAD": {

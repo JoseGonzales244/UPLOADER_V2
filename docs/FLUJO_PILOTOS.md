@@ -37,7 +37,7 @@ flowchart TD
   - `P026-CROSS_TCAD`: Mapeo para consolidado de cross TC adicional.
 - **Tablas Físicas Teradata:**
   - `DLAB_GEC.M_EXP_DATA_TCAD_SA`: Datos de llamadas Speech Analytics.
-    - *Columnas clave*: `CONID` (PI), `DNI`, `REG_EV`, `FECHA_LLAMADA`, `OFRE_TCAD`, `OFRE_360`, `TCAD_A`, `TCAD_B`, `VENTA_TC`, `VENTA_TCAD`, `PERIODO`.
+    - *Columnas clave*: `CONID` (PI), `DNI`, `REG_EV`, `FECHA_LLAMADA`, `OFRE_TCAD`, `OFRE_360`, `TCAD_A`, `TCAD_B`, `FLG_NEW_SPEECH_TCAD`, `VENTA_TC`, `VENTA_TCAD`, `PERIODO`.
   - `DLAB_GEC.M_EXP_CROSS_TCAD`: Datos consolidados de solicitudes y aprobaciones de adicionales.
     - *Primary Index*: `(DNI, REG_EJECUTIVO, FECHA_SOLICITUD)`.
     - *Columnas*: `PERIODO`, `DNI`, `REG_EJECUTIVO`, `EJECUTIVO`, `SUPERVISOR`, `INDICADOR`, `FECHA_SOLICITUD`, `FECHA_APROBACION`, `FLG_VALIDO`, `CODIGO`.
@@ -46,7 +46,7 @@ flowchart TD
   1. `DLAB_GEC.V_EXP_VENTAS_TC_TCAD`: Ventas de tarjetas de crédito normalizadas y filtradas por ejecutivos de Televentas (`EQUIPOVENTA_DSC IN ('TLV TARJETAS', 'Televentas')`, `SUB_EQUIPO = 'TC'`, `ESTADOSOLICITUD_DSC = 'Aprobado'`).
   2. `DLAB_GEC.V_FCT_TCAD`: Filtra y clasifica adicionales vendidas (`TCAD_VENDIDA`) y activadas (`TCAD_ACTIVADA`) desde `M_EXP_CROSS_TCAD`.
   3. `DLAB_GEC.V_FNL_TCAD_SIMPLE`: Funnel analítico que consolida por cliente (`CODDOC`) y fecha de venta:
-     - Ofrecimientos directos: `OFRE_TCAD`, `OFRE_360`, `OFER_A`, `OFER_B`.
+     - Ofrecimientos directos: `OFRE_TCAD`, `OFRE_360`, `OFER_A`, `OFER_B`, `FLG_NEW_SPEECH_TCAD` (Flag 1/0 de llamadas con nuevo speech piloto).
      - Adicionales: `VENTA_TCAD_FLAG`, `CANT_TCAD`, `ACTIVA_TCAD_FLAG`, `CANT_TCAD_ACTIVADA`.
      - Seguros: `VENTA_SEG_FLAG` (Cross Seguro 360 obtenido de `M_EXP_VENTAS_TC` con `FLAGSEGURO = 1`).
   4. `DLAB_GEC.V_FCT_TCAD_ATRIB`: Atribuye las tarjetas adicionales vendidas al promotor y supervisor de la venta principal de TC en el período correspondiente.
