@@ -272,7 +272,7 @@ def initialize_verint_session(headless: bool = False):
     Devuelve los objetos (p, browser, context, page) para reutilizarlos en barridos masivos.
     """
     verint_url = os.getenv("VERINT_URL", "https://wfo.mt5.verintcloudservices.com/wfo/control/signin")
-    username = os.getenv("VERINT_USER") or os.getenv("MICROSOFT_USER") or os.getenv("USER_EMAIL")
+    username = os.getenv("VERINT_USER")
 
     if not username:
         raise ValueError("Falta el usuario de Verint en el archivo .env (VERINT_USER)")
