@@ -277,7 +277,7 @@ def initialize_verint_session(headless: bool = False):
     if not username:
         raise ValueError("Falta el usuario de Verint en el archivo .env (VERINT_USER)")
 
-    project_root = Path(BASE_DIR).parent.parent
+    project_root = Path(__file__).resolve().parents[4]
     profile_dir = project_root / "data" / "verint_browser_profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
 
