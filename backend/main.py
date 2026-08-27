@@ -33,8 +33,7 @@ if BASE_DIR not in sys.path:
 from infrastructure.system.logging_config import setup_logging
 from modules.consumo.use_cases.consumo_orchestrator import run_orchestration_flow
 from modules.calidad.use_cases.quality_orchestrator import run_quality_process_flow
-from infrastructure.parsers.readers import read_excel_file, read_csv_file, read_unicode_text_file
-from infrastructure.parsers.cleaners import clean_dataframe, sanitize_identifier, suggest_sql_type
+from infrastructure.parsers.preview_service import FilePreviewService
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
 from infrastructure.system.health_check import run_preflight_health_check
 from modules.cierre.use_cases.cierre_orchestrator import run_cierre_process_flow
@@ -422,68 +421,14 @@ async def preview_file(
     selected_template: str = Form("Ninguno")
 ):
     try:
-        templates = load_templates()
         content = await file.read()
-        
-        file_bytes = io.BytesIO(content)
-
-        if file_type == "Excel":
-            df = read_excel_file(file_bytes, selected_template=selected_template, templates=templates)
-        elif file_type == "CSV":
-            df = read_csv_file(file_bytes)
-        else:
-            df = read_unicode_text_file(file_bytes)
-
-        # Sugerir tipos de datos
-        columns_info = []
-        template_config = templates.get(selected_template, {})
-        
-        for col in df.columns:
-            suggested = suggest_sql_type(df[col].dtype)
-
-            if not template_config:
-                selected = True
-                new_name = sanitize_identifier(col)
-                convert_nulls = False
-                datatype = suggested
-            elif col in template_config:
-                selected = template_config[col].get("Añadir", True)
-                new_name = sanitize_identifier(template_config[col].get("Nuevo nombre", col))
-                convert_nulls = template_config[col].get("Null:0/No Null:1", False)
-                datatype = template_config[col].get("Tipo de dato", suggested)
-            else:
-                selected = False
-                new_name = sanitize_identifier(col)
-                convert_nulls = False
-                datatype = suggested
-
-            columns_info.append({
-                "original_name": col,
-                "name": col,
-                "new_name": new_name,
-                "datatype": datatype,
-                "selected": selected,
-                "convert_nulls": convert_nulls
-            })
-
-        # Aplicar la plantilla sobre el DataFrame de vista previa para reflejar las transformaciones finales
-        df_transformed = clean_dataframe(
-            df,
-            selections=columns_info,
-            convertir_sin_acentos=True,
-            transformar_varchar_latin=False,
-            max_len_varchar=3000
+        preview_data = FilePreviewService.generate_preview(
+            file_source=content,
+            filename=file.filename,
+            file_type=file_type,
+            selected_template=selected_template
         )
-        preview_rows = df_transformed.head(10).to_dicts()
-
-        return {
-            "status": "ok",
-            "filename": file.filename,
-            "total_rows": len(df),
-            "total_cols": len(df_transformed.columns),
-            "columns": columns_info,
-            "preview": preview_rows
-        }
+        return preview_data
     except Exception as e:
         logger.error(f"Error procesando archivo para vista previa: {e}")
         return JSONResponse(status_code=400, content={"status": "error", "detail": str(e)})
@@ -508,21 +453,15 @@ def _run_upload_task(
         process_state["current_process"] = f"Ingesta Teradata: {teradata_table}"
         send_progress_update("🛠️ Leyendo archivo para ingesta...", "info", progress=0.1)
 
-        templates = load_templates()
-        if file_type == "Excel":
-            df = read_excel_file(tmp_path, selected_template=selected_template, templates=templates)
-        elif file_type == "CSV":
-            df = read_csv_file(tmp_path)
-        else:
-            df = read_unicode_text_file(tmp_path)
-
         send_progress_update("🧹 Limpiando y preparando datos...", "info", progress=0.3)
-        df_clean = clean_dataframe(
-            df,
-            selections,
-            convertir_sin_acentos,
-            transformar_varchar_latin,
-            max_len_varchar
+        df_clean, final_selections = FilePreviewService.prepare_upload_data(
+            file_path=tmp_path,
+            file_type=file_type,
+            selected_template=selected_template,
+            selections=selections,
+            convertir_sin_acentos=convertir_sin_acentos,
+            transformar_varchar_latin=transformar_varchar_latin,
+            max_len_varchar=max_len_varchar
         )
 
         send_progress_update("📡 Conectando a Teradata...", "info", progress=0.5)
@@ -550,7 +489,7 @@ def _run_upload_task(
             con,
             teradata_table,
             df_clean,
-            selections,
+            final_selections,
             clear_table,
             progress_callback=progress_cb
         )
@@ -614,43 +553,6 @@ async def upload_to_teradata(
             selections = json.loads(columns_json)
         except Exception:
             pass
-
-    if not selections:
-        templates = load_templates()
-        if file_type == "Excel":
-            df = read_excel_file(tmp_path, selected_template=selected_template, templates=templates)
-        elif file_type == "CSV":
-            df = read_csv_file(tmp_path)
-        else:
-            df = read_unicode_text_file(tmp_path)
-        template_config = templates.get(selected_template, {})
-        for col in df.columns:
-            suggested = suggest_sql_type(df[col].dtype)
-
-            if not template_config:
-                selected = True
-                new_name = sanitize_identifier(col)
-                convert_nulls = False
-                datatype = suggested
-            elif col in template_config:
-                selected = template_config[col].get("Añadir", True)
-                new_name = sanitize_identifier(template_config[col].get("Nuevo nombre", col))
-                convert_nulls = template_config[col].get("Null:0/No Null:1", False)
-                datatype = template_config[col].get("Tipo de dato", suggested)
-            else:
-                selected = False
-                new_name = sanitize_identifier(col)
-                convert_nulls = False
-                datatype = suggested
-
-            selections.append({
-                "original_name": col,
-                "name": col,
-                "new_name": new_name,
-                "datatype": datatype,
-                "selected": selected,
-                "convert_nulls": convert_nulls
-            })
 
     background_tasks.add_task(
         _run_upload_task,

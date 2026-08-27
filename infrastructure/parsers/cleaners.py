@@ -41,7 +41,13 @@ def suggest_sql_type(dtype) -> str:
     else:
         return 'VARCHAR(255)'
 
-def clean_dataframe(df: pl.DataFrame, selections: list, convertir_sin_acentos: bool, transformar_varchar_latin: bool, max_len_varchar: int) -> pl.DataFrame:
+def clean_dataframe(
+    df: pl.DataFrame,
+    selections: list,
+    convertir_sin_acentos: bool = True,
+    transformar_varchar_latin: bool = False,
+    max_len_varchar: int = 3000
+) -> pl.DataFrame:
     """
     Cleans, projects, and renames the DataFrame columns in parallel using vectorized Polars expressions.
     """

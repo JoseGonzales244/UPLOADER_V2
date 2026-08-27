@@ -11,9 +11,10 @@ class SQLScriptExecutionError(Exception):
         super().__init__(f"Error en script '{script_name}' (sentencia {statement_index}): {original_error}")
 
 
-def get_period_params(period_str):
+def get_period_params(period_str: str) -> dict:
     """
     Calculates parameters based on a period string in YYYYMM format (e.g. '202607').
+    Returns unified dictionary with both lowercase and uppercase keys.
     """
     if not re.match(r'^\d{6}$', period_str):
         raise ValueError(f"Formato de periodo inválido '{period_str}'. Debe ser YYYYMM.")
@@ -38,30 +39,98 @@ def get_period_params(period_str):
         "periodo_prev": period_prev,
         "anio": year,
         "mes": month,
-        "fec_inicio_mes": fec_inicio_mes
+        "fec_inicio_mes": fec_inicio_mes,
+        "PERIODO": period_str,
+        "PERIODO_ANTERIOR": period_prev,
     }
 
 
-def split_sql_statements(sql_content):
+# Aliases for backward compatibility
+get_quality_period_params = get_period_params
+get_cierre_period_params = get_period_params
+
+
+def inject_variables(sql_text: str, context: dict) -> str:
     """
-    Splits SQL script content into individual executable statements.
-    Removes comments and handles semicolons safely.
+    Reemplaza variables de tipo {VARIABLE} con sus valores del diccionario de contexto (case-insensitive).
     """
-    # Remove single line comments
-    content = re.sub(r'--.*', '', sql_content)
-    # Remove multiline comments
-    content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+    for key, val in context.items():
+        pattern = r'\{' + re.escape(str(key)) + r'\}'
+        sql_text = re.compile(pattern, re.IGNORECASE).sub(str(val), sql_text)
+    return sql_text
 
-    # Split by semicolon
-    statements = content.split(';')
-    cleaned_statements = []
 
-    for stmt in statements:
-        stmt_clean = stmt.strip()
-        if stmt_clean:
-            cleaned_statements.append(stmt_clean)
+def parse_statements(sql_text: str) -> list:
+    """
+    Limpia comentarios (bloque /* */ y línea simple --) y separa sentencias por punto y coma,
+    respetando las cadenas de texto literales.
+    """
+    # Eliminar comentarios de bloque
+    sql_cleaned = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
 
-    return cleaned_statements
+    # Eliminar comentarios de línea simple respetando comillas
+    lines = []
+    for line in sql_cleaned.split('\n'):
+        in_quote = False
+        quote_char = None
+        comment_idx = -1
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if c in ("'", '"') and (i == 0 or line[i-1] != '\\'):
+                if not in_quote:
+                    in_quote = True
+                    quote_char = c
+                elif c == quote_char:
+                    in_quote = False
+                    quote_char = None
+            elif c == '-' and i + 1 < len(line) and line[i+1] == '-' and not in_quote:
+                comment_idx = i
+                break
+            i += 1
+        if comment_idx != -1:
+            line = line[:comment_idx]
+        lines.append(line)
+
+    cleaned_text = '\n'.join(lines)
+
+    # Dividir por punto y coma respetando bloques entre comillas
+    statements = []
+    current = []
+    in_quote = False
+    quote_char = None
+    i = 0
+    while i < len(cleaned_text):
+        c = cleaned_text[i]
+        if c in ("'", '"') and (i == 0 or cleaned_text[i-1] != '\\'):
+            if not in_quote:
+                in_quote = True
+                quote_char = c
+            elif c == quote_char:
+                in_quote = False
+                quote_char = None
+            current.append(c)
+        elif c == ';' and not in_quote:
+            stmt = ''.join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+        else:
+            current.append(c)
+        i += 1
+
+    stmt = ''.join(current).strip()
+    if stmt:
+        statements.append(stmt)
+
+    return statements
+
+
+def split_sql_statements(sql_content: str) -> list:
+    """
+    Splits SQL script content into individual executable statements using parse_statements.
+    """
+    return parse_statements(sql_content)
 
 
 def get_friendly_script_name(script_path_or_name):

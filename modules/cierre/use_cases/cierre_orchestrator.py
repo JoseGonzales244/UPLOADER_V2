@@ -12,71 +12,15 @@ import teradatasql
 
 from infrastructure.database.database import load_credentials, connect_teradata
 from infrastructure.system.logging_config import setup_logging
-from infrastructure.database.sql_executor import get_friendly_script_name
+from infrastructure.database.sql_executor import (
+    get_friendly_script_name,
+    get_cierre_period_params,
+    inject_variables,
+    parse_statements
+)
 
 logger = setup_logging("modules.cierre.orchestrator", log_prefix="cierre")
 
-def get_cierre_period_params(period_str: str) -> dict:
-    """
-    Retorna el diccionario de parámetros inyectando directamente el período ingresado.
-    """
-    if not re.match(r'^\d{6}$', period_str):
-        raise ValueError(f"Formato de período inválido '{period_str}'. Debe ser YYYYMM.")
-        
-    return {
-        "PERIODO": period_str,
-        "PERIODO_ANTERIOR": period_str,
-    }
-
-def inject_variables(sql_text: str, context: dict) -> str:
-    """
-    Reemplaza variables {VARIABLE} en el código SQL con los valores del contexto.
-    """
-    for key, val in context.items():
-        pattern = r'\{' + re.escape(str(key)) + r'\}'
-        sql_text = re.compile(pattern, re.IGNORECASE).sub(str(val), sql_text)
-    return sql_text
-
-def parse_statements(sql_text: str) -> list:
-    """
-    Limpia comentarios y separa sentencias por punto y coma.
-    """
-    # Eliminar comentarios de bloque
-    sql_cleaned = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
-    
-    # Eliminar comentarios de línea simple
-    lines = []
-    for line in sql_cleaned.split('\n'):
-        in_quote = False
-        quote_char = None
-        comment_idx = -1
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if c in ("'", '"') and (i == 0 or line[i-1] != '\\'):
-                if not in_quote:
-                    in_quote = True
-                    quote_char = c
-                elif c == quote_char:
-                    in_quote = False
-                    quote_char = None
-            elif c == '-' and i + 1 < len(line) and line[i+1] == '-' and not in_quote:
-                comment_idx = i
-                break
-            i += 1
-        if comment_idx != -1:
-            line = line[:comment_idx]
-        lines.append(line)
-        
-    cleaned_text = '\n'.join(lines)
-    
-    statements = []
-    for stmt in cleaned_text.split(';'):
-        stmt_clean = stmt.strip()
-        if stmt_clean:
-            statements.append(stmt_clean)
-            
-    return statements
 
 def run_cierre_process_flow(
     period_str: str,
