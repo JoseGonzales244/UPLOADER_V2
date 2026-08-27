@@ -6,10 +6,30 @@ correspondiente a cada módulo (calidad, consumo, etc.).
 import os
 import datetime
 import logging
+from pathlib import Path
 
 logger = logging.getLogger("powerbi_connector")
 
-POWER_BI_DIR = r"C:\Users\b47756\OneDrive - Interbank\Televentas\POWER BI"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def get_powerbi_dir() -> Path:
+    """
+    Resuelve dinámicamente el directorio 'POWER BI'.
+    1. Prioridad: Carpeta 'POWER BI' al mismo nivel de la raíz del proyecto (hermana de APP_CALIDAD).
+    2. Variable de entorno 'POWER_BI_DIR' si está configurada.
+    3. Fallback en OneDrive - Interbank.
+    """
+    env_dir = os.getenv("POWER_BI_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    sibling_dir = PROJECT_ROOT.parent / "POWER BI"
+    if sibling_dir.exists():
+        return sibling_dir
+
+    onedrive_dir = Path.home() / "OneDrive - Interbank" / "Televentas" / "POWER BI"
+    return sibling_dir if not onedrive_dir.exists() else onedrive_dir
 
 
 def write_powerbi_timestamp(filename: str) -> None:
@@ -21,8 +41,9 @@ def write_powerbi_timestamp(filename: str) -> None:
         filename: Nombre del archivo conector, ej: 'conector_calidad.txt'
     """
     try:
-        os.makedirs(POWER_BI_DIR, exist_ok=True)
-        target_path = os.path.join(POWER_BI_DIR, filename)
+        target_dir = get_powerbi_dir()
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / filename
         with open(target_path, "w", encoding="utf-8") as fh:
             fh.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
         logger.info(f"Timestamp escrito en {target_path}")

@@ -28,7 +28,8 @@ CREATE MULTISET TABLE DLAB_GEC.F_NPS_VENTAS_TV
     PRODUCTO     VARCHAR(255) CHARACTER SET LATIN NOT CASESPECIFIC, -- Alineado con SUB_EQUIPO
     ORIGEN       VARCHAR(50)  CHARACTER SET LATIN NOT CASESPECIFIC  -- Alineado con EQUIPO
 )
-PRIMARY INDEX ( CODIGO );
+PRIMARY INDEX ( CODIGO )
+PARTITION BY RANGE_N(PERIODO BETWEEN '202001' AND '203512' EACH 1);
 
 
 
@@ -122,7 +123,7 @@ INSERT INTO DLAB_GEC.F_NPS_VENTAS_TV
         'RET. CONV'                                        AS PRODUCTO,
         'R_CO'                                             AS ORIGEN
     FROM E_DW_VIEWS_DLAB.V_CNV_VISTA_RETENCION_BT
-    WHERE (MES = '{PERIODO}' OR MES = CAST('{PERIODO}' AS INTEGER))
+    WHERE CAST(MES AS VARCHAR(6)) = '{PERIODO}'
       AND RETENCION_FLG = 1
 
     UNION ALL
@@ -310,21 +311,11 @@ REPLACE VIEW DLAB_GEC.V_NPS_EJECUTIVOS_PRODUCTO AS
         COALESCE(e.CANT_PROMOTORES, 0)              AS CANT_PROMOTORES,
         COALESCE(e.CANT_DETRACTORES, 0)             AS CANT_DETRACTORES,
         
-        CASE 
-          WHEN COALESCE(v.CANT_VENTAS, 0) = 0 
-            THEN NULL
-          ELSE
-            1.0 * COALESCE(e.CANT_ENCUESTAS_ENVIADAS, 0) 
-                / v.CANT_VENTAS
-        END                                         AS PORC_ENVIO,
+        1.0 * ZEROIFNULL(e.CANT_ENCUESTAS_ENVIADAS) 
+            / NULLIFZERO(v.CANT_VENTAS)             AS PORC_ENVIO,
         
-        CASE 
-          WHEN COALESCE(e.CANT_ENCUESTAS_ENVIADAS, 0) = 0 
-            THEN NULL
-          ELSE
-            1.0 * COALESCE(e.CANT_ENCUESTAS_RESPONDIDAS, 0) 
-                / e.CANT_ENCUESTAS_ENVIADAS
-        END                                         AS PORC_RESPUESTA,
+        1.0 * ZEROIFNULL(e.CANT_ENCUESTAS_RESPONDIDAS) 
+            / NULLIFZERO(e.CANT_ENCUESTAS_ENVIADAS) AS PORC_RESPUESTA,
         
         e.NPS                                       AS NPS
         
