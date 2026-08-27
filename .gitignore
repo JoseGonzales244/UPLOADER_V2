@@ -14,14 +14,16 @@ modules/genesys/.chrome_genesys_profile/
 data/verint_browser_profile/
 
 # Carpetas de datos sensibles, transcripciones y descargas
-transcripciones/
-transcripciones_pa/
+/transcripciones/
+/transcripciones_pa/
+/transcripciones_genesys/
 data/transcripciones_pa/
 data/**/*.txt
 downloads/
 Auditorias Wsp/
 *.docx
 *.doc
+!modules/**/transcripciones/**
 openspec/
 logs/
 *.log
