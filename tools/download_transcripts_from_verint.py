@@ -122,43 +122,20 @@ def main():
 
         try:
             res_data = client.get_interaction_transcription_api(call_id)
-            if res_data and isinstance(res_data, dict):
-                result_obj = res_data.get("GetInteractionTranscriptionResult") or {}
-                data_trans = result_obj.get("Data") or {}
-                sequences = data_trans.get("WordsSequences") or []
-
-                lines = []
-                for seq in sequences:
-                    if not isinstance(seq, dict):
-                        continue
-                    speaker = "Asesor" if seq.get("SpeakerName") == "Agent" else "Cliente"
-                    start_ms = seq.get("StartTime", 0)
-                    total_sec = int(start_ms) // 1000
-                    mins = total_sec // 60
-                    secs = total_sec % 60
-                    ts_str = f"{mins:02d}:{secs:02d}"
-                    words = " ".join([w.get("WordText", "") for w in seq.get("Words", []) if isinstance(w, dict) and w.get("WordText")]).strip()
-                    if words:
-                        lines.append(f"[{ts_str}] {speaker}: {words}")
-
-                if lines:
-                    transcript_text = "\n".join(lines)
-                    file_name = f"TRANSCRIPT_DNI_{dni}_{call_id}.txt"
-                    file_path = output_dir / file_name
-                    with open(file_path, "w", encoding="utf-8") as f_out:
-                        f_out.write(transcript_text)
-                    
-                    c["archivo_transcripcion"] = file_name
-                    descargadas += 1
-                    preview = lines[0] if lines else ""
-                    logger.info(f"   💾 GUARDADO: {file_name} ({len(lines)} turnos)")
-                    logger.info(f"   💬 Inicio: {preview[:100]}...")
-                else:
-                    logger.warning(f"   ⚠️ Verint devolvió 0 secuencias de diálogo para {call_id}.")
-                    c["archivo_transcripcion"] = None
-                    sin_datos += 1
+            transcript_text = VerintAPIClient.format_dialogue(res_data)
+            if transcript_text:
+                file_name = f"TRANSCRIPT_DNI_{dni}_{call_id}.txt"
+                file_path = output_dir / file_name
+                with open(file_path, "w", encoding="utf-8") as f_out:
+                    f_out.write(transcript_text)
+                
+                c["archivo_transcripcion"] = file_name
+                descargadas += 1
+                first_line = transcript_text.splitlines()[0] if transcript_text.splitlines() else ""
+                logger.info(f"   💾 GUARDADO: {file_name} ({len(transcript_text.splitlines())} turnos)")
+                logger.info(f"   💬 Inicio: {first_line[:100]}...")
             else:
-                logger.warning(f"   ⚠️ Verint no halló la interacción para {call_id}.")
+                logger.warning(f"   ⚠️ Verint no devolvió diálogo para {call_id}.")
                 c["archivo_transcripcion"] = None
                 sin_datos += 1
         except Exception as e:

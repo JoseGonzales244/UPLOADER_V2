@@ -965,6 +965,33 @@ class VerintAPIClient:
             logger.error(f"Excepción en GetInteractionTranscription: {e_post}")
         return None
 
+    @staticmethod
+    def format_dialogue(res_data: Optional[Dict[str, Any]]) -> str:
+        """
+        Formatea la respuesta JSON de GetInteractionTranscription a texto con minutaje:
+        [mm:ss] Asesor/Cliente: Diálogo
+        """
+        if not res_data or not isinstance(res_data, dict):
+            return ""
+        result_obj = res_data.get("GetInteractionTranscriptionResult") or {}
+        data_trans = result_obj.get("Data") or {}
+        sequences = data_trans.get("WordsSequences") or []
+        lines = []
+        for seq in sequences:
+            if not isinstance(seq, dict):
+                continue
+            speaker_raw = seq.get("SpeakerName", "")
+            speaker = "Asesor" if speaker_raw == "Agent" else ("Cliente" if speaker_raw == "Customer" else (speaker_raw or "Interlocutor"))
+            start_ms = seq.get("StartTime", 0)
+            total_sec = int(start_ms) // 1000
+            mins = total_sec // 60
+            secs = total_sec % 60
+            ts_str = f"{mins:02d}:{secs:02d}"
+            words = " ".join([w.get("WordText", "") for w in seq.get("Words", []) if isinstance(w, dict) and w.get("WordText")]).strip()
+            if words:
+                lines.append(f"[{ts_str}] {speaker}: {words}")
+        return "\n".join(lines)
+
     def close(self):
         self.session.close()
 

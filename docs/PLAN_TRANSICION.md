@@ -193,6 +193,10 @@ Todas las tablas listadas a continuación deben existir en `IBKTD`. El usuario `
 
 `M_EXP_VENTAS_TC`, `M_EXP_VENTAS_PP`, `M_EXP_VENTAS_EC`, `M_EXP_VENTAS_CD`, `M_EXP_VENTAS_SEG`, `M_EXP_VENTAS_CON`, `M_EXP_VENTAS_IL`, `M_EXP_VENTAS_TCA`, `M_EXP_VENTAS_UPG`, `M_EXP_VENTAS_PA`, `T_VENTAS_BPE_MARKET`, `TLV_CARGA_ACTUAL`, `TLV_CARGA_ACTUAL_DIGITAL`, `V_GESTION_BNC`, `V_GESTION_CHIP`, `T_RETENCION_BASE_CALIDAD_GIRU`, `E_DW_VIEWS_DLAB.V_CNV_VISTA_RETENCION_BT`, `E_DW_VIEWS.V_FCT_RT_TC_HISTORICO`.
 
+> [!TIP]
+> Consulta el catálogo completo y linaje visual en: [DICCIONARIO_FUENTES_Y_LINAJE_DATOS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/DICCIONARIO_FUENTES_Y_LINAJE_DATOS.md).
+
+
 ---
 
 ## 6. 🚀 Procedimiento de Instalación en Máquina Nueva
