@@ -245,8 +245,8 @@ REPLACE VIEW DLAB_GEC.V_CNV_RETENCION_PBI AS
  AND FECHA >= CAST(:fec_inicio_mes AS DATE FORMAT 'YYYYMMDD')
 );
 
--- [PASO 6]: Reemplazar la vista V_RETENCION_BASE_CALIDAD_GIRU con flags individuales de ventas cross
-REPLACE VIEW DLAB_GEC.V_RETENCION_BASE_CALIDAD_GIRU AS
+-- [PASO 6]: Reemplazar la vista RETENCION_GIRU_VIEW con flags individuales de ventas cross
+REPLACE VIEW DLAB_GEC.RETENCION_GIRU_VIEW AS
 (
     SELECT 
         r.*,
