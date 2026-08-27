@@ -272,35 +272,56 @@ def initialize_verint_session(headless: bool = False):
     Devuelve los objetos (p, browser, context, page) para reutilizarlos en barridos masivos.
     """
     verint_url = os.getenv("VERINT_URL", "https://wfo.mt5.verintcloudservices.com/wfo/control/signin")
-    username = os.getenv("VERINT_USER")
+    username = os.getenv("VERINT_USER") or os.getenv("MICROSOFT_USER") or os.getenv("USER_EMAIL")
     password = os.getenv("VERINT_PASS")
 
-    if not username or not password:
-        raise ValueError("Faltan credenciales de Verint en el archivo .env (VERINT_USER / VERINT_PASS)")
+    if not username:
+        raise ValueError("Falta el usuario de Verint en el archivo .env (VERINT_USER)")
 
+    project_root = Path(BASE_DIR).parent.parent
+    profile_dir = project_root / "data" / "verint_browser_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
 
     p = sync_playwright().start()
-    logger.info("Lanzando navegador Chromium...")
-    browser = p.chromium.launch(headless=headless)
-    context = browser.new_context(accept_downloads=True)
-    page = context.new_page()
+    logger.info("Lanzando navegador Chromium con perfil persistente (SSO Microsoft)...")
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=str(profile_dir),
+        headless=headless,
+        ignore_https_errors=True,
+        accept_downloads=True
+    )
+    browser = None
+    page = context.pages[0] if context.pages else context.new_page()
 
-    # Login
+    # Login SSO Microsoft / Verint
     logger.info(f"Navegando a: {verint_url}")
-    page.goto(verint_url)
+    try:
+        page.goto(verint_url, timeout=30000)
+    except Exception as e:
+        logger.warning(f"Aviso en navegación inicial: {e}")
+
     page.wait_for_load_state("domcontentloaded")
 
-    if "signin" in page.url or page.query_selector("#username"):
-        logger.info("Enviando credenciales de inicio de sesión...")
-        page.fill("#username", username)
-        page.press("#username", "Enter")
-        
-        page.wait_for_selector("#password", timeout=15000)
-        page.fill("#password", password)
-        page.press("#password", "Enter")
-        page.wait_for_load_state("domcontentloaded")
+    user_input = page.query_selector("input[name='username']") or page.query_selector("#username") or page.query_selector("input[type='email']")
+    if user_input:
+        logger.info(f"Ingresando usuario SSO Microsoft: {username}")
+        user_input.fill(username)
+        btn_continuar = page.query_selector("button:has-text('Continuar')") or page.query_selector("input[type='submit']") or page.query_selector("button[type='submit']")
+        if btn_continuar:
+            btn_continuar.click()
+        else:
+            user_input.press("Enter")
+        page.wait_for_timeout(2000)
 
-    logger.info("Sesión iniciada correctamente.")
+    # Si solicita contraseña opcionalmente (no SSO), completarla sin bloquear
+    pass_input = page.query_selector("input[type='password']") or page.query_selector("#password")
+    if pass_input and password:
+        logger.info("Ingresando contraseña...")
+        pass_input.fill(password)
+        pass_input.press("Enter")
+        page.wait_for_timeout(2000)
+
+    logger.info("Sesión inicializada.")
 
     # Navegar a Speech Analytics
     interactions_url = "https://wfo.mt5.verintcloudservices.com/wfo/ui/#wsm%5Bws%5D=speech_Listen"
