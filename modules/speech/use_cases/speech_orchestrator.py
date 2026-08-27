@@ -8,10 +8,7 @@ from dotenv import load_dotenv
 import teradatasql
 
 from modules.speech.services.insight_lead_service import InsightLeadService
-from modules.verint.transcripciones.extractors.verint_transcript_extractor import (
-    initialize_verint_session,
-    extract_single_transcript_in_session
-)
+from modules.verint.services.verint_api_client import VerintAPIClient
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
@@ -121,7 +118,7 @@ def extract_transcripts_from_verint(
     headless: bool = True
 ) -> Dict[str, str]:
     """
-    Descarga los diálogos reutilizando la sesión y extractor estándar de modules/verint.
+    Descarga los diálogos utilizando el cliente HTTP API REST directo de Verint (rápido y sin navegador).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     transcripts_map = {}
@@ -141,42 +138,30 @@ def extract_transcripts_from_verint(
         logger.info(f"✓ Todas las {len(call_items)} transcripciones ya existen localmente en {output_dir}.")
         return transcripts_map
 
-    logger.info(f"Iniciando descarga en Verint de {len(pending_items)} transcripciones pendientes (Headless={headless})...")
-    playwright, browser, context, page = initialize_verint_session(headless=headless)
+    logger.info(f"Iniciando descarga en Verint API de {len(pending_items)} transcripciones pendientes...")
+    api_client = VerintAPIClient()
+    api_client.login()
+    api_client.init_speech_session(instance_id=247115)
 
     try:
         for idx, item in enumerate(pending_items, 1):
             cid = item.get("ID_LLAMADA") or item.get("CONID")
-            metadata = {
-                "FECHA_VENTA": item.get("FECHA_LLAMADA"),
-                "DNI": item.get("DNI"),
-                "REG_EJECUTIVO": item.get("REGISTRO")
-            }
-
-            logger.info(f"[{idx}/{len(pending_items)}] Extrayendo transcripción para CONID: {cid}...")
+            txt_path = output_dir / f"TRANSCRIPT_{cid}.txt"
+            logger.info(f"[{idx}/{len(pending_items)}] Extrayendo transcripción por API para CONID: {cid}...")
             try:
-                txt_path = extract_single_transcript_in_session(
-                    page=page,
-                    call_id=cid,
-                    metadata=metadata,
-                    output_dir=str(output_dir)
-                )
-                if txt_path and os.path.exists(txt_path):
-                    with open(txt_path, "r", encoding="utf-8", errors="ignore") as f:
-                        transcripts_map[cid] = f.read()
-                    logger.info(f"[{idx}/{len(pending_items)}] ✓ Guardado: {txt_path}")
+                res_json = api_client.get_interaction_transcription_api(cid)
+                if res_json:
+                    formatted_text = api_client.format_dialogue(res_json)
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(formatted_text)
+                    transcripts_map[cid] = formatted_text
+                    logger.info(f"[{idx}/{len(pending_items)}] ✓ Guardado por API: {txt_path}")
+                else:
+                    logger.warning(f"[{idx}/{len(pending_items)}] ⚠️ Sin contenido de transcripción para CONID: {cid}")
             except Exception as e:
-                logger.error(f"[{idx}/{len(pending_items)}] Error extrayendo {cid}: {e}")
-
-            time.sleep(1.5)
-
+                logger.error(f"[{idx}/{len(pending_items)}] Error extrayendo {cid} vía API: {e}")
     finally:
-        try:
-            context.close()
-            browser.close()
-            playwright.stop()
-        except Exception:
-            pass
+        api_client.close()
 
     return transcripts_map
 
