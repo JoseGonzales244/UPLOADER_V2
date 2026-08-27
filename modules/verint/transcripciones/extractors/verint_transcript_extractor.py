@@ -273,7 +273,6 @@ def initialize_verint_session(headless: bool = False):
     """
     verint_url = os.getenv("VERINT_URL", "https://wfo.mt5.verintcloudservices.com/wfo/control/signin")
     username = os.getenv("VERINT_USER") or os.getenv("MICROSOFT_USER") or os.getenv("USER_EMAIL")
-    password = os.getenv("VERINT_PASS")
 
     if not username:
         raise ValueError("Falta el usuario de Verint en el archivo .env (VERINT_USER)")
@@ -311,14 +310,6 @@ def initialize_verint_session(headless: bool = False):
             btn_continuar.click()
         else:
             user_input.press("Enter")
-        page.wait_for_timeout(2000)
-
-    # Si solicita contraseña opcionalmente (no SSO), completarla sin bloquear
-    pass_input = page.query_selector("input[type='password']") or page.query_selector("#password")
-    if pass_input and password:
-        logger.info("Ingresando contraseña...")
-        pass_input.fill(password)
-        pass_input.press("Enter")
         page.wait_for_timeout(2000)
 
     logger.info("Sesión inicializada.")
