@@ -52,8 +52,19 @@ class VerintAPIClient:
         self.is_authenticated = False
         self.xsrf_token = None
         self.impact360_token = None
-        self.instance_id = 247115
-        self.app_id = "e9cf0296-0580-4e22-c88d-1de0258fb48b"
+
+        # Cargar configuración no sensible desde config.json
+        verint_cfg = {}
+        try:
+            cfg_file = Path(__file__).resolve().parents[3] / "config" / "config.json"
+            if cfg_file.exists():
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    verint_cfg = json.load(f).get("verint_settings", {})
+        except Exception:
+            pass
+
+        self.instance_id = int(os.getenv("VERINT_INSTANCE_ID") or verint_cfg.get("instance_id", 247115))
+        self.app_id = str(os.getenv("VERINT_APP_ID") or verint_cfg.get("app_id", "e9cf0296-0580-4e22-c88d-1de0258fb48b"))
         self.speech_session_id = None
         
         # --- Auto Cookie & Token Harvester (Playwright SSO headless si caché expiró) ---

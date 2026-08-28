@@ -1,4 +1,4 @@
-﻿{
+{
     "business_vars":  {
                           "corte_dia_inicio_1":  1,
                           "corte_dia_fin_1":  14,
@@ -9,7 +9,9 @@
                             "verint_url":  "https://wfo.mt5.verintcloudservices.com/wfo/control/signin",
                             "input_csv_template":  "data/input/proceso_calidad/EV_{PERIODO}.csv",
                             "project_name":  "Televentas",
-                            "filter_name":  "Filtro_Calidad"
+                            "filter_name":  "Filtro_Calidad",
+                            "instance_id":  247115,
+                            "app_id":  2
                         },
     "quality_execution_sequence":  [
                                        "modules/calidad/sql/01_evaluacion_manual_pc.sql",

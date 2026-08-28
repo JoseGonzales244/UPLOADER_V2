@@ -56,7 +56,7 @@ def extract_transcripts_from_verint(
     logger.info(f"Iniciando descarga en Verint API de {len(pending_items)} transcripciones pendientes...")
     api_client = VerintAPIClient()
     api_client.login()
-    api_client.init_speech_session(instance_id=247115)
+    api_client.init_speech_session()
 
     try:
         for idx, item in enumerate(pending_items, 1):
