@@ -27,7 +27,13 @@ from modules.calidad.use_cases.phases.phase3_ingest_accion_tomada import (  # no
     deduplicate_observations_by_severity,
 )
 
-from modules.calidad.use_cases import phases as _calidad_phases
+from modules.calidad.use_cases.phases import (
+    phase1_ingest_insight,
+    phase2_ingest_verint,
+    phase3_ingest_accion_tomada,
+    phase4_sql_scripts,
+    phase5_ntd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,15 +121,15 @@ def run_quality_process_flow(
     )
 
     if run_phase1:
-        _calidad_phases.phase1_ingest_insight.run_phase1(ctx)
+        phase1_ingest_insight.run_phase1(ctx)
     if run_phase2:
-        _calidad_phases.phase2_ingest_verint.run_phase2(ctx)
+        phase2_ingest_verint.run_phase2(ctx)
     if run_phase3:
-        _calidad_phases.phase3_ingest_accion_tomada.run_phase3(ctx)
+        phase3_ingest_accion_tomada.run_phase3(ctx)
     if run_phase4:
-        _calidad_phases.phase4_sql_scripts.run_phase4(ctx, start_from_script=start_from_script)
+        phase4_sql_scripts.run_phase4(ctx, start_from_script=start_from_script)
     if run_phase5:
-        _calidad_phases.phase5_ntd.run_phase5(ctx)
+        phase5_ntd.run_phase5(ctx)
 
     # Notificación de escritorio global
     try:
