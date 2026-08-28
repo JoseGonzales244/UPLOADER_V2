@@ -306,40 +306,103 @@ class VerintAPIClient:
     def download_report(self, report_item: dict, output_filepath: str, instance_id: int = 247115) -> bool:
         """
         Descarga el archivo exportado de Verint Cloud dado el objeto de reporte devuelto por GetSavedReports.
+        Aplica streaming HTTP, normalización de rutas y validación rigurosa de integridad ZIP (PK\\x03\\x04 + EOCD).
         """
+        import tempfile
+        import zipfile
+        import urllib.parse
+
         os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
         
         report_name = report_item.get("Name", "")
-        rel_url = report_item.get("URL", "")
-        if not rel_url or str(rel_url).strip().lower() in ["none", "null", ""]:
+        rel_url = str(report_item.get("URL", "")).strip()
+        if not rel_url or rel_url.lower() in ["none", "null", ""]:
             logger.warning(f"⚠️ El reporte '{report_name}' aún no posee URL de descarga asignada ({rel_url}). Esperando a que finalice...")
             return False
 
         report_format = report_item.get("Format", 4)
         token = random.randint(10000, 99999)
         
-        url = (
-            f"{self.base_url}/SpeechAnalytics/Handlers/Reports/DownloadReports.ashx"
-            f"?instanceId={instance_id}"
-            f"&baseDirectory=DataExports"
-            f"&name={report_name}"
-            f"&reportFormat={report_format}"
-            f"&url={rel_url}"
-            f"&sessionId={self.speech_session_id}"
-            f"&SA_downloadReportToken={token}"
-        )
+        # Normalizar separadores de ruta en el parámetro url (\\ a /)
+        clean_rel_url = rel_url.replace("\\", "/")
         
-        logger.info(f"Descargando reporte '{report_name}' por API HTTP pura desde {url}...")
-        res = self.session.get(url)
+        params = {
+            "instanceId": instance_id,
+            "baseDirectory": "DataExports",
+            "name": report_name,
+            "reportFormat": report_format,
+            "url": clean_rel_url,
+            "sessionId": self.speech_session_id or "",
+            "SA_downloadReportToken": token
+        }
         
-        if res.status_code == 200 and len(res.content) > 1000:
-            with open(output_filepath, "wb") as f:
-                f.write(res.content)
-            logger.info(f"✅ Archivo guardado exitosamente en: {output_filepath} ({len(res.content)} bytes)")
+        download_endpoint = f"{self.base_url}/SpeechAnalytics/Handlers/Reports/DownloadReports.ashx"
+        
+        # Crear archivo temporal para descarga segura
+        target_dir = os.path.dirname(output_filepath) or "."
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".tmp", dir=target_dir)
+        os.close(temp_fd)
+
+        try:
+            logger.info(f"Descargando reporte '{report_name}' por API HTTP con streaming desde {download_endpoint}...")
+            
+            # Descarga con streaming y timeout de lectura ampliado (300s)
+            with self.session.stream("GET", download_endpoint, params=params, timeout=300.0) as resp:
+                if resp.status_code != 200:
+                    logger.error(f"Error HTTP al descargar reporte '{report_name}' (Status {resp.status_code})")
+                    return False
+                
+                with open(temp_path, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=65536):
+                        f.write(chunk)
+            
+            file_size = os.path.getsize(temp_path)
+            if file_size < 1000:
+                logger.warning(f"⚠️ Descarga de '{report_name}' retornó tamaño insuficiente ({file_size} bytes). El worker de Verint aún está escribiendo el archivo.")
+                return False
+
+            # 1. Validar Magic Bytes de Excel (.xlsx / ZIP o .xls OLE2)
+            with open(temp_path, "rb") as fp:
+                header = fp.read(8)
+            if not (header.startswith(b"PK\x03\x04") or header.startswith(b"\xd0\xcf\x11\xe0")):
+                if header.startswith(b"<!DOC") or header.startswith(b"<html") or header.startswith(b"<?xml"):
+                    logger.warning(f"⚠️ El servidor de Verint devolvió una respuesta HTML/XML en lugar del Excel. Sesión expirada o archivo no listo.")
+                else:
+                    logger.warning(f"⚠️ El archivo descargado no posee firma binaria de Excel válida (cabecera: {header[:4]}).")
+                return False
+
+            # 2. Validar estructura completa ZIP y EOCD (End of Central Directory)
+            if header.startswith(b"PK\x03\x04"):
+                try:
+                    with zipfile.ZipFile(temp_path, "r") as zf:
+                        corrupted_file = zf.testzip()
+                        if corrupted_file is not None:
+                            logger.warning(f"⚠️ Archivo ZIP internamente corrupto en '{corrupted_file}'. El servidor aún no terminó de cerrarlo.")
+                            return False
+                except Exception as zip_err:
+                    logger.warning(f"⚠️ El archivo Excel descargado está truncado o incompleto ({zip_err}). El worker de Verint todavía está escribiendo en disco. Reintentando...")
+                    return False
+
+            # 3. Todo OK: Reemplazo atómico del archivo final
+            if os.path.exists(output_filepath):
+                try:
+                    os.remove(output_filepath)
+                except Exception:
+                    pass
+            os.replace(temp_path, output_filepath)
+            final_size = os.path.getsize(output_filepath)
+            logger.info(f"✅ Archivo Excel 100% íntegro guardado exitosamente en: {output_filepath} ({final_size} bytes)")
             return True
-        else:
-            logger.error(f"Error al descargar reporte '{report_name}' por API ({res.status_code}, Bytes: {len(res.content)})")
+
+        except Exception as dl_err:
+            logger.error(f"Error durante el streaming de descarga de '{report_name}': {dl_err}")
             return False
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
 
     def create_contacts_report(self, report_name: str, filter_qdi_xml: str, instance_caption: str = "Televentas") -> bool:
         """
@@ -574,21 +637,28 @@ class VerintAPIClient:
             ]
             
             if matching_reports:
-                all_ready = all(
-                    (str(r.get("Status", "")) in ["1", "4", "completed", "completado", "ready"] or bool(r.get("URL")))
-                    and bool(r.get("URL")) 
-                    and str(r.get("URL")).strip().lower() not in ["", "none", "null"]
+                all_parts_ready = all(
+                    bool(r.get("URL")) and str(r.get("URL")).strip().lower() not in ["", "none", "null"]
                     for r in matching_reports
                 )
-                if all_ready:
-                    logger.info(f"🎯 Reporte '{report_name}' ({len(matching_reports)} parte(s)) completado en Verint Cloud! Descargando...")
+                if all_parts_ready:
+                    logger.info(f"🎯 Reporte '{report_name}' ({len(matching_reports)} parte(s)) disponible con URL en Verint. Intentando descarga e inspección de integridad...")
+                    downloaded_parts = []
+                    all_success = True
                     for r in matching_reports:
                         part_name = str(r.get("Name", ""))
                         out_path = Path(output_dir) / f"{part_name}.xlsx"
                         if self.download_report(r, str(out_path), instance_id=247115):
-                            downloaded_paths.append(str(out_path))
-                    if downloaded_paths:
-                        return downloaded_paths[0] if len(downloaded_paths) == 1 else ",".join(downloaded_paths)
+                            downloaded_parts.append(str(out_path))
+                        else:
+                            all_success = False
+                            break
+                    
+                    if all_success and downloaded_parts:
+                        logger.info(f"🏆 ¡Reporte '{report_name}' descargado e íntegro al 100% ({len(downloaded_parts)} parte(s))!")
+                        return downloaded_parts[0] if len(downloaded_parts) == 1 else ",".join(downloaded_parts)
+                    else:
+                        logger.info(f"⏳ El reporte aún se está consolidando en Verint Cloud. Reintentando en {poll_interval_seconds}s...")
                 else:
                     statuses = [f"{r.get('Name')}: Status={r.get('Status')}, URL={r.get('URL')}" for r in matching_reports]
                     logger.info(f"⏳ Esperando generación del reporte en Verint Cloud... Estado actual: {statuses}")

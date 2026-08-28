@@ -45,6 +45,19 @@ flowchart TD
 
 ---
 
+## 📋 Insumos Indispensables y Requisitos Previos
+
+Para ejecutar el flujo de **PBI Base Consumo**, los siguientes archivos y accesos son requeridos:
+
+| Insumo | Ruta Exacta en `data/input/` | Estado / Condición | Comportamiento si NO está |
+| :--- | :--- | :---: | :--- |
+| **`CD40K_NEW.xlsx`** (o `CD40K.xlsx`) | `data/input/base_consumo/CD40K_NEW.xlsx` | 🟡 **Opcional (Fase 2)** | Si la casilla `Fase 2` está marcada y no existe el archivo, la fase falla. Si se desmarca `Fase 2`, el flujo continúa normalmente. |
+| **7 Insumos Insight** | Descarga automática vía Scraper | 🔵 **Automático (Fase 1)** | Se descargan directamente desde Insight. Requiere credenciales en `.env`. |
+| **Credenciales SQL Server** | `.env` (`SQL_SERVER_HOST`, etc.) | 🟡 **Opcional (Fase 3)** | Si no están configuradas, la Fase 3 (Desembolsos) se omite con aviso informativo. |
+| **Credenciales Teradata** | `.env` (`TERADATA_USER`, `TERADATA_PASSWORD`) | 🔴 **INDISPENSABLE** | Requeridas para ejecutar las transformaciones y vistas de colocaciones en `DLAB_GEC`. |
+
+---
+
 ## 🔍 Detalle por Fase (Entradas y Salidas)
 
 ### 📌 Fase 1: Ingesta de Insumos desde Insight

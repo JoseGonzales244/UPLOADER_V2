@@ -23,7 +23,11 @@ SESSION_TTL_SECONDS = 4 * 60 * 60  # 4 horas
 
 # Ruta del caché de cookies
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-COOKIE_CACHE_PATH = PROJECT_ROOT / "logs" / "verint_cookies_cache.json"
+DATA_DIR = PROJECT_ROOT / "data"
+RUNTIME_DIR = DATA_DIR / "runtime"
+CACHE_DIR = RUNTIME_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+COOKIE_CACHE_PATH = CACHE_DIR / "verint_cookies_cache.json"
 
 
 def _load_cache() -> Optional[Dict]:
@@ -70,7 +74,9 @@ def _is_cache_valid(cache: Dict) -> bool:
     return True
 
 
-PERSISTENT_PROFILE_PATH = PROJECT_ROOT / "data" / "verint_browser_profile"
+PROFILES_DIR = RUNTIME_DIR / "browser_profiles"
+PERSISTENT_PROFILE_PATH = PROFILES_DIR / "verint"
+PERSISTENT_PROFILE_PATH.mkdir(parents=True, exist_ok=True)
 
 
 def _harvest_via_playwright(

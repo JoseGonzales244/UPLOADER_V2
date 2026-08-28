@@ -15,7 +15,7 @@ logger = logging.getLogger("modules.transcripciones.presenters.excel_presenter")
 
 
 class TranscriptExcelPresenter(IReportPresenter):
-    def __init__(self, default_output_dir: str = "logs"):
+    def __init__(self, default_output_dir: str = os.path.join("data", "reports")):
         self.default_output_dir = default_output_dir
 
     def generate_report(

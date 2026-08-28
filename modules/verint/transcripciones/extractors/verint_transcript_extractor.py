@@ -21,10 +21,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("verint_transcript_extractor")
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+DATA_DIR = PROJECT_ROOT / "data"
+DEFAULT_TRANSCRIPT_DIR = DATA_DIR / "transcripciones"
+DEFAULT_TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_config():
-    config_path = os.path.join(BASE_DIR, "config", "config.json")
+    config_path = PROJECT_ROOT / "config" / "config.json"
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Archivo de configuración no encontrado: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
@@ -185,11 +188,11 @@ def extract_transcript_by_call_id_api(call_id: str, api_client=None, output_dir=
     ejecutivo = metadata.get('ejecutivo', 'B00000')
     
     if not output_dir:
-        output_dir = BASE_DIR
-    os.makedirs(output_dir, exist_ok=True)
+        output_dir = DEFAULT_TRANSCRIPT_DIR
+    os.makedirs(str(output_dir), exist_ok=True)
     
     filename = f"Transcripcion_Verint_{call_id}_{fecha}_{dni}_{ejecutivo}.txt"
-    filepath = os.path.join(output_dir, filename)
+    filepath = os.path.join(str(output_dir), filename)
 
     created_client = False
     if api_client is None:
@@ -277,8 +280,7 @@ def initialize_verint_session(headless: bool = False):
     if not username:
         raise ValueError("Falta el usuario de Verint en el archivo .env (VERINT_USER)")
 
-    project_root = Path(__file__).resolve().parents[4]
-    profile_dir = project_root / "data" / "verint_browser_profile"
+    profile_dir = DATA_DIR / "runtime" / "browser_profiles" / "verint"
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     p = sync_playwright().start()

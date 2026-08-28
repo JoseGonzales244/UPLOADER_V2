@@ -10,15 +10,23 @@ __pycache__/
 .env.*
 ACCESOS_EXPERIENCIA.txt
 
+# Runtime, perfiles y cachés
 modules/genesys/.chrome_genesys_profile/
 data/verint_browser_profile/
+data/runtime/
+data/downloads/
+data/reports/
 
 # Carpetas de datos sensibles, transcripciones y descargas
 /transcripciones/
 /transcripciones_pa/
 /transcripciones_genesys/
+data/transcripciones/
 data/transcripciones_pa/
+data/transcripciones_tc/
 data/**/*.txt
+data/**/*.mp3
+data/**/*.wav
 downloads/
 Auditorias Wsp/
 *.docx

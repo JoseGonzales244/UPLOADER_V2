@@ -45,14 +45,28 @@ flowchart TD
 
 ---
 
+## 📋 Insumos Indispensables y Requisitos Previos
+
+Para ejecutar el flujo de **PBI Evaluaciones Calidad**, los siguientes archivos y accesos son requeridos:
+
+| Insumo | Ruta Exacta en `data/input/` | Estado / Condición | Comportamiento si NO está |
+| :--- | :--- | :---: | :--- |
+| **`EV_{PERIODO}.csv`** | `data/input/proceso_calidad/EV_{PERIODO}.csv` | 🔴 **INDISPENSABLE** | Si falta, el extractor de Verint/Teradata falla con `FileNotFoundError`. |
+| **`ACCION_TOMADA.xlsx`** | `data/input/proceso_calidad/ACCION_TOMADA.xlsx` | 🟡 **Opcional (Fase 3)** | Si no está en disco, la Fase 3 emite advertencia y se omite la deduplicación de observaciones, continuando con las demás fases. |
+| **Credenciales Teradata** | `.env` (`TERADATA_USER`, `TERADATA_PASSWORD`) | 🔴 **INDISPENSABLE** | Requeridas para ejecutar las transformaciones SQL en `DLAB_GEC`. |
+| **Credenciales Insight** | `.env` (`USERNAME_INSIGHT`, `PASSWORD_INSIGHT`) | 🟡 **Requerido para Fase 1** | Si la Fase 1 está activa y no hay credenciales, falla la descarga automática de `EVALUATIONS`. |
+
+---
+
 ## 🔍 Detalle por Fase (Entradas y Salidas)
 
 ### 📌 Fase 1: Ingesta de Insight (Evaluaciones Manuales)
 
 - 📥 **INPUTS**:
   - **Plataforma Origen**: Insight (PureCloud).
-  - **Formato Origen**: Archivo `.tsv` / `.csv` descargado mediante automatización.
-  - **Estrategia de Lectura**: Lectura robusta con Polars (`quote_char=None`, `truncate_ragged_lines=True`, `ignore_errors=True`) y fallback de codificación `latin-1` para manejar comillas sin cerrar en comentarios de auditoría.
+  - **Descarga**: Automática mediante API/Scraper (`download_insight_data`).
+  - **Formato Origen**: Archivo `.tsv` / `.csv` descargado temporalmente.
+  - **Estrategia de Lectura**: Lectura robusta con Polars (`quote_char=None`, `truncate_ragged_lines=True`, `ignore_errors=True`) y fallback de codificación `latin-1`.
   - **Plantilla de Mapeo**: `P008-INSIGHT_07_EVALUATIONS` en `plantillas.json`.
 
 - 📤 **OUTPUTS**:

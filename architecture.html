@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador de Arquitectura Interactiva - UPLOADER V2 Interbank</title>
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #111827;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --ibk-blue: #0039A6;
+      --ibk-green: #00A859;
+      --accent-cyan: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 100;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #0039A6, #00A859);
+      color: white;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 12px rgba(0, 168, 89, 0.3);
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Flow Selector Bar */
+    .flow-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+
+    .flow-btn {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .flow-btn:hover {
+      background: var(--bg-card-hover);
+      color: #fff;
+      border-color: var(--accent-cyan);
+    }
+
+    .flow-btn.active {
+      background: linear-gradient(135deg, #0039A6, #0284c7);
+      color: #fff;
+      border-color: #38bdf8;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+    }
+
+    /* Header Controls */
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: var(--bg-card-hover);
+      color: #fff;
+    }
+
+    /* Main Content Area */
+    .main-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Canvas Area */
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      background: radial-gradient(circle at 50% 50%, #172033 0%, #0b0f19 100%);
+      cursor: grab;
+    }
+
+    .canvas-container:active {
+      cursor: grabbing;
+    }
+
+    #flow-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1550px;
+      height: 1100px;
+      transform-origin: top left;
+    }
+
+    /* SVG Layer */
+    #svg-connections {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Swimlanes Header & Background */
+    .swimlane-col {
+      position: absolute;
+      top: 20px;
+      width: 260px;
+      bottom: 20px;
+      background: rgba(30, 41, 59, 0.25);
+      border: 1px dashed rgba(71, 85, 105, 0.4);
+      border-radius: 16px;
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+
+    .swimlane-header {
+      position: absolute;
+      top: -12px;
+      left: 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Architecture Nodes */
+    .node-card {
+      position: absolute;
+      width: 260px;
+      height: 115px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 20;
+      backdrop-filter: blur(8px);
+    }
+
+    .node-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+      border-color: #94a3b8;
+    }
+
+    .node-card.dimmed {
+      opacity: 0.25;
+      border-style: dashed;
+      filter: grayscale(40%);
+    }
+
+    .node-card.active-flow {
+      opacity: 1 !important;
+      border-width: 2px;
+      border-style: solid;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+    }
+
+    .node-card.selected {
+      outline: 2px solid #38bdf8;
+      outline-offset: 3px;
+    }
+
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .node-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .node-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .node-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .node-step-badge {
+      display: none;
+      background: #38bdf8;
+      color: #0f172a;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 10px;
+      letter-spacing: 0.3px;
+    }
+
+    .node-card.active-flow .node-step-badge {
+      display: inline-block;
+    }
+
+    .node-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin: 4px 0;
+    }
+
+    .node-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 4px;
+    }
+
+    .node-file-tag {
+      font-family: monospace;
+      max-width: 170px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #38bdf8;
+    }
+
+    /* Sidebar Inspector */
+    .sidebar {
+      width: 420px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      transition: all 0.3s ease;
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .sidebar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-content {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .inspector-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .inspector-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .inspector-value {
+      font-size: 13px;
+      color: #fff;
+      line-height: 1.4;
+    }
+
+    .code-block {
+      background: #0b0f19;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: Consolas, Monaco, "Courier New", monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      max-height: 220px;
+    }
+
+    .flow-info-card {
+      background: linear-gradient(135deg, rgba(0, 57, 166, 0.2), rgba(0, 168, 89, 0.2));
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    /* Stepper bottom bar */
+    .bottom-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .step-indicator {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      min-width: 110px;
+      text-align: center;
+    }
+
+    /* SVG Animations */
+    .flow-line {
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      transition: all 0.3s ease;
+    }
+
+    .flow-line.dimmed {
+      opacity: 0.1;
+      stroke: #475569 !important;
+      stroke-dasharray: 4 4;
+    }
+
+    .flow-line.active {
+      stroke-width: 3.5;
+      filter: drop-shadow(0 0 6px currentColor);
+      stroke-dasharray: 8 4;
+      animation: dashMove 1.5s linear infinite;
+    }
+
+    @keyframes dashMove {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .flow-label {
+      font-size: 10px;
+      font-weight: 700;
+      fill: #f8fafc;
+      paint-order: stroke;
+      stroke: #0b0f19;
+      stroke-width: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-badge">UPLOADER V2</div>
+      <div>
+        <div class="brand-title">Simulador de Arquitectura Interactiva</div>
+        <div class="brand-subtitle">Plataforma Calidad Televentas • Topología de 5 Capas</div>
+      </div>
+    </div>
+
+    <!-- Flow Selector Tabs -->
+    <div class="flow-bar" id="flow-buttons">
+      <!-- Generated via JS -->
+    </div>
+
+    <!-- Header Controls -->
+    <div class="header-controls">
+      <button class="btn-icon" id="btn-zoom-in" title="Acercar">🔍 +</button>
+      <button class="btn-icon" id="btn-zoom-out" title="Alejar">🔍 -</button>
+      <button class="btn-icon" id="btn-reset-view" title="Centrar">⟲ Reset</button>
+      <button class="btn-icon" id="btn-toggle-sidebar" title="Detalles">📋 Inspector</button>
+    </div>
+  </header>
+
+  <!-- Main Canvas Container -->
+  <div class="main-container">
+    <div class="canvas-container" id="canvas-wrapper">
+      <div id="flow-canvas">
+        <svg id="svg-connections">
+          <defs>
+            <linearGradient id="grad-active" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#38bdf8" />
+              <stop offset="100%" stop-color="#34d399" />
+            </linearGradient>
+            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 8 5 L 0 9 z" fill="#38bdf8" />
+            </marker>
+          </defs>
+          <g id="connections-group"></g>
+          <g id="labels-group"></g>
+        </svg>
+
+        <!-- Swimlane Columns Background -->
+        <div id="swimlanes-layer"></div>
+
+        <!-- Component Nodes Layer -->
+        <div id="nodes-layer"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Stepper / Flow Controller -->
+    <div class="bottom-bar">
+      <button class="btn-icon" id="btn-prev-step">◀ Anterior</button>
+      <div class="step-indicator" id="step-indicator-text">Paso 1 / 6</div>
+      <button class="btn-icon" id="btn-next-step">Siguiente ▶</button>
+      <button class="btn-icon" id="btn-auto-play" style="color: #34d399;">▶ Auto-Play</button>
+    </div>
+
+    <!-- Sidebar Inspector -->
+    <aside class="sidebar" id="sidebar-inspector">
+      <div class="sidebar-header">
+        <div class="sidebar-title">
+          <span>🔍</span> <span id="inspector-heading">Detalles del Componente</span>
+        </div>
+        <button class="btn-icon" id="btn-close-sidebar">✕</button>
+      </div>
+      <div class="sidebar-content" id="sidebar-details">
+        <!-- Injected via JS -->
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. Topología del Sistema: 5 Swimlanes
+       ========================================================================= */
+    const lanes = [
+      { id: "lane_ingress", title: "1. Ingress & Client UI", badge: "Ingress", color: "#38bdf8", x: 40 },
+      { id: "lane_gateway", title: "2. API Gateway & WS", badge: "Gateway", color: "#818cf8", x: 324 },
+      { id: "lane_parsers", title: "3. Scrapers & Parsers", badge: "Extracción", color: "#34d399", x: 608 },
+      { id: "lane_domain", title: "4. Domain Orchestrators", badge: "Dominio", color: "#fbbf24", x: 892 },
+      { id: "lane_persistence", title: "5. Persistence & Sinks", badge: "Almacén / Salida", color: "#f43f5e", x: 1176 }
+    ];
+
+    /* =========================================================================
+       2. Nodos del Sistema (Componentes Permanentes)
+       ========================================================================= */
+    const allNodes = [
+      // Lane 0: Ingress & Client UI
+      {
+        id: "ui_spa",
+        label: "React 18 SPA Frontend",
+        icon: "⚛️",
+        laneIndex: 0,
+        rowIndex: 0,
+        file: "frontend/app.js",
+        desc: "Interfaz reactiva unificada con pestañas de Consumo, Calidad, Audios e Ingesta Teradata.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE", "FLOW_AUDIOS", "FLOW_UPLOAD", "FLOW_HEALTH"],
+        payload: "{\n  \"periodo\": \"202602\",\n  \"run_phase1\": true,\n  \"run_phase4\": true\n}"
+      },
+      {
+        id: "ui_stepper",
+        label: "5-Phase Live Stepper",
+        icon: "🚥",
+        laneIndex: 0,
+        rowIndex: 1,
+        file: "frontend/styles.css",
+        desc: "Componente visual reactivo que muestra el avance en tiempo real de las 5 fases del pipeline.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD"],
+        payload: "{\n  \"phase\": 3,\n  \"progress\": 0.6,\n  \"status\": \"En ejecución\"\n}"
+      },
+      {
+        id: "ui_schema_editor",
+        label: "Column & SQL Type Editor",
+        icon: "📝",
+        laneIndex: 0,
+        rowIndex: 2,
+        file: "frontend/app.js",
+        desc: "Editor interactivo para ajustar tipos SQL, nombres de columna y longitud máxima de VARCHAR.",
+        flows: ["FLOW_UPLOAD"],
+        payload: "[\n  {\"col\": \"DNI\", \"type\": \"VARCHAR(8)\"},\n  {\"col\": \"MONTO\", \"type\": \"DECIMAL(12,2)\"}\n]"
+      },
+      {
+        id: "outlook_client",
+        label: "Outlook Desktop Ingress",
+        icon: "📧",
+        laneIndex: 0,
+        rowIndex: 3,
+        file: "modules/genesys/services/outlook_service.py",
+        desc: "Lector COM pywin32 para parsear solicitudes de audios desde el buzón de entrada.",
+        flows: ["FLOW_AUDIOS", "FLOW_HEALTH"],
+        payload: "{\n  \"solicitudes\": [{\"reg_ev\": \"10293\", \"dni\": \"45879632\"}]\n}"
+      },
+
+      // Lane 1: API Routing & Real-Time Gateway
+      {
+        id: "api_gateway",
+        label: "FastAPI REST Gateway",
+        icon: "⚡",
+        laneIndex: 1,
+        rowIndex: 0,
+        file: "backend/main.py",
+        desc: "Servidor asíncrono Uvicorn con endpoints REST, validación Pydantic y parada segura (stop_checker).",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE", "FLOW_AUDIOS", "FLOW_UPLOAD", "FLOW_HEALTH"],
+        payload: "POST /api/orchestrate/consumo\nHeader: Content-Type: application/json"
+      },
+      {
+        id: "ws_broadcaster",
+        label: "WebSocket Broadcaster",
+        icon: "📡",
+        laneIndex: 1,
+        rowIndex: 1,
+        file: "backend/main.py",
+        desc: "ConnectionManager async que transmite logs y progreso en vivo a los clientes conectados.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE", "FLOW_AUDIOS", "FLOW_UPLOAD"],
+        payload: "{\n  \"timestamp\": \"14:32:05\",\n  \"message\": \"Fase 4: Ejecutando VENTAS_DN.sql...\",\n  \"progress\": 0.8\n}"
+      },
+      {
+        id: "preflight_diag",
+        label: "Preflight Health Check",
+        icon: "🩺",
+        laneIndex: 1,
+        rowIndex: 2,
+        file: "infrastructure/system/health_check.py",
+        desc: "Verificación en paralelo de conectividad a Teradata, sesión Chrome CDP 9222 y Outlook MAPI.",
+        flows: ["FLOW_HEALTH"],
+        payload: "{\n  \"teradata\": \"OK\",\n  \"outlook\": \"OK\",\n  \"chrome_cdp\": \"OK\"\n}"
+      },
+      {
+        id: "task_executor",
+        label: "Background Task Engine",
+        icon: "⚙️",
+        laneIndex: 1,
+        rowIndex: 3,
+        file: "backend/main.py",
+        desc: "Gestor de hilos en segundo plano que desacopla la ejecución pesada de la respuesta HTTP.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_UPLOAD"],
+        payload: "BackgroundTasks.add_task(_run_consumo_task, req)"
+      },
+
+      // Lane 2: Data Parsers & Web Scrapers
+      {
+        id: "insight_scraper",
+        label: "Insight Web Scraper",
+        icon: "🕷️",
+        laneIndex: 2,
+        rowIndex: 0,
+        file: "infrastructure/scrapers/insight_downloader.py",
+        desc: "Descarga automatizada de 7 consultas de tráfico Genesys y Evaluaciones manuales de Calidad.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD"],
+        payload: "download_insight_data(consulta='TRAFICO_GENESYS', periodo='202602')"
+      },
+      {
+        id: "file_parser_cleaner",
+        label: "Polars Readers & Cleaners",
+        icon: "🧹",
+        laneIndex: 2,
+        rowIndex: 1,
+        file: "infrastructure/parsers/cleaners.py",
+        desc: "Motor Polars ultra-rápido: sanitización Latin-1, eliminación de acentos e inferencia de tipos.",
+        flows: ["FLOW_UPLOAD"],
+        payload: "clean_dataframe(df, convertir_sin_acentos=True, max_len_varchar=3000)"
+      },
+      {
+        id: "genesys_browser_bot",
+        label: "Genesys Chrome CDP Bot",
+        icon: "🎧",
+        laneIndex: 2,
+        rowIndex: 2,
+        file: "modules/genesys/services/genesys_browser.py",
+        desc: "Control automatizado de Chrome en puerto 9222 para reproducir y descargar grabaciones .mp3.",
+        flows: ["FLOW_AUDIOS", "FLOW_HEALTH"],
+        payload: "GenesysBrowserAutomation.descargar_audio(telefono='987654321')"
+      },
+      {
+        id: "verint_api_client",
+        label: "Verint Speech Analytics API",
+        icon: "🗣️",
+        laneIndex: 2,
+        rowIndex: 3,
+        file: "modules/verint/services/verint_api_client.py",
+        desc: "Cliente REST para descarga masiva de reportes de Speech Analytics y transcripciones.",
+        flows: ["FLOW_CALIDAD"],
+        payload: "VerintAPIClient.get_speech_analytics_report(periodo='202602')"
+      },
+
+      // Lane 3: Domain Orchestrators
+      {
+        id: "orch_consumo",
+        label: "Consumo 5-Phase Orchestrator",
+        icon: "📊",
+        laneIndex: 3,
+        rowIndex: 0,
+        file: "modules/consumo/use_cases/consumo_orchestrator.py",
+        desc: "Orquesta Insight -> CD40K -> Desembolsos -> SQL Pipeline -> Validación SELECT PBI.",
+        flows: ["FLOW_CONSUMO"],
+        payload: "run_orchestration_flow(periodo='202602', run_phase1=True...)"
+      },
+      {
+        id: "orch_calidad",
+        label: "Calidad 5-Phase Orchestrator",
+        icon: "🎯",
+        laneIndex: 3,
+        rowIndex: 1,
+        file: "modules/calidad/use_cases/quality_orchestrator.py",
+        desc: "Consolida Insight + Verint Speech, aplica pesos, curva y parche de nota 0% por faltas graves.",
+        flows: ["FLOW_CALIDAD"],
+        payload: "run_quality_process_flow(periodo='202602', solo_cierre=False)"
+      },
+      {
+        id: "orch_cierre",
+        label: "Cierre Mensual Orchestrator",
+        icon: "🔒",
+        laneIndex: 3,
+        rowIndex: 2,
+        file: "modules/cierre/use_cases/cierre_orchestrator.py",
+        desc: "Ejecución transaccional e idempotente (DELETE + INSERT) de 01_auditoria y 02_kri_resumen.",
+        flows: ["FLOW_CIERRE"],
+        payload: "run_cierre_process_flow(period_str='202602', run_cierre_01=True)"
+      },
+      {
+        id: "orch_audios",
+        label: "Audio Pipeline Orchestrator",
+        icon: "📂",
+        laneIndex: 3,
+        rowIndex: 3,
+        file: "backend/main.py",
+        desc: "Enriquece DNI con teléfonos en Teradata y coordina la descarga concurrente de grabaciones.",
+        flows: ["FLOW_AUDIOS"],
+        payload: "TeradataService.enriquecer_solicitudes(solicitudes)"
+      },
+      {
+        id: "orch_grouped",
+        label: "P021 Grouped Aggregator",
+        icon: "👥",
+        laneIndex: 3,
+        rowIndex: 4,
+        file: "modules/calidad/televentas/use_cases/grouped_orchestrator.py",
+        desc: "Hook automático que recalcula agrupaciones de ejecutivos tras la carga de plantilla P021.",
+        flows: ["FLOW_UPLOAD"],
+        payload: "process_televentas_grouped(periodo='202602', force_reprocess=False)"
+      },
+
+      // Lane 4: Persistence, DW & Sinks
+      {
+        id: "td_engine",
+        label: "Teradata FastLoad & Batch Engine",
+        icon: "🗄️",
+        laneIndex: 4,
+        rowIndex: 0,
+        file: "infrastructure/database/database.py",
+        desc: "Motor ODBC/REST para inserciones masivas por lotes con soporte de rollback transaccional.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE", "FLOW_AUDIOS", "FLOW_UPLOAD", "FLOW_HEALTH"],
+        payload: "load_to_teradata(con, table='DLAB_GEC.M_EXP_...', df, clear_table=True)"
+      },
+      {
+        id: "sql_scripts_pipeline",
+        label: "Teradata SQL Staging & Analytics",
+        icon: "📜",
+        laneIndex: 4,
+        rowIndex: 1,
+        file: "modules/*/sql/*.sql",
+        desc: "Colección de scripts SQL parametrizados (VENTAS_DN, KRI_VENTAS, NTD, AUDITORIA).",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE"],
+        payload: "EXECUTE 'modules/consumo/sql/03_VENTAS_DN.sql' WITH {PERIODO: '202602'}"
+      },
+      {
+        id: "audio_transcripts_sink",
+        label: "Local MP3 Audio Storage",
+        icon: "📁",
+        laneIndex: 4,
+        rowIndex: 2,
+        file: "transcripciones_genesys/",
+        desc: "Carpeta de almacenamiento de audios descargados organizados por DNI y fecha de llamada.",
+        flows: ["FLOW_AUDIOS"],
+        payload: "transcripciones_genesys/AUDIO_10293_45879632.mp3"
+      },
+      {
+        id: "pbi_sync_notifier",
+        label: "Power BI Sync & Windows Toast",
+        icon: "🔔",
+        laneIndex: 4,
+        rowIndex: 3,
+        file: "infrastructure/system/notifier.py",
+        desc: "Actualiza timestamp de refresco para Power BI y emite alerta Toast nativa en Windows.",
+        flows: ["FLOW_CONSUMO", "FLOW_CALIDAD", "FLOW_CIERRE", "FLOW_UPLOAD"],
+        payload: "notify_process_completed('Consumo', 'Proceso culminado en 4.2 min')"
+      }
+    ];
+
+    /* =========================================================================
+       3. Flujos de Negocio E2E
+       ========================================================================= */
+    const flows = {
+      FLOW_CONSUMO: {
+        tag: "Flujo 1 / 6",
+        title: "⚡ PBI Base Consumo (5 Fases)",
+        summary: "Pipeline completo que extrae 7 insumos de Insight, ingesta CD40K y desembolsos, ejecuta el pipeline SQL en Teradata y actualiza Power BI con notificación Toast.",
+        activeNodeIds: ["ui_spa", "api_gateway", "orch_consumo", "insight_scraper", "td_engine", "sql_scripts_pipeline", "pbi_sync_notifier", "ws_broadcaster", "ui_stepper"],
+        stepsMap: {
+          "ui_spa": "Paso 1",
+          "api_gateway": "Paso 2",
+          "orch_consumo": "Paso 3",
+          "insight_scraper": "Paso 4",
+          "td_engine": "Paso 5",
+          "sql_scripts_pipeline": "Paso 6",
+          "pbi_sync_notifier": "Paso 7",
+          "ws_broadcaster": "Paso 8",
+          "ui_stepper": "Paso 9"
+        },
+        connections: [
+          { from: "ui_spa", to: "api_gateway", label: "POST /api/orchestrate/consumo" },
+          { from: "api_gateway", to: "orch_consumo", label: "Inicia Orquestador" },
+          { from: "orch_consumo", to: "insight_scraper", label: "Fase 1: Descarga Insumos" },
+          { from: "insight_scraper", to: "td_engine", label: "Ingesta Staging Teradata" },
+          { from: "orch_consumo", to: "sql_scripts_pipeline", label: "Fase 4: Ejecuta SQLs" },
+          { from: "sql_scripts_pipeline", to: "td_engine", label: "Calcula KRI y Ventas DN" },
+          { from: "orch_consumo", to: "pbi_sync_notifier", label: "Fase 5: Toast y Timestamp PBI" },
+          { from: "orch_consumo", to: "ws_broadcaster", label: "Streaming Logs" },
+          { from: "ws_broadcaster", to: "ui_stepper", label: "Actualiza Stepper en UI" }
+        ]
+      },
+
+      FLOW_CALIDAD: {
+        tag: "Flujo 2 / 6",
+        title: "📊 PBI Evaluaciones Calidad",
+        summary: "Orquestación semanal de calidad que combina evaluaciones de Insight con Verint Speech Analytics, aplicando curva de notas, ponderaciones y parche de nota 0% por faltas normativas.",
+        activeNodeIds: ["ui_spa", "api_gateway", "orch_calidad", "insight_scraper", "verint_api_client", "td_engine", "sql_scripts_pipeline", "pbi_sync_notifier", "ws_broadcaster", "ui_stepper"],
+        stepsMap: {
+          "ui_spa": "Paso 1",
+          "api_gateway": "Paso 2",
+          "orch_calidad": "Paso 3",
+          "insight_scraper": "Paso 4",
+          "verint_api_client": "Paso 5",
+          "td_engine": "Paso 6",
+          "sql_scripts_pipeline": "Paso 7",
+          "pbi_sync_notifier": "Paso 8",
+          "ws_broadcaster": "Paso 9",
+          "ui_stepper": "Paso 10"
+        },
+        connections: [
+          { from: "ui_spa", to: "api_gateway", label: "POST /api/orchestrate/calidad" },
+          { from: "api_gateway", to: "orch_calidad", label: "Inicia Calidad" },
+          { from: "orch_calidad", to: "insight_scraper", label: "Fase 1: Evaluaciones Insight" },
+          { from: "orch_calidad", to: "verint_api_client", label: "Fase 2: Speech Reports" },
+          { from: "verint_api_client", to: "td_engine", label: "Carga Staging Calidad" },
+          { from: "orch_calidad", to: "sql_scripts_pipeline", label: "Fase 4: Pesos & Parche Nota 0" },
+          { from: "sql_scripts_pipeline", to: "td_engine", label: "Genera Vista NTD" },
+          { from: "orch_calidad", to: "pbi_sync_notifier", label: "Fase 5: Toast Final" },
+          { from: "orch_calidad", to: "ws_broadcaster", label: "Streaming Logs" },
+          { from: "ws_broadcaster", to: "ui_stepper", label: "Actualiza Stepper" }
+        ]
+      },
+
+      FLOW_CIERRE: {
+        tag: "Flujo 3 / 6",
+        title: "🔒 Modo Cierre Mensual Idempotente",
+        summary: "Congelamiento histórico mensual ejecutando 01_auditoria_y_cierre.sql y 02_kri_resumen_total.sql con transacciones DELETE + INSERT que garantizan cero duplicidad.",
+        activeNodeIds: ["ui_spa", "api_gateway", "orch_cierre", "sql_scripts_pipeline", "td_engine", "pbi_sync_notifier", "ws_broadcaster"],
+        stepsMap: {
+          "ui_spa": "Paso 1",
+          "api_gateway": "Paso 2",
+          "orch_cierre": "Paso 3",
+          "sql_scripts_pipeline": "Paso 4",
+          "td_engine": "Paso 5",
+          "pbi_sync_notifier": "Paso 6",
+          "ws_broadcaster": "Paso 7"
+        },
+        connections: [
+          { from: "ui_spa", to: "api_gateway", label: "POST /api/orchestrate/calidad (solo_cierre=True)" },
+          { from: "api_gateway", to: "orch_cierre", label: "Inicia Cierre Mensual" },
+          { from: "orch_cierre", to: "sql_scripts_pipeline", label: "01_auditoria & 02_kri" },
+          { from: "sql_scripts_pipeline", to: "td_engine", label: "DELETE + INSERT Idempotente" },
+          { from: "orch_cierre", to: "pbi_sync_notifier", label: "Notificación Toast" },
+          { from: "orch_cierre", to: "ws_broadcaster", label: "Logs de Cierre" },
+          { from: "ws_broadcaster", to: "ui_spa", label: "Estado Final OK" }
+        ]
+      },
+
+      FLOW_AUDIOS: {
+        tag: "Flujo 4 / 6",
+        title: "🎧 Solicitud & Descarga de Audios Genesys",
+        summary: "Lectura de correos en Outlook Desktop, enriquecimiento de teléfonos vía Teradata, y descarga automatizada de llamadas en Genesys Cloud mediante Chrome CDP.",
+        activeNodeIds: ["outlook_client", "api_gateway", "orch_audios", "td_engine", "genesys_browser_bot", "audio_transcripts_sink", "ws_broadcaster", "ui_spa"],
+        stepsMap: {
+          "outlook_client": "Paso 1",
+          "api_gateway": "Paso 2",
+          "orch_audios": "Paso 3",
+          "td_engine": "Paso 4",
+          "genesys_browser_bot": "Paso 5",
+          "audio_transcripts_sink": "Paso 6",
+          "ws_broadcaster": "Paso 7",
+          "ui_spa": "Paso 8"
+        },
+        connections: [
+          { from: "outlook_client", to: "api_gateway", label: "GET /api/audios/outlook-fetch" },
+          { from: "api_gateway", to: "orch_audios", label: "POST /api/audios/download" },
+          { from: "orch_audios", to: "td_engine", label: "Enriquecer DNI -> Teléfono" },
+          { from: "orch_audios", to: "genesys_browser_bot", label: "Chrome CDP (puerto 9222)" },
+          { from: "genesys_browser_bot", to: "audio_transcripts_sink", label: "Descarga archivo .mp3" },
+          { from: "orch_audios", to: "ws_broadcaster", label: "Progreso de Audios" },
+          { from: "ws_broadcaster", to: "ui_spa", label: "Muestra Tabla en UI" }
+        ]
+      },
+
+      FLOW_UPLOAD: {
+        tag: "Flujo 5 / 6",
+        title: "📁 Ingesta Universal a Teradata & Hook P021",
+        summary: "Subida masiva de archivos con inferencia de tipos Polars, limpieza Latin-1 sin acentos, inserción por lotes en Teradata y disparo automático del agrupador P021.",
+        activeNodeIds: ["ui_spa", "ui_schema_editor", "api_gateway", "file_parser_cleaner", "td_engine", "orch_grouped", "pbi_sync_notifier"],
+        stepsMap: {
+          "ui_spa": "Paso 1",
+          "ui_schema_editor": "Paso 2",
+          "api_gateway": "Paso 3",
+          "file_parser_cleaner": "Paso 4",
+          "td_engine": "Paso 5",
+          "orch_grouped": "Paso 6",
+          "pbi_sync_notifier": "Paso 7"
+        },
+        connections: [
+          { from: "ui_spa", to: "ui_schema_editor", label: "POST /api/upload/preview" },
+          { from: "ui_schema_editor", to: "api_gateway", label: "POST /api/upload/teradata" },
+          { from: "api_gateway", to: "file_parser_cleaner", label: "Polars Clean & Latin-1" },
+          { from: "file_parser_cleaner", to: "td_engine", label: "Batch Load a Teradata" },
+          { from: "td_engine", to: "orch_grouped", label: "Hook Plantilla P021" },
+          { from: "orch_grouped", to: "pbi_sync_notifier", label: "Toast Completado" }
+        ]
+      },
+
+      FLOW_HEALTH: {
+        tag: "Flujo 6 / 6",
+        title: "🩺 Diagnóstico Preflight de Entorno",
+        summary: "Verificación simultánea en tiempo real de la conectividad con Teradata, disponibilidad de Microsoft Outlook Desktop y sesión activa de Chrome CDP para Genesys.",
+        activeNodeIds: ["ui_spa", "api_gateway", "preflight_diag", "outlook_client", "genesys_browser_bot", "td_engine"],
+        stepsMap: {
+          "ui_spa": "Paso 1",
+          "api_gateway": "Paso 2",
+          "preflight_diag": "Paso 3",
+          "outlook_client": "Paso 4",
+          "genesys_browser_bot": "Paso 5",
+          "td_engine": "Paso 6"
+        },
+        connections: [
+          { from: "ui_spa", to: "api_gateway", label: "GET /api/health-check" },
+          { from: "api_gateway", to: "preflight_diag", label: "Ejecuta Preflight" },
+          { from: "preflight_diag", to: "outlook_client", label: "Ping Outlook COM" },
+          { from: "preflight_diag", to: "genesys_browser_bot", label: "Ping Chrome CDP 9222" },
+          { from: "preflight_diag", to: "td_engine", label: "Ping Teradata DW" },
+          { from: "preflight_diag", to: "ui_spa", label: "Retorna Badges de Estado" }
+        ]
+      }
+    };
+
+    /* =========================================================================
+       4. Variables de Estado y Renderizado
+       ========================================================================= */
+    let currentFlowKey = "FLOW_CONSUMO";
+    let selectedNodeId = "orch_consumo";
+    let currentStepIndex = 0;
+    let autoPlayTimer = null;
+    let zoomLevel = 1.0;
+
+    const nodePositions = {};
+    const W = 260;
+    const H = 115;
+
+    // Calcular posiciones de cada nodo
+    allNodes.forEach(node => {
+      const lane = lanes[node.laneIndex];
+      const x = lane.x;
+      const y = 80 + node.rowIndex * 180;
+      nodePositions[node.id] = { x, y, laneColor: lane.color };
+    });
+
+    /* =========================================================================
+       5. Renderizado del DOM: Swimlanes, Nodos y Conexiones SVG
+       ========================================================================= */
+    function renderSwimlanes() {
+      const container = document.getElementById("swimlanes-layer");
+      container.innerHTML = "";
+
+      lanes.forEach((lane, i) => {
+        const col = document.createElement("div");
+        col.className = "swimlane-col";
+        col.style.left = `${lane.x}px`;
+        col.style.borderColor = `${lane.color}40`;
+
+        const header = document.createElement("div");
+        header.className = "swimlane-header";
+        header.style.color = lane.color;
+        header.style.borderColor = `${lane.color}80`;
+        header.innerHTML = `<span>●</span> ${lane.title}`;
+
+        col.appendChild(header);
+        container.appendChild(col);
+      });
+    }
+
+    function renderNodes() {
+      const container = document.getElementById("nodes-layer");
+      container.innerHTML = "";
+
+      const activeFlow = flows[currentFlowKey];
+
+      allNodes.forEach(node => {
+        const pos = nodePositions[node.id];
+        const isFlowActive = activeFlow.activeNodeIds.includes(node.id);
+        const stepLabel = activeFlow.stepsMap[node.id] || "";
+
+        const card = document.createElement("div");
+        card.id = `node-${node.id}`;
+        card.className = `node-card ${isFlowActive ? "active-flow" : "dimmed"} ${node.id === selectedNodeId ? "selected" : ""}`;
+        card.style.left = `${pos.x}px`;
+        card.style.top = `${pos.y}px`;
+
+        if (isFlowActive) {
+          card.style.borderColor = pos.laneColor;
+        }
+
+        card.innerHTML = `
+          <div class="node-header">
+            <div class="node-title-group">
+              <span class="node-icon">${node.icon}</span>
+              <span class="node-title" title="${node.label}">${node.label}</span>
+            </div>
+            <span class="node-step-badge">${stepLabel}</span>
+          </div>
+          <div class="node-desc">${node.desc}</div>
+          <div class="node-footer">
+            <span class="node-file-tag">${node.file.split('/').pop()}</span>
+            <span>${lanes[node.laneIndex].badge}</span>
+          </div>
+        `;
+
+        card.addEventListener("click", () => selectNode(node.id));
+        container.appendChild(card);
+      });
+    }
+
+    function renderConnections() {
+      const connGroup = document.getElementById("connections-group");
+      const labelsGroup = document.getElementById("labels-group");
+      connGroup.innerHTML = "";
+      labelsGroup.innerHTML = "";
+
+      const activeFlow = flows[currentFlowKey];
+      if (!activeFlow || !activeFlow.connections) return;
+
+      activeFlow.connections.forEach(conn => {
+        const src = nodePositions[conn.from];
+        const dst = nodePositions[conn.to];
+        if (!src || !dst) return;
+
+        let pathData = "";
+        let midX = 0;
+        let midY = 0;
+
+        if (src.x === dst.x) {
+          // Intra-lane connection (vertical straight/curve)
+          const startX = src.x + W / 2;
+          const startY = src.y < dst.y ? src.y + H : src.y;
+          const endX = dst.x + W / 2;
+          const endY = src.y < dst.y ? dst.y : dst.y + H;
+          
+          pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+          midX = startX + 10;
+          midY = (startY + endY) / 2;
+        } else {
+          // Inter-lane connection (Horizontal Bézier)
+          const isLeftToRight = src.x < dst.x;
+          const startX = isLeftToRight ? src.x + W : src.x;
+          const startY = src.y + H / 2;
+          const endX = isLeftToRight ? dst.x : dst.x + W;
+          const endY = dst.y + H / 2;
+          const dx = Math.abs(endX - startX);
+
+          const cp1x = isLeftToRight ? startX + dx * 0.45 : startX - dx * 0.45;
+          const cp2x = isLeftToRight ? endX - dx * 0.45 : endX + dx * 0.45;
+
+          pathData = `M ${startX} ${startY} C ${cp1x} ${startY}, ${cp2x} ${endY}, ${endX} ${endY}`;
+          midX = (startX + endX) / 2;
+          midY = (startY + endY) / 2 - 8;
+        }
+
+        // Path element
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", pathData);
+        path.setAttribute("class", "flow-line active");
+        path.setAttribute("stroke", src.laneColor || "#38bdf8");
+        path.setAttribute("marker-end", "url(#arrow)");
+        connGroup.appendChild(path);
+
+        // Text label
+        if (conn.label) {
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("x", midX);
+          text.setAttribute("y", midY);
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("class", "flow-label");
+          text.textContent = conn.label;
+          labelsGroup.appendChild(text);
+        }
+      });
+    }
+
+    function renderFlowButtons() {
+      const container = document.getElementById("flow-buttons");
+      container.innerHTML = "";
+
+      Object.keys(flows).forEach(key => {
+        const flow = flows[key];
+        const btn = document.createElement("button");
+        btn.className = `flow-btn ${key === currentFlowKey ? "active" : ""}`;
+        btn.innerHTML = `<span>${flow.title.split(' ')[0]}</span> ${flow.title.substring(flow.title.indexOf(' ') + 1)}`;
+        btn.addEventListener("click", () => switchFlow(key));
+        container.appendChild(btn);
+      });
+    }
+
+    function renderInspector() {
+      const node = allNodes.find(n => n.id === selectedNodeId);
+      const container = document.getElementById("sidebar-details");
+      const activeFlow = flows[currentFlowKey];
+
+      if (!node) {
+        container.innerHTML = `<p style="color: var(--text-muted);">Selecciona un componente del diagrama para inspeccionar sus detalles.</p>`;
+        return;
+      }
+
+      const lane = lanes[node.laneIndex];
+      const stepNumber = activeFlow.stepsMap[node.id] || "No participa en flujo actual";
+
+      container.innerHTML = `
+        <div class="flow-info-card">
+          <div class="inspector-label">${activeFlow.tag}</div>
+          <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${activeFlow.title}</div>
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${activeFlow.summary}</div>
+        </div>
+
+        <div class="inspector-card">
+          <div class="inspector-label">Componente & Capa</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 24px;">${node.icon}</span>
+            <div>
+              <div class="inspector-value" style="font-weight: 700;">${node.label}</div>
+              <span style="font-size: 11px; color: ${lane.color}; font-weight: 600;">${lane.title}</span>
+            </div>
+          </div>
+          <div class="inspector-label" style="margin-top: 10px;">Archivo Fuente</div>
+          <div class="code-block">${node.file}</div>
+        </div>
+
+        <div class="inspector-card">
+          <div class="inspector-label">Rol y Responsabilidad</div>
+          <div class="inspector-value" style="font-size: 12px; color: #cbd5e1;">${node.desc}</div>
+        </div>
+
+        <div class="inspector-card">
+          <div class="inspector-label">Ejecución en Flujo Activo</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: #fff;">Paso Asignado:</span>
+            <span class="brand-badge" style="padding: 2px 8px; font-size: 11px;">${stepNumber}</span>
+          </div>
+        </div>
+
+        <div class="inspector-card">
+          <div class="inspector-label">Contrato de Datos / Payload de Ejemplo</div>
+          <div class="code-block">${node.payload}</div>
+        </div>
+      `;
+    }
+
+    /* =========================================================================
+       6. Controladores e Interacciones
+       ========================================================================= */
+    function switchFlow(flowKey) {
+      currentFlowKey = flowKey;
+      currentStepIndex = 0;
+      const flow = flows[flowKey];
+      if (flow.activeNodeIds.length > 0) {
+        selectedNodeId = flow.activeNodeIds[0];
+      }
+      updateAll();
+    }
+
+    function selectNode(nodeId) {
+      selectedNodeId = nodeId;
+      const activeFlow = flows[currentFlowKey];
+      const idx = activeFlow.activeNodeIds.indexOf(nodeId);
+      if (idx !== -1) {
+        currentStepIndex = idx;
+      }
+      updateAll();
+    }
+
+    function nextStep() {
+      const activeFlow = flows[currentFlowKey];
+      if (currentStepIndex < activeFlow.activeNodeIds.length - 1) {
+        currentStepIndex++;
+      } else {
+        currentStepIndex = 0;
+      }
+      selectedNodeId = activeFlow.activeNodeIds[currentStepIndex];
+      updateAll();
+    }
+
+    function prevStep() {
+      const activeFlow = flows[currentFlowKey];
+      if (currentStepIndex > 0) {
+        currentStepIndex--;
+      } else {
+        currentStepIndex = activeFlow.activeNodeIds.length - 1;
+      }
+      selectedNodeId = activeFlow.activeNodeIds[currentStepIndex];
+      updateAll();
+    }
+
+    function toggleAutoPlay() {
+      const btn = document.getElementById("btn-auto-play");
+      if (autoPlayTimer) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+        btn.innerHTML = "▶ Auto-Play";
+        btn.style.color = "#34d399";
+      } else {
+        autoPlayTimer = setInterval(nextStep, 2200);
+        btn.innerHTML = "⏸ Pausar";
+        btn.style.color = "#f43f5e";
+      }
+    }
+
+    function updateAll() {
+      renderFlowButtons();
+      renderNodes();
+      renderConnections();
+      renderInspector();
+
+      const activeFlow = flows[currentFlowKey];
+      const stepText = document.getElementById("step-indicator-text");
+      stepText.textContent = `Paso ${currentStepIndex + 1} / ${activeFlow.activeNodeIds.length}`;
+    }
+
+    /* =========================================================================
+       7. Inicialización y Event Listeners
+       ========================================================================= */
+    document.addEventListener("DOMContentLoaded", () => {
+      renderSwimlanes();
+      renderFlowButtons();
+      updateAll();
+
+      document.getElementById("btn-next-step").addEventListener("click", nextStep);
+      document.getElementById("btn-prev-step").addEventListener("click", prevStep);
+      document.getElementById("btn-auto-play").addEventListener("click", toggleAutoPlay);
+
+      // Zoom Controls
+      const canvas = document.getElementById("flow-canvas");
+      document.getElementById("btn-zoom-in").addEventListener("click", () => {
+        zoomLevel = Math.min(zoomLevel + 0.1, 1.8);
+        canvas.style.transform = `scale(${zoomLevel})`;
+      });
+      document.getElementById("btn-zoom-out").addEventListener("click", () => {
+        zoomLevel = Math.max(zoomLevel - 0.1, 0.6);
+        canvas.style.transform = `scale(${zoomLevel})`;
+      });
+      document.getElementById("btn-reset-view").addEventListener("click", () => {
+        zoomLevel = 1.0;
+        canvas.style.transform = `scale(1.0)`;
+        document.getElementById("canvas-wrapper").scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      });
+
+      // Sidebar Toggle
+      const sidebar = document.getElementById("sidebar-inspector");
+      document.getElementById("btn-toggle-sidebar").addEventListener("click", () => {
+        sidebar.style.display = sidebar.style.display === "none" ? "flex" : "none";
+      });
+      document.getElementById("btn-close-sidebar").addEventListener("click", () => {
+        sidebar.style.display = "none";
+      });
+    });
+  </script>
+</body>
+</html>

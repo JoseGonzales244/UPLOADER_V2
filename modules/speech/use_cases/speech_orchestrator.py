@@ -100,7 +100,7 @@ def sync_transcripts_pipeline(
     t_repo = teradata_repo or TeradataRepository()
     s_repo = speech_repo or SpeechDbRepository()
 
-    out_dir = output_dir or (PROJECT_ROOT / "data" / "transcripciones_tc")
+    out_dir = output_dir or (PROJECT_ROOT / "data" / "transcripciones")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Extracción Teradata

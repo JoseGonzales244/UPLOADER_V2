@@ -4,10 +4,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Directorios base
+# Directorios base y centralizados bajo data/
 BASE_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DOWNLOADS_DIR = Path.home() / "Downloads"
+DATA_DIR = PROJECT_ROOT / "data"
+
+# Descargas centralizadas de audios
+DOWNLOADS_DIR = DATA_DIR / "downloads" / "audios" / "genesys"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Runtime, cachés y perfiles
+RUNTIME_DIR = DATA_DIR / "runtime"
+CACHE_DIR = RUNTIME_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+TRACKING_FILE = CACHE_DIR / "genesys_tracking.json"
+TELEFONOS_CACHE_FILE = CACHE_DIR / "telefonos_cache.json"
+NO_ENCONTRADOS_FILE = CACHE_DIR / "no_encontrados.csv"
 
 # Cargar .env de la raíz si existe
 env_root = PROJECT_ROOT / ".env"
@@ -16,15 +29,12 @@ if env_root.exists():
 else:
     load_dotenv()
 
-# Archivos de persistencia
-TRACKING_FILE = BASE_DIR / "tracking.json"
-TELEFONOS_CACHE_FILE = BASE_DIR / "telefonos_cache.json"
-NO_ENCONTRADOS_FILE = BASE_DIR / "no_encontrados.csv"
-
 # Configuración de CDP y Navegador
 CDP_URL = os.getenv("GENESYS_CDP_URL", "http://localhost:9222")
 GENESYS_URL = os.getenv("GENESYS_URL", "https://apps.mypurecloud.com/directory/#/analytics/interactions")
-PROFILE_DIR = BASE_DIR / ".chrome_genesys_profile"
+PROFILES_DIR = RUNTIME_DIR / "browser_profiles"
+PROFILE_DIR = PROFILES_DIR / "genesys"
+PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Credenciales y conexión Teradata
 TERADATA_USER = os.getenv("TERADATA_USER")
