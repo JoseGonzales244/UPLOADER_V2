@@ -72,5 +72,20 @@ class TestFriendlyErrors(unittest.TestCase):
         self.assertIn("no es un Excel válido", str(ctx.exception))
 
 
+    def test_teradata_3504_error_translation(self):
+        raw = (
+            "Error en script '02_sa_marcacion_ventas_lpdp.sql' (sentencia 17): "
+            "[Version 20.0.0.63] [Session 46778961] [Teradata Database] [Error 3504] [SQLState HY000] "
+            "Selected non-aggregate values must be part of the associated group. at gosqldriver/teradatasql.formatError ErrorUtil.go:84"
+        )
+        friendly = format_friendly_error(raw)
+        self.assertIn("3504", friendly)
+        self.assertIn("GROUP BY", friendly)
+        self.assertIn("02_sa_marcacion_ventas_lpdp.sql", friendly)
+        self.assertNotIn("gosqldriver", friendly)
+        self.assertNotIn("ErrorUtil.go", friendly)
+        self.assertNotIn("Version 20.0.0.63", friendly)
+
+
 if __name__ == "__main__":
     unittest.main()

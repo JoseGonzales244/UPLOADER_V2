@@ -78,7 +78,29 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 4. Error de Teradata 7547 (Target row updated by multiple source rows)
+    # 4. Error de Base de Datos Teradata con código específico (Error 3504, 3706, 7547, etc.)
+    td_match = re.search(r'\[Teradata Database\]\s*\[Error\s*(\d+)\](?:\s*\[SQLState\s*[A-Za-z0-9]+\])?\s*(.+?)(?:\s+at\s+gosqldriver|\s*ErrorUtil|\s*TeradataConnection|$)', raw_msg, re.IGNORECASE)
+    if td_match:
+        err_code = td_match.group(1)
+        raw_desc = td_match.group(2).strip().rstrip('.')
+        script_match = re.search(r"en script '([^']+)' \(sentencia (\d+)\)", raw_msg)
+        script_info = f" en '{script_match.group(1)}' (sentencia {script_match.group(2)})" if script_match else ""
+
+        explanations = {
+            "3504": "Las columnas seleccionadas que no son funciones de agregación (como MAX o SUM) deben incluirse en la cláusula GROUP BY.",
+            "3706": "Error de sintaxis SQL o palabra reservada mal utilizada.",
+            "3807": "La tabla o vista no existe en la base de datos. Verifique que las fases previas de carga se hayan completado correctamente.",
+            "3802": "La base de datos especificada no existe.",
+            "7547": "Conflicto de registros en Teradata: se detectaron registros duplicados en los datos de origen intentando actualizar la misma fila de destino.",
+            "3932": "Operación DDL no permitida dentro de una transacción explícita (requiere autocommit).",
+            "8017": "Credenciales incorrectas en Teradata: usuario o contraseña de base de datos no válidos.",
+            "2652": "Operación no soportada sobre tabla particionada.",
+        }
+        detail = explanations.get(err_code, raw_desc)
+        msg = f"Error Teradata {err_code}{script_info}: {raw_desc}. 🔍 Causa: {detail}"
+        return _append_resume_tip(msg, raw_msg, context)
+
+    # 5. Error de Teradata 7547 (Target row updated by multiple source rows)
     if "error 7547" in raw_msg.lower() or "target row updated by multiple source rows" in raw_msg.lower():
         msg = (
             "Conflicto de registros en Teradata (Error 7547): Se detectaron registros duplicados en los datos de origen "
@@ -86,7 +108,7 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 5. Error de Teradata 3807 / 3802 (Tabla o vista no existe)
+    # 6. Error de Teradata 3807 / 3802 (Tabla o vista no existe)
     if "error 3807" in raw_msg.lower() or "error 3802" in raw_msg.lower() or ("object" in raw_msg.lower() and "does not exist" in raw_msg.lower()):
         obj_match = re.search(r"'(DLAB_GEC\.[A-Za-z0-9_]+|[A-Za-z0-9_\.]+)'", raw_msg)
         obj_name = obj_match.group(1) if obj_match else "especificada"
@@ -96,7 +118,7 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 6. Error de Teradata 8017 (Autenticación / Credenciales inválidas)
+    # 7. Error de Teradata 8017 (Autenticación / Credenciales inválidas)
     if "error 8017" in raw_msg.lower() or "userid, password or account is invalid" in raw_msg.lower():
         msg = (
             "Credenciales incorrectas en Teradata (Error 8017): Usuario o contraseña de base de datos no válidos. "
@@ -104,7 +126,7 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 7. Error de Teradata 2801 / 395 / 528 / Conexión / VPN / Timeout (WinError 10060 / 10061 / wsarecv)
+    # 8. Error de Teradata 2801 / 395 / 528 / Conexión / VPN / Timeout (WinError 10060 / 10061 / wsarecv)
     if any(k in raw_msg.lower() for k in [
         "error 2801", "error 395", "error 528", "08s01", "wsarecv", "failure receiving message header",
         "read tcp", "10060", "10061", "connection refused", "connection reset", "timed out",
@@ -116,7 +138,7 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 8. Error de Verint WFO (Sesión / Autenticación / Timeout)
+    # 9. Error de Verint WFO (Sesión / Autenticación / Timeout)
     if "verint" in raw_msg.lower() and any(k in raw_msg.lower() for k in ["autenticación", "timeout", "sesión", "reporte", "401", "403"]):
         msg = (
             "Error en el servicio de Verint Speech Analytics: La sesión expiró o se agotó el tiempo de espera generando el reporte. "
@@ -124,7 +146,7 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 9. Error de Insight / PureCloud (Autenticación / Descarga)
+    # 10. Error de Insight / PureCloud (Autenticación / Descarga)
     if "insight" in raw_msg.lower() and any(k in raw_msg.lower() for k in ["autenticación", "credenciales", "login", "descarga"]):
         msg = (
             "Error al conectar con Insight / PureCloud: No se pudo autenticar o descargar las evaluaciones. "
@@ -132,9 +154,12 @@ def format_friendly_error(err: Exception | str, context: str = "") -> str:
         )
         return _append_resume_tip(msg, raw_msg, context)
 
-    # 10. Limpieza general de trazas técnicas para mensajes desconocidos
+    # 11. Limpieza general de trazas técnicas para mensajes desconocidos (Go stacktraces, paths, etc.)
     clean_msg = raw_msg
+    clean_msg = re.sub(r'\[Version\s+[^\]]+\]\s*', '', clean_msg)
+    clean_msg = re.sub(r'\[Session\s+[^\]]+\]\s*', '', clean_msg)
     clean_msg = re.sub(r'\s+at\s+[a-zA-Z0-9_\/\.\*\(\)\:\-]+', '', clean_msg)
+    clean_msg = re.sub(r'\b[a-zA-Z0-9_\.\*\(\)\:\-]+\.(go|s)\:\d+\b', '', clean_msg)
     clean_msg = re.sub(r'([A-Z]\:[\\\/][^:\n\r]+)', '', clean_msg)
     clean_msg = re.sub(r'\s{2,}', ' ', clean_msg).strip()
 
