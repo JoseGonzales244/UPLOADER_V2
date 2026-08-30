@@ -18,6 +18,7 @@ graph TD
     PIP --> P1[base_consumo.md]
     PIP --> P2[calidad_ntd.md]
     PIP --> P3[cierre_mensual.md]
+    PIP --> P4[dotacion_mensual.md]
     PIP --> P5[audios_y_transcripciones.md]
     PIP --> P6[pilotos_y_nps.md]
 
@@ -39,6 +40,7 @@ graph TD
 - 📊 **[PBI Base Consumo](pipelines/base_consumo.md):** Las 5 fases del pipeline de consumo, insumos y scripts SQL.
 - 📈 **[PBI Evaluaciones Calidad](pipelines/calidad_ntd.md):** Proceso de consolidado NTD y reglas de ponderación.
 - 🔒 **[Modo Cierre Mensual](pipelines/cierre_mensual.md):** Idempotencia, scripts `01_auditoria` y `02_kri_resumen`.
+- 👥 **[Dotación Mensual & Licencias SA](pipelines/dotacion_mensual.md):** Fases 1 a 5, ausentismos de las 4 analistas y licencias Verint.
 - 🎧 **[Audios y Transcripciones](pipelines/audios_y_transcripciones.md):** Genesys Cloud, Outlook MAPI y Verint ExtJS.
 - 🚀 **[Pilotos y Encuestas NPS](pipelines/pilotos_y_nps.md):** Piloto TCAD, Objeciones No Venta y NPS IVR.
 

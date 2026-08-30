@@ -22,8 +22,6 @@ user_home = os.path.expanduser("~")
 ONEDRIVE_DIRS = [
     os.path.join(user_home, "OneDrive - Interbank", "Televentas"),
     os.path.join(user_home, "OneDrive", "Televentas"),
-    r"C:\Users\b47756\OneDrive - Interbank\Televentas",
-    r"C:\Users\USER\OneDrive - Interbank\Televentas",
 ]
 
 SQL_SCRIPT_PATH = Path(__file__).parent.parent / "sql" / "01_proceso_televentas_grouped.sql"

@@ -126,6 +126,9 @@ function App() {
   const [soloCierre, setSoloCierre] = useState(false);
   const [cierreScripts, setCierreScripts] = useState({ s1: true, s2: true, s3: true });
 
+  const [periodoDotacion, setPeriodoDotacion] = useState(getDefaultPeriod().slice(0, 4) + '-' + getDefaultPeriod().slice(4, 6));
+  const [periodoLicencias, setPeriodoLicencias] = useState(getDefaultPeriod());
+
   const logConsoleRef = useRef(null);
 
   useEffect(() => {
@@ -606,6 +609,60 @@ function App() {
     }
   };
 
+  const handleRunDotacionPipeline = async () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setCurrentProcess(`Dotación (${periodoDotacion})`);
+    setProgress(0.05);
+    setStatusMsg(`Iniciando pipeline de Dotación para ${periodoDotacion}...`);
+    setLogs([]);
+
+    try {
+      const res = await fetch('/api/dotacion/run-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          periodo: periodoDotacion
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Error iniciando dotación');
+      }
+      showToast(data.message || 'Pipeline de Dotación iniciado exitosamente', 'info');
+    } catch (err) {
+      showToast('Error al iniciar dotación: ' + err.message, 'error');
+      setIsRunning(false);
+    }
+  };
+
+  const handleRunLicenciasPipeline = async () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setCurrentProcess(`Licencias SA (${periodoLicencias})`);
+    setProgress(0.1);
+    setStatusMsg(`Iniciando generación de licencias SA para ${periodoLicencias}...`);
+    setLogs([]);
+
+    try {
+      const res = await fetch('/api/dotacion/run-licencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          periodo: periodoLicencias
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Error iniciando licencias');
+      }
+      showToast(data.message || 'Generación de Licencias SA iniciada', 'info');
+    } catch (err) {
+      showToast('Error al iniciar licencias SA: ' + err.message, 'error');
+      setIsRunning(false);
+    }
+  };
+
   const handleStopProcess = async () => {
     try {
       const res = await fetch('/api/orchestrate/stop', { method: 'POST' });
@@ -746,7 +803,8 @@ function App() {
             { id: 'upload', icon: '📁', label: 'Subir a Teradata' },
             { id: 'audios', icon: '🎧', label: 'Audios Genesys' },
             { id: 'consumo', icon: '⚡', label: 'PBI Base Consumo' },
-            { id: 'calidad', icon: '📊', label: 'PBI Evaluaciones Calidad' }
+            { id: 'calidad', icon: '📊', label: 'PBI Evaluaciones Calidad' },
+            { id: 'dotacion', icon: '👥', label: 'Dotación & Licencias' }
           ].map((tab) =>
             h('button', {
               key: tab.id,
@@ -1304,6 +1362,80 @@ function App() {
                 : 'btn-primary-ib'
             }`
           }, isRunning ? '⏳ Ejecutando...' : (soloCierre ? '🔒 Iniciar Cierre Mensual' : '🚀 Iniciar Orquestación de Calidad'))
+        ),
+
+        // TAB 5: DOTACIÓN Y LICENCIAS
+        activeTab === 'dotacion' && h('div', { class: 'space-y-6' },
+          // SUB-PROCESO 1: PIPELINE GENERAL DE DOTACIÓN
+          h('div', { class: 'ib-card p-6 space-y-4' },
+            h('div', { class: 'flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4' },
+              h('div', null,
+                h('h2', { class: 'text-sm font-bold text-white uppercase tracking-wider font-display flex items-center gap-2' },
+                  '👥 1. Pipeline de Dotación Mensual & Distribución de Muestras',
+                  h('span', { class: 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700/60 text-emerald-400' }, 'Inicio de Mes')
+                ),
+                h('p', { class: 'text-xs text-slate-400 mt-0.5' }, 'Sincroniza el Roster de Ventas y distribuye cuotas entre las 4 analistas.')
+              ),
+              h('div', { class: 'flex items-center gap-2' },
+                h('label', { class: 'text-xs font-semibold text-slate-300 font-display' }, 'Periodo:'),
+                h('input', {
+                  type: 'text',
+                  value: periodoDotacion,
+                  disabled: isRunning,
+                  onChange: (e) => setPeriodoDotacion(e.target.value),
+                  placeholder: 'YYYY-MM',
+                  class: 'w-28 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono-code text-white focus:border-emerald-500 text-center font-bold'
+                })
+              )
+            ),
+
+            // Stepper informativo de las 4 Fases
+            h('div', { class: 'p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/80 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-2 font-mono-code' },
+              h('span', null, '1. Saneamiento & Feriados'),
+              h('span', { class: 'text-slate-600' }, '➜'),
+              h('span', null, '2. Sincronización Roster (R0-R3)'),
+              h('span', { class: 'text-slate-600' }, '➜'),
+              h('span', null, '3. Distribución 4 Analistas'),
+              h('span', { class: 'text-slate-600' }, '➜'),
+              h('span', null, '4. Televentas Ejecutivos')
+            ),
+
+            h('button', {
+              onClick: handleRunDotacionPipeline,
+              disabled: isRunning,
+              class: 'w-full py-3.5 rounded-xl font-bold text-sm shadow-lg font-display btn-primary-ib cursor-pointer'
+            }, isRunning ? '⏳ Ejecutando Pipeline de Dotación...' : '🚀 Ejecutar Dotación Completa (Fases 1 a 4)')
+          ),
+
+          // SUB-PROCESO 2: LICENCIAS SPEECH ANALYTICS (VERINT)
+          h('div', { class: 'ib-card p-6 space-y-4' },
+            h('div', { class: 'flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4' },
+              h('div', null,
+                h('h2', { class: 'text-sm font-bold text-white uppercase tracking-wider font-display flex items-center gap-2' },
+                  '🔑 2. Solicitud de Licencias Speech Analytics (Verint SA)',
+                  h('span', { class: 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-950 border border-blue-700/60 text-blue-400' }, 'Fin de Mes')
+                ),
+                h('p', { class: 'text-xs text-slate-400 mt-0.5' }, 'Reconcilia el personal activo y genera la nueva pestaña en LICENCIAS_SA_2026.xlsx excluyendo BackOffice.')
+              ),
+              h('div', { class: 'flex items-center gap-2' },
+                h('label', { class: 'text-xs font-semibold text-slate-300 font-display' }, 'Periodo:'),
+                h('input', {
+                  type: 'text',
+                  value: periodoLicencias,
+                  disabled: isRunning,
+                  onChange: (e) => setPeriodoLicencias(e.target.value),
+                  placeholder: 'YYYYMM',
+                  class: 'w-24 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono-code text-white focus:border-blue-500 text-center font-bold'
+                })
+              )
+            ),
+
+            h('button', {
+              onClick: handleRunLicenciasPipeline,
+              disabled: isRunning,
+              class: 'w-full py-3 rounded-xl font-bold text-xs shadow-lg font-display bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/30 cursor-pointer transition'
+            }, isRunning ? '⏳ Generando Licencias SA...' : '⚡ Generar Hoja de Licencias SA')
+          )
         ),
 
         // WebSocket Live Events Console

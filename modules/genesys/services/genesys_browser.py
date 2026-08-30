@@ -168,8 +168,11 @@ class GenesysBrowserAutomation:
             logger.debug(f"Error asegurando panel de filtros: {e}")
 
     @staticmethod
-    def construir_url_interacciones_fecha(origin: str, anio: int = 2026, mes: int = 7) -> str:
+    def construir_url_interacciones_fecha(origin: str, anio: Optional[int] = None, mes: Optional[int] = None) -> str:
         """Construye la URL parametrizada con el rango de fechas directo para Genesys Cloud."""
+        now = datetime.datetime.now()
+        anio = anio or now.year
+        mes = mes or now.month
         start_dt = f"{anio:04d}-{mes:02d}-01T05%3A00%3A00.000Z"
         if mes == 12:
             end_dt = f"{anio+1:04d}-01-01T05%3A00%3A00.000Z"
@@ -179,8 +182,10 @@ class GenesysBrowserAutomation:
         base_origin = origin.split("/directory")[0] if "/directory" in origin else origin
         return f"{base_origin}/directory/#/analytics/interactions?start={start_dt}&end={end_dt}&hasMedia=false&mediaType=all"
 
-    def _asegurar_filtro_fecha(self, analytics_frame: Frame, mes_deseado: str = "julio", anio_deseado: str = "2026") -> None:
+    def _asegurar_filtro_fecha(self, analytics_frame: Frame, mes_deseado: Optional[str] = None, anio_deseado: Optional[str] = None) -> None:
         """Verifica el filtro de fecha actual. Si no coincide con el mes/año requerido, despliega el calendario gux-calendar y selecciona desde el 1° del mes hasta el 1° del mes siguiente."""
+        now = datetime.datetime.now()
+        anio_deseado = anio_deseado or str(now.year)
         try:
             btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
             btn = analytics_frame.locator(btn_selector).first

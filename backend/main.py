@@ -37,6 +37,8 @@ from infrastructure.parsers.preview_service import FilePreviewService
 from infrastructure.database.database import load_credentials, connect_teradata, load_to_teradata
 from infrastructure.system.health_check import run_preflight_health_check
 from modules.cierre.use_cases.cierre_orchestrator import run_cierre_process_flow
+from modules.dotacion.use_cases.dotacion_orchestrator import DotacionOrchestrator
+from modules.dotacion.use_cases.licencias_orchestrator import LicenciasSaOrchestrator
 from ui.components import load_templates
 
 logger = setup_logging("backend.main", log_prefix="fastapi")
@@ -569,6 +571,88 @@ async def upload_to_teradata(
         selections
     )
     return {"status": "started", "message": f"Iniciando ingesta a {teradata_table}"}
+
+
+# -----------------------------------------------------------------------------
+# ENDPOINTS: MÓDULO DE DOTACIÓN MENSUAL Y LICENCIAS SA
+# -----------------------------------------------------------------------------
+
+def _run_dotacion_pipeline_task(periodo: str):
+    process_state["running"] = True
+    process_state["current_process"] = f"Dotación Mensual ({periodo})"
+    process_state["progress"] = 0.0
+    send_progress_update(f"👥 Iniciando Pipeline de Dotación para el periodo {periodo}...", "info", progress=0.05)
+
+    def progress_cb(msg: str, level: str = "info"):
+        send_progress_update(msg, level)
+
+    try:
+        orchestrator = DotacionOrchestrator()
+        result = orchestrator.run_pipeline(
+            periodo=periodo,
+            progress_callback=progress_cb
+        )
+        process_state["progress"] = 1.0
+        send_progress_update(f"🎉 Pipeline de Dotación finalizado con éxito para {periodo}.", "success", progress=1.0)
+    except Exception as e:
+        logger.exception(f"Error en pipeline de dotación: {e}")
+        send_progress_update(f"❌ Error en Dotación: {e}", "error")
+    finally:
+        process_state["running"] = False
+        process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
+
+
+def _run_licencias_pipeline_task(periodo: str):
+    process_state["running"] = True
+    process_state["current_process"] = f"Licencias SA ({periodo})"
+    process_state["progress"] = 0.0
+    send_progress_update(f"🔑 Iniciando generación de Licencias Speech Analytics para {periodo}...", "info", progress=0.1)
+
+    def progress_cb(msg: str, level: str = "info"):
+        send_progress_update(msg, level)
+
+    try:
+        orchestrator = LicenciasSaOrchestrator()
+        result = orchestrator.run_licencias_pipeline(
+            periodo=periodo,
+            progress_callback=progress_cb
+        )
+        process_state["progress"] = 1.0
+        send_progress_update(f"🎉 Licencias SA generadas con éxito para {periodo}.", "success", progress=1.0)
+    except Exception as e:
+        logger.exception(f"Error en generación de licencias SA: {e}")
+        send_progress_update(f"❌ Error en Licencias SA: {e}", "error")
+    finally:
+        process_state["running"] = False
+        process_state["current_process"] = None
+        send_progress_update(process_state["message"], process_state["status"])
+
+
+class DotacionPipelineRequest(BaseModel):
+    periodo: str = "AUTO"
+
+
+@app.post("/api/dotacion/run-pipeline")
+def run_dotacion_pipeline(req: DotacionPipelineRequest, background_tasks: BackgroundTasks):
+    if process_state["running"]:
+        raise HTTPException(status_code=400, detail=f"Ya hay un proceso en ejecución: {process_state['current_process']}")
+
+    background_tasks.add_task(_run_dotacion_pipeline_task, req.periodo.strip())
+    return {"status": "started", "message": f"Iniciando Pipeline de Dotación para {req.periodo}"}
+
+
+class LicenciasSaRequest(BaseModel):
+    periodo: str = "AUTO"
+
+
+@app.post("/api/dotacion/run-licencias")
+def run_licencias_pipeline(req: LicenciasSaRequest, background_tasks: BackgroundTasks):
+    if process_state["running"]:
+        raise HTTPException(status_code=400, detail=f"Ya hay un proceso en ejecución: {process_state['current_process']}")
+
+    background_tasks.add_task(_run_licencias_pipeline_task, req.periodo.strip())
+    return {"status": "started", "message": f"Iniciando generación de Licencias SA para {req.periodo}"}
 
 
 # Servir Frontend

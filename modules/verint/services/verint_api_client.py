@@ -674,7 +674,9 @@ class VerintAPIClient:
         """
         clean_id = str(call_id).strip()
         guid_str = str(uuid.uuid4())
-        now_iso = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.0000000+00:00")
+        now = datetime.datetime.now()
+        now_iso = now.strftime("%Y-%m-%dT%H:%M:%S.0000000+00:00")
+        curr_year = now.year
         
         return f"""<QDI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <GUID>{guid_str}</GUID>
@@ -696,8 +698,8 @@ class VerintAPIClient:
     <AdditionalEvalInfo>NOTHING</AdditionalEvalInfo>
   </UserPreferences>
   <OrderDef>
-    <From>2026-01-01T00:00:00.0000000+00:00</From>
-    <To>2026-12-31T23:59:59.0000000+00:00</To>
+    <From>{curr_year}-01-01T00:00:00.0000000+00:00</From>
+    <To>{curr_year}-12-31T23:59:59.0000000+00:00</To>
     <OrderDefType>GREATER_LESS_EQUAL</OrderDefType>
     <RangeInDays>{days}</RangeInDays>
     <FieldRelation>Segment</FieldRelation>

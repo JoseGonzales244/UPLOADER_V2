@@ -12,6 +12,7 @@
   - `modules/genesys/`: Genesys audio downloader & Outlook parser.
   - `modules/speech/`: Transcripts orchestrator & Insight lead service.
   - `modules/verint/`: Verint WFO REST API & Cookie harvester.
+  - `modules/dotacion/`: Monthly staffing (Fases 1-4), analyst vacations & Verint SA licensing.
 - **Active Infrastructure:** `infrastructure/` (`database/`, `parsers/`, `system/`, `scrapers/`).
 - **Centralized Data Storage:** `data/` (`downloads/`, `transcripciones/`, `input/`, `reports/`, `runtime/`).
 
