@@ -159,7 +159,7 @@ function App() {
           if (wasRunningRef.current && data.running === false && data.message) {
             if ('Notification' in window && Notification.permission === 'granted') {
               try {
-                new Notification('Uploader V2 - Proceso Finalizado', {
+                new Notification('Plataforma Calidad - Proceso Finalizado', {
                   body: data.message,
                   icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📊</text></svg>'
                 });

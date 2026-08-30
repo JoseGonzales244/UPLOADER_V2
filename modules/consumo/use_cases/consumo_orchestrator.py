@@ -124,7 +124,7 @@ def run_orchestration_flow(
         try:
             from infrastructure.system.notifier import notify_desktop
             notify_desktop(
-                title="Uploader V2 - Consumo",
+                title="Plataforma Calidad - Consumo",
                 message=f"¡Proceso completado exitosamente para el período {period_str}!",
                 duration_sec=5
             )

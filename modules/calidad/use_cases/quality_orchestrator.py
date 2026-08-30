@@ -142,7 +142,7 @@ def run_quality_process_flow(
         if run_phase5: active_phases.append("Fase 5")
         phases_label = ", ".join(active_phases) if active_phases else "Proceso de Calidad"
         notify_desktop(
-            title="Uploader V2 - Calidad",
+            title="Plataforma Calidad",
             message=f"¡{phases_label} completada(s) exitosamente para el período {period_str}!",
             duration_sec=5
         )

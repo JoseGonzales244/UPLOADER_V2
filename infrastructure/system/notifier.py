@@ -31,7 +31,7 @@ def notify_desktop(title: str = "Plataforma Calidad Televentas", message: str = 
             $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
             $xml.LoadXml($template)
             $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-            $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Uploader V2')
+            $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Plataforma Calidad')
             $notifier.Show($toast)
             Start-Sleep -Seconds {duration_sec}
             """

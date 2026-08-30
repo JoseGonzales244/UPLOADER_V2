@@ -18,8 +18,10 @@ from ui.components import load_templates
 
 logger = logging.getLogger(__name__)
 
-# Directorios de OneDrive para buscar archivos P021 de Televentas
+user_home = os.path.expanduser("~")
 ONEDRIVE_DIRS = [
+    os.path.join(user_home, "OneDrive - Interbank", "Televentas"),
+    os.path.join(user_home, "OneDrive", "Televentas"),
     r"C:\Users\b47756\OneDrive - Interbank\Televentas",
     r"C:\Users\USER\OneDrive - Interbank\Televentas",
 ]

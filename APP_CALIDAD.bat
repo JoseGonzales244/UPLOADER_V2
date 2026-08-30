@@ -22,7 +22,7 @@ if exist "%VENV_PYTHON%" (
 
 if errorlevel 1 (
     echo.
-    echo No se pudo iniciar el Servidor Uploader V2.
+    echo No se pudo iniciar el Servidor Plataforma Calidad.
     echo Verifica que Python y las dependencias esten instaladas.
     pause
 )

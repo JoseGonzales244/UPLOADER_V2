@@ -50,15 +50,10 @@ Esto iniciará el servidor Uvicorn FastAPI en `http://127.0.0.1:8000` y abrirá 
 
 - 🌐 **[architecture.html](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/architecture.html)**: **Visualizador Interactivo de Arquitectura 3D/2D** (Canvas interactivo, 5 capas, 17 componentes y 6 flujos E2E animados).
 - 🧩 **[architecture.json](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/architecture.json)**: Topología estructurada en JSON para agentes IA y herramientas de análisis.
-- 📖 **[MANUAL_USUARIO.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/MANUAL_USUARIO.md)**: Manual del usuario final y guía paso a paso.
-- ⚡ **[FLUJO_CONSUMO.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CONSUMO.md)**: Detalle del proceso PBI Base Consumo (Fases 1 a 5, inputs/outputs por fase).
-- 📊 **[FLUJO_CALIDAD.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CALIDAD.md)**: Detalle del proceso PBI Evaluaciones Calidad (Fases 1 a 5, inputs/outputs por fase).
-- 🔒 **[FLUJO_CIERRE.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_CIERRE.md)**: Detalle del Modo Cierre Mensual (idempotencia DELETE+INSERT, inputs/outputs por script).
-- 🚀 **[FLUJO_PILOTOS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_PILOTOS.md)**: Detalle de Piloto TCAD (Tarjetas Adicionales & Seguros 360) y Piloto No Venta (Objeciones Speech Analytics).
-- 📈 **[FLUJO_ENCUESTAS_NPS.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_ENCUESTAS_NPS.md)**: Pipeline analítico parametrizado de Encuestas NPS IVR y cruce de colocaciones por producto.
-- 🎧 **[FLUJO_AUDIOS_Y_CARGA.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/FLUJO_AUDIOS_Y_CARGA.md)**: Descarga de Audios Genesys/Outlook e Ingesta a Teradata.
-- 🗺️ **[MAPA_FLUJO_EJECUCION_BOTONES.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/MAPA_FLUJO_EJECUCION_BOTONES.md)**: Mapeo de botones de la interfaz web hacia endpoints FastAPI y scripts SQL.
-- 🔄 **[PLAN_TRANSICION.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/PLAN_TRANSICION.md)**: **Plan completo de handover** — dependencias, credenciales, accesos, procedimiento de instalación y agenda de traspaso.
+- 📚 **[docs/README.md](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/README.md)**: **Hub Central de Documentación Técnica** (Acceso directo a todos los módulos y guías).
+  - 📖 **[Manual de Usuario](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/operations/manual_usuario.md)** & **[Troubleshooting](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/operations/troubleshooting.md)** (`docs/operations/`).
+  - ⚡ **Pipelines Técnicos SQL** (`docs/pipelines/`): [Base Consumo](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/base_consumo.md), [Calidad NTD](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/calidad_ntd.md), [Cierre Mensual](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/cierre_mensual.md), [Dotación](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/dotacion_y_licencias.md), [Audios](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/audios_y_transcripciones.md), [Pilotos y NPS](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/pipelines/pilotos_y_nps.md).
+  - 🗄️ **Gobierno y Datos** (`docs/data/`): [Diccionario de Tablas](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/data/diccionario_tablas.md) & [Matriz de Linaje](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/docs/data/matriz_linaje.md).
 
 ---
 
@@ -69,16 +64,12 @@ PLATAFORMA_CALIDAD_TELEVENTAS/
 ├── APP_CALIDAD.bat             <-- Ejecutable de inicio rápido
 ├── .agents/                    <-- Reglas de gobierno del agente (AGENTS.md)
 ├── logs/                       <-- Registro centralizado de logs por fecha
-├── docs/                       <-- Documentación unificada de flujos del sistema
-│   ├── MANUAL_USUARIO.md
-│   ├── FLUJO_CONSUMO.md
-│   ├── FLUJO_CALIDAD.md
-│   ├── FLUJO_CIERRE.md
-│   ├── FLUJO_PILOTOS.md
-│   ├── FLUJO_ENCUESTAS_NPS.md
-│   ├── FLUJO_AUDIOS_Y_CARGA.md
-│   ├── MAPA_FLUJO_EJECUCION_BOTONES.md
-│   └── PLAN_TRANSICION.md
+├── docs/                       <-- Base de conocimiento modular (Docs-as-Code)
+│   ├── README.md               <-- Hub e índice central de navegación
+│   ├── operations/             <-- Manuales de usuario y troubleshooting
+│   ├── pipelines/              <-- Especificación de flujos y scripts SQL
+│   ├── data/                   <-- Diccionario de tablas y linaje de datos
+│   └── archive/                <-- Planes históricos y documentación archivada
 ├── backend/
 │   ├── main.py                 <-- Servidor FastAPI con WebSockets y REST API
 │   └── __init__.py
@@ -97,15 +88,4 @@ PLATAFORMA_CALIDAD_TELEVENTAS/
 │   ├── scrapers/               <-- Scraper Insight
 │   ├── system/                 <-- Logging centralizado y Notificador Desktop
 │   └── llm/                    <-- Cliente Gemini AI
-└── legacy/                     <-- Código legado (Streamlit / Deprecado)
-```
-
----
-
-## 🛡️ Modo de Respaldo (Streamlit)
-
-Si por requerimientos operativos de cierre deseas utilizar la versión original en Streamlit:
-
-```cmd
-.\.venv\Scripts\python.exe -m streamlit run index.py
 ```

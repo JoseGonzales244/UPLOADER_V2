@@ -120,7 +120,7 @@ def run_cierre_process_flow(
         try:
             from infrastructure.system.notifier import notify_desktop
             notify_desktop(
-                title="Uploader V2 - Cierre Mensual",
+                title="Plataforma Calidad - Cierre Mensual",
                 message=f"¡Cierre Mensual completado exitosamente para el período {periodo_cerrado}!",
                 duration_sec=5
             )

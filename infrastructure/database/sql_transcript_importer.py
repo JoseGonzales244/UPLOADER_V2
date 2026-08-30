@@ -73,7 +73,7 @@ def generate_sql_inserts(transcripts: list, batch_size: int = 500) -> str:
     sql_lines = [
         "-- ==========================================================================",
         "-- SCRIPT DE INSERCIÓN MASIVA EN DB_SPEECH.TRANSCRIPCION",
-        "-- Generado automáticamente por UPLOADER_V2 (Modo Batch)",
+        "-- Generado automáticamente por APP_CALIDAD (Modo Batch)",
         "-- ==========================================================================\n",
         "USE DB_SPEECH;\nGO\n"
     ]

@@ -1,5 +1,5 @@
 """
-FastAPI Backend Server - UPLOADER V2
+FastAPI Backend Server - Plataforma Calidad Televentas (APP_CALIDAD)
 Proporciona endpoints REST y WebSockets en tiempo real para:
 - Orquestación de Consumo (PBI Base Consumo)
 - Orquestación de Calidad (PBI Evaluaciones Calidad)
@@ -42,8 +42,8 @@ from ui.components import load_templates
 logger = setup_logging("backend.main", log_prefix="fastapi")
 
 app = FastAPI(
-    title="Uploader V2 - API Server",
-    description="Servidor Backend unificado para la Plataforma Uploader V2 Interbank",
+    title="Plataforma Calidad Televentas - API Server",
+    description="Servidor Backend unificado para la Plataforma Calidad Televentas Interbank (APP_CALIDAD)",
     version="2.0.0"
 )
 
@@ -187,7 +187,7 @@ class AudioRequest(BaseModel):
 def health_check():
     return {
         "status": "ok",
-        "app": "Uploader V2 API",
+        "app": "Plataforma Calidad Televentas API",
         "timestamp": datetime.datetime.now().isoformat(),
         "process_state": process_state
     }
@@ -581,4 +581,4 @@ def index_page():
     index_file = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
-    return "<h2>Uploader V2 Backend activo. Frontend no encontrado.</h2>"
+    return "<h2>Plataforma Calidad Backend activo. Frontend no encontrado.</h2>"
