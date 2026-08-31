@@ -1,8 +1,11 @@
 import os
 import io
 import re
+import logging
 import pandas as pd
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 try:
     from openpyxl import load_workbook
@@ -48,7 +51,8 @@ def _read_excel_with_openpyxl(uploaded_file) -> pl.DataFrame | None:
             workbook = load_workbook(uploaded_file, read_only=True, data_only=True)
         else:
             workbook = load_workbook(io.BytesIO(uploaded_file.getvalue()), read_only=True, data_only=True)
-    except Exception:
+    except Exception as exc:
+        logger.debug(f"openpyxl failed to parse workbook, delegating to next engine: {exc}")
         return None
 
     sheet_name = "Speech" if "Speech" in workbook.sheetnames else workbook.sheetnames[0]

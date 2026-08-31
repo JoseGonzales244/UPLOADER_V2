@@ -379,17 +379,20 @@ FORMATO JSON:
 
         try:
             h1 = json.loads(res1_text).get("hallazgos", [])
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parseando respuesta JSON del Agente 1 (Gramática): {e} | Raw: {res1_text[:100]}")
             h1 = []
 
         try:
             h2 = json.loads(res2_text).get("hallazgos", [])
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parseando respuesta JSON del Agente 2 (Trato): {e} | Raw: {res2_text[:100]}")
             h2 = []
 
         try:
             h3 = json.loads(res3_text).get("hallazgos", [])
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parseando respuesta JSON del Agente 3 (Protocolo): {e} | Raw: {res3_text[:100]}")
             h3 = []
 
         raw_all = h1 + h2 + h3

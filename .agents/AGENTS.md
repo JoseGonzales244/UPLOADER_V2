@@ -40,10 +40,15 @@
 
 - **Zero Chat Dump:** NEVER print datasets, large reports, tables, or complete scripts in chat. Always write them to markdown artifacts in the brain directory and reply in chat with strictly ≤ 2 lines plus the clickable markdown file link.
 - **Direct & Pragmatic:** Zero conversational filler, greetings, or apologies. Focus directly on code diffs, logs, and verifiable deliverables.
+- **Strict Markdown Link Syntax:**
+  - **In Workspace Markdown Docs (`docs/*.md`):** Use workspace-relative paths: `[filename:L10](../path/to/file.py)` so the IDE Markdown previewer renders clickable links natively without line wrapping.
+  - **In Chat Responses:** Use absolute `file://` URIs: `[filename](file:///path/to/file)`.
+  - **Zero Backticks inside `[]`:** NEVER nest backticks inside brackets (e.g. NEVER `[`file.py`](...)`).
 
 ---
 
 ## 5. Verification & Safety Protocol
 
 - **Automated Validation:** Always run the complete unit test suite before finalizing features or refactors.
-- **Non-Destructive Operations:** Never delete production files or drop tables without explicit validation and safeguards.
+- **Deprecado = Eliminar:** Lo que ya no sirve o ha sido unificado/reemplazado se elimina inmediatamente. Nunca dejar wrappers vacíos, scripts obsoletos o código muerto.
+- **Non-Destructive Operations:** Never delete production databases or drop production tables without explicit validation and safeguards.

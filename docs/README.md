@@ -29,14 +29,19 @@ graph TD
 ---
 
 ## 📂 1. Dominio: Operaciones y Usuario (`docs/operations/`)
+
 > **Audiencia:** Operadores, Analistas de Calidad, Supervisores.
+
 - 📖 **[Manual de Usuario](operations/manual_usuario.md):** Guía paso a paso para la carga a Teradata, descarga de audios y orquestación.
+- 🤝 **[Plan de Traspaso & Onboarding](operations/plan_de_traspaso.md):** Guía de instalación en laptop nueva, matriz de accesos y setup de OneDrive.
 - 🩺 **[Troubleshooting y Diagnóstico](operations/troubleshooting.md):** Resolución de fallos de entorno (Outlook, Chrome CDP, Teradata).
 
 ---
 
 ## ⚡ 2. Dominio: Pipelines y Lógica de Negocio (`docs/pipelines/`)
+
 > **Audiencia:** Ingenieros de Datos, Desarrolladores.
+
 - 📊 **[PBI Base Consumo](pipelines/base_consumo.md):** Las 5 fases del pipeline de consumo, insumos y scripts SQL.
 - 📈 **[PBI Evaluaciones Calidad](pipelines/calidad_ntd.md):** Proceso de consolidado NTD y reglas de ponderación.
 - 🔒 **[Modo Cierre Mensual](pipelines/cierre_mensual.md):** Idempotencia, scripts `01_auditoria` y `02_kri_resumen`.
@@ -47,6 +52,8 @@ graph TD
 ---
 
 ## 🗄️ 3. Dominio: Catálogo y Linaje de Datos (`docs/data/`)
+
 > **Audiencia:** BI, Gobierno de Datos, Auditores.
+
 - 📋 **[Diccionario de Tablas](data/diccionario_tablas.md):** Catálogo de tablas en `DLAB_GEC` y esquemas de tipos.
 - 🗺️ **[Matriz de Linaje de Datos](data/matriz_linaje.md):** Trazabilidad completa desde orígenes hasta PowerBI.

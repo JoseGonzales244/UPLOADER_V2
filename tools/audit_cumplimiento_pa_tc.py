@@ -68,8 +68,15 @@ from modules.genesys.services.genesys_browser import GenesysBrowserAutomation
 from modules.genesys.services.teradata_service import TeradataService
 from modules.genesys.models import SolicitudAudio
 
-EXCEL_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026.xlsx"
-BACKUP_FILE = PROJECT_ROOT / "Solicitud Cumplimiento TC 2026_Auditada.xlsx"
+def get_default_excel_file() -> Path:
+    candidates = list(PROJECT_ROOT.glob("Solicitud Cumplimiento TC*.xlsx"))
+    for c in candidates:
+        if "_Auditada" not in c.name:
+            return c
+    return PROJECT_ROOT / f"Solicitud Cumplimiento TC {datetime.now().year}.xlsx"
+
+EXCEL_FILE = get_default_excel_file()
+BACKUP_FILE = EXCEL_FILE.parent / f"{EXCEL_FILE.stem}_Auditada.xlsx"
 
 
 from modules.genesys.config import PROFILE_DIR, GENESYS_URL, CDP_URL
@@ -390,19 +397,22 @@ Responde estrictamente en formato JSON:
         }
 
 
-def process_audit():
+def process_audit(mode: str = "full", excel_path: Optional[Path] = None):
     start_time_exec = time.time()
-    if not EXCEL_FILE.exists():
-        logger.critical(f"❌ No se encontró el archivo '{EXCEL_FILE}'")
+    target_excel = Path(excel_path) if excel_path else EXCEL_FILE
+    target_backup = target_excel.parent / f"{target_excel.stem}_Auditada.xlsx"
+
+    if not target_excel.exists():
+        logger.critical(f"❌ No se encontró el archivo '{target_excel}'")
         return
 
     logger.info("=" * 75)
-    logger.info("   INICIANDO AUDITORÍA FOCALIZADA: PAGO AUTOMÁTICO TC 2026")
-    logger.info(f"   Archivo Entrada : {EXCEL_FILE.name}")
-    logger.info(f"   Archivo Respaldo: {BACKUP_FILE.name}")
+    logger.info(f"   INICIANDO AUDITORÍA FOCALIZADA: PAGO AUTOMÁTICO TC (Modo: {mode.upper()})")
+    logger.info(f"   Archivo Entrada : {target_excel.name}")
+    logger.info(f"   Archivo Respaldo: {target_backup.name}")
     logger.info("=" * 75)
 
-    wb = openpyxl.load_workbook(EXCEL_FILE)
+    wb = openpyxl.load_workbook(target_excel)
     ws = wb.active
 
     headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
@@ -418,76 +428,85 @@ def process_audit():
     total_rows = ws.max_row
     total_casos = total_rows - 1
 
-    # =========================================================================
-    # 📌 FASE 1: BARRIDO COMPLETO EN GENESYS CLOUD (RECUPERACIÓN DE ID LLAMADA)
-    # =========================================================================
-    logger.info("\n" + "=" * 75)
-    logger.info("🚀 [FASE 1/2] BARRIDO EN GENESYS CLOUD: OBTENIENDO TODOS LOS IDs DE LLAMADA")
-    logger.info("=" * 75)
-
-    browser_bot = GenesysBrowserAutomation()
-    genesys_resolver = GenesysAPIResolver(browser_bot)
-    genesys_token = genesys_resolver.connect_and_get_token()
-
-    teradata_svc = TeradataService()
     ids_encontrados_genesys = 0
 
-    if genesys_token:
-        for row_idx in range(2, total_rows + 1):
-            dni_raw = ws.cell(row=row_idx, column=col_dni).value
-            reg_raw = ws.cell(row=row_idx, column=col_reg).value
-            ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
-            fec_adq_raw = ws.cell(row=row_idx, column=col_fec_adq).value
-            saved_call_id = ws.cell(row=row_idx, column=col_id_llamada).value
+    # =========================================================================
+    # 📌 FASE 1: BARRIDO EN GENESYS CLOUD (Omitido en modo 'eval')
+    # =========================================================================
+    if mode in ["full", "extract"]:
+        logger.info("\n" + "=" * 75)
+        logger.info("🚀 [FASE 1] BARRIDO EN GENESYS CLOUD: OBTENIENDO IDs DE LLAMADA")
+        logger.info("=" * 75)
 
-            if not dni_raw:
-                continue
+        browser_bot = GenesysBrowserAutomation()
+        genesys_resolver = GenesysAPIResolver(browser_bot)
+        genesys_token = genesys_resolver.connect_and_get_token()
 
-            dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
-            reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
+        teradata_svc = TeradataService()
 
-            # Si ya tiene un ID válido previo, no consultar nuevamente
-            if saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]:
-                ids_encontrados_genesys += 1
-                continue
+        if genesys_token:
+            for row_idx in range(2, total_rows + 1):
+                dni_raw = ws.cell(row=row_idx, column=col_dni).value
+                reg_raw = ws.cell(row=row_idx, column=col_reg).value
+                ejec_raw = ws.cell(row=row_idx, column=col_ejec).value
+                fec_adq_raw = ws.cell(row=row_idx, column=col_fec_adq).value
+                saved_call_id = ws.cell(row=row_idx, column=col_id_llamada).value
 
-            fec_dt = fec_adq_raw if isinstance(fec_adq_raw, datetime) else (datetime.combine(fec_adq_raw, datetime.min.time()) if isinstance(fec_adq_raw, date) else None)
-            if not fec_dt:
-                try:
-                    fec_dt = datetime.strptime(str(fec_adq_raw)[:10], "%Y-%m-%d")
-                except Exception:
-                    fec_dt = datetime(2026, 4, 1)
+                if not dni_raw:
+                    continue
 
-            logger.info(f"[FASE 1 - Caso {row_idx - 1}/{total_casos}] Consultando Genesys para DNI {dni_8} | Agente: {reg_clean} ({ejec_raw})...")
+                dni_8 = str(int(dni_raw) if isinstance(dni_raw, float) else dni_raw).strip().zfill(8)
+                reg_clean = str(reg_raw).strip().upper() if reg_raw else ""
 
-            # 1. Teléfonos vinculados
-            dummy_sol = [SolicitudAudio(nombre_archivo=f"REQ_{dni_8}", dni=dni_8, reg_ev=reg_clean)]
-            enriquecidas = teradata_svc.enriquecer_solicitudes(dummy_sol)
-            telefonos = enriquecidas[0].telefonos if enriquecidas else []
+                if saved_call_id and str(saved_call_id).strip() not in ["", "7464", "None"]:
+                    ids_encontrados_genesys += 1
+                    continue
 
-            # 2. Búsqueda REST
-            user_id = genesys_resolver.resolve_user_id(reg_clean)
-            call_id, fec_llamada = genesys_resolver.search_conversation(user_id, telefonos, fec_dt)
+                fec_dt = fec_adq_raw if isinstance(fec_adq_raw, datetime) else (datetime.combine(fec_adq_raw, datetime.min.time()) if isinstance(fec_adq_raw, date) else None)
+                if not fec_dt and fec_adq_raw:
+                    try:
+                        fec_dt = datetime.strptime(str(fec_adq_raw)[:10], "%Y-%m-%d")
+                    except Exception as parse_err:
+                        logger.warning(f"No se pudo parsear fecha '{fec_adq_raw}' para DNI {dni_8}: {parse_err}")
+                        fec_dt = None
 
-            if call_id:
-                ws.cell(row=row_idx, column=col_id_llamada, value=str(call_id))
-                if fec_llamada:
-                    ws.cell(row=row_idx, column=col_fec_llamada, value=str(fec_llamada))
-                ids_encontrados_genesys += 1
-                logger.info(f"   ✓ ID Llamada: {call_id} | Fecha: {fec_llamada}")
-            else:
-                logger.warning(f"   ⚠️ No se halló llamada en Genesys para DNI {dni_8}.")
+                if not fec_dt:
+                    logger.warning(f"⚠️ Saltando búsqueda Genesys para DNI {dni_8}: Fecha de adquisición no disponible.")
+                    continue
 
-        wb.save(EXCEL_FILE)
-        logger.info(f"\n[FASE 1 COMPLETADA] {ids_encontrados_genesys}/{total_casos} IDs de llamada listos en Excel.")
-    else:
-        logger.warning("[FASE 1] ⚠️ No se pudo obtener sesión de Genesys. Continuando con IDs previamente guardados...")
+                logger.info(f"[FASE 1 - Caso {row_idx - 1}/{total_casos}] Consultando Genesys para DNI {dni_8} | Agente: {reg_clean} ({ejec_raw})...")
+
+                dummy_sol = [SolicitudAudio(nombre_archivo=f"REQ_{dni_8}", dni=dni_8, reg_ev=reg_clean)]
+                enriquecidas = teradata_svc.enriquecer_solicitudes(dummy_sol)
+                telefonos = enriquecidas[0].telefonos if enriquecidas else []
+
+                user_id = genesys_resolver.resolve_user_id(reg_clean)
+                call_id, fec_llamada = genesys_resolver.search_conversation(user_id, telefonos, fec_dt)
+
+                if call_id:
+                    ws.cell(row=row_idx, column=col_id_llamada, value=str(call_id))
+                    if fec_llamada:
+                        ws.cell(row=row_idx, column=col_fec_llamada, value=str(fec_llamada))
+                    ids_encontrados_genesys += 1
+                    logger.info(f"   ✓ Hallado CallID: {call_id} (Fecha: {fec_llamada})")
+                else:
+                    logger.warning(f"   ⚠️ No se halló llamada en Genesys para DNI {dni_8}.")
+
+            wb.save(target_excel)
+            logger.info(f"\n[FASE 1 COMPLETADA] {ids_encontrados_genesys}/{total_casos} IDs de llamada listos en Excel.")
+        else:
+            logger.warning("[FASE 1] ⚠️ No se pudo obtener sesión de Genesys. Continuando con IDs previamente guardados...")
+
+    if mode == "extract":
+        wb.save(target_excel)
+        logger.info(f"✅ Modo extracción finalizado. Archivo guardado en: {target_excel}")
+        return
 
     # =========================================================================
-    # 📌 FASE 2: EXTRACCIÓN EN VERINT API Y AUDITORÍA FOCALIZADA CON IA
+    # 📌 FASE 2: EXTRACCIÓN EN VERINT API Y AUDITORÍA IA
     # =========================================================================
     logger.info("\n" + "=" * 75)
-    logger.info("🎯 [FASE 2/2] DESCARGA DE TRANSCRIPCIONES EN VERINT API Y EVALUACIÓN IA")
+    logger.info("🎯 [FASE 2] DESCARGA DE TRANSCRIPCIONES EN VERINT API Y EVALUACIÓN IA")
     logger.info("=" * 75)
 
     auditor = PagoAutomaticoAuditor()
@@ -498,7 +517,6 @@ def process_audit():
 
     for row_idx in range(2, total_rows + 1):
         dni_raw = ws.cell(row=row_idx, column=col_dni).value
-        reg_raw = ws.cell(row=row_idx, column=col_reg).value
         call_id = ws.cell(row=row_idx, column=col_id_llamada).value
 
         if not dni_raw:
@@ -524,26 +542,36 @@ def process_audit():
             pendientes_manual += 1
 
         if (row_idx - 1) % 5 == 0:
-            wb.save(EXCEL_FILE)
-            logger.debug(f"[CHECKPOINT] Progreso guardado en {EXCEL_FILE.name}.")
+            wb.save(target_excel)
 
     # Guardado final
-    wb.save(EXCEL_FILE)
-    wb.save(BACKUP_FILE)
+    wb.save(target_excel)
+    wb.save(target_backup)
 
     elapsed = time.time() - start_time_exec
     logger.info("\n" + "=" * 75)
     logger.info("✅ AUDITORÍA FINALIZADA:")
+    logger.info(f"   • Modo de Ejecución         : {mode.upper()}")
     logger.info(f"   • Tiempo Total              : {elapsed:.1f} s")
     logger.info(f"   • Total Casos               : {total_casos}")
     logger.info(f"   • IDs Recuperados Genesys   : {ids_encontrados_genesys}")
     logger.info(f"   • Auditados con Éxito (IA)  : {auditados_exito}")
     logger.info(f"   • Pendientes Escucha Manual : {pendientes_manual}")
-    logger.info(f"   • Excel Actualizado         : {EXCEL_FILE}")
-    logger.info(f"   • Respaldo                  : {BACKUP_FILE}")
+    logger.info(f"   • Excel Actualizado         : {target_excel}")
+    logger.info(f"   • Respaldo                  : {target_backup}")
     logger.info(f"   • Log Completo              : {LOG_FILE}")
     logger.info("=" * 75)
 
 
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Auditor Unificado de Cumplimiento Pago Automático TC.")
+    parser.add_argument("--mode", choices=["full", "extract", "eval", "fast"], default="full", help="Modo de ejecución: full (todo), extract (solo IDs/Verint), eval (solo IA), fast (rápido)")
+    parser.add_argument("--excel", type=str, default=None, help="Ruta opcional al archivo Excel de cumplimiento")
+    args = parser.parse_args()
+
+    process_audit(mode=args.mode, excel_path=args.excel)
+
+
 if __name__ == "__main__":
-    process_audit()
+    main()
