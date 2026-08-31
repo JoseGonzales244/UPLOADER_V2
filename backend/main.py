@@ -477,14 +477,15 @@ def _run_upload_task(
         clear_table = (load_action == "Reemplazar registros existentes (Vaciar y cargar)")
 
         send_progress_update(f"🚀 Iniciando transferencia a tabla '{teradata_table}'...", "info", progress=0.7)
-        def progress_cb(msg):
-            log_type = "info"
-            if "advertencia" in msg.lower() or "warning" in msg.lower():
-                log_type = "warning"
-            elif "error" in msg.lower() or "fallo" in msg.lower():
-                log_type = "error"
-            elif "éxito" in msg.lower() or "completada" in msg.lower() or "completado" in msg.lower():
-                log_type = "success"
+        def progress_cb(msg: str, level: str = "info"):
+            log_type = level or "info"
+            if log_type == "info":
+                if "advertencia" in msg.lower() or "warning" in msg.lower():
+                    log_type = "warning"
+                elif "error" in msg.lower() or "fallo" in msg.lower():
+                    log_type = "error"
+                elif "éxito" in msg.lower() or "completada" in msg.lower() or "completado" in msg.lower():
+                    log_type = "success"
             send_progress_update(msg, log_type)
 
         load_to_teradata(
