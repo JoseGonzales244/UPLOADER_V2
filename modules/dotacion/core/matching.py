@@ -31,3 +31,39 @@ def mismo_supervisor(name1, name2):
         return t1 == t2
 
     return short_tokens.issubset(long_tokens)
+
+
+def detect_supervisor_inconsistencies(records: list) -> list:
+    """
+    Analiza una lista de diccionarios de asesores y detecta inconsistencias en supervisores:
+    1. Un mismo nombre de supervisor con múltiples códigos distintos.
+    2. Un mismo código de supervisor con múltiples nombres distintos.
+    Retorna una lista de alertas formateadas.
+    """
+    from collections import defaultdict
+
+    name_to_codes = defaultdict(set)
+    code_to_names = defaultdict(set)
+
+    for r in records:
+        nom = str(r.get('super') or r.get('nombre_super') or r.get('SUPERVISOR') or r.get('NOM_SUPERVISOR') or '').strip().upper()
+        reg = str(r.get('reg_super') or r.get('REG_SUPER') or r.get('REG_SUPERVISOR') or '').strip().upper()
+        # Ignorar vacíos o placeholders
+        if nom and reg and reg not in ['NONE', 'NULL', '', 'N/A'] and nom not in ['NONE', 'NULL', '', 'N/A', 'SIN SUPERVISOR']:
+            name_to_codes[nom].add(reg)
+            code_to_names[reg].add(nom)
+
+    alerts = []
+    # 1. Un mismo supervisor con múltiples códigos
+    for nom, codes in sorted(name_to_codes.items()):
+        if len(codes) > 1:
+            codigos_str = ", ".join(sorted(codes))
+            alerts.append(f"⚠️ SUPERVISOR CON MÚLTIPLES CÓDIGOS: '{nom}' aparece con los códigos: [{codigos_str}]")
+
+    # 2. Un mismo código asignado a múltiples supervisores
+    for reg, names in sorted(code_to_names.items()):
+        if len(names) > 1:
+            nombres_str = ", ".join(f"'{n}'" for n in sorted(names))
+            alerts.append(f"⚠️ CÓDIGO CON MÚLTIPLES NOMBRES: Código '{reg}' está asignado a: [{nombres_str}]")
+
+    return alerts

@@ -135,6 +135,17 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
     
     print(f"  Extracted {len(active_advisors)} unique active advisors.")
 
+    # 4.1 Auditar alertas de supervisores con códigos inconsistentes
+    from modules.dotacion.core.matching import detect_supervisor_inconsistencies
+    supervisor_alerts = detect_supervisor_inconsistencies(active_advisors)
+    if supervisor_alerts:
+        print("\n" + "=" * 70)
+        print("🚨 ALERTAS DE INCONSISTENCIAS EN SUPERVISORES (INPUT EXCEL)")
+        print("=" * 70)
+        for alert in supervisor_alerts:
+            print(f"  {alert}")
+        print("=" * 70 + "\n")
+
     # 5. Escribir y actualizar Hoja2
     print(f"[Step 4] Updating {curr_exec_file} Hoja2...")
     wb_exec = openpyxl.load_workbook(curr_exec_file, keep_links=True, data_only=False)

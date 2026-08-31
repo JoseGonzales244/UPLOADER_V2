@@ -42,6 +42,24 @@ class TestDotacionPipelineLogic(unittest.TestCase):
         self.assertFalse(is_backoffice("Backoffice Interino", "ASESOR"))
         self.assertFalse(is_backoffice("Normal", "ASESOR VENTAS"))
 
+    def test_supervisor_inconsistencies_detection(self):
+        """Verifica la detección de alertas cuando un supervisor tiene múltiples códigos o viceversa."""
+        from modules.dotacion.core.matching import detect_supervisor_inconsistencies
+
+        records = [
+            {"super": "CATHERINE JOSEFINA ESPINOZA TIMOTEO", "reg_super": "B15241"},
+            {"super": "CATHERINE JOSEFINA ESPINOZA TIMOTEO", "reg_super": "B43648"}, # Error en input
+            {"super": "BRUNO MIRANDA", "reg_super": "B43648"},
+            {"super": "MARIA LOPEZ", "reg_super": "B99999"}
+        ]
+
+        alerts = detect_supervisor_inconsistencies(records)
+        self.assertTrue(len(alerts) >= 2)
+        # Catherine con 2 códigos
+        self.assertTrue(any("CATHERINE JOSEFINA ESPINOZA TIMOTEO" in a and "B15241" in a and "B43648" in a for a in alerts))
+        # B43648 con 2 supervisores (Bruno y Catherine)
+        self.assertTrue(any("B43648" in a and "BRUNO MIRANDA" in a for a in alerts))
+
 
 class TestDotacionEndpoints(unittest.TestCase):
 
