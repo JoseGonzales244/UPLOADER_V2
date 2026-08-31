@@ -6,8 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 import openpyxl
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BASE_DIR))
+BASE_DIR = Path(__file__).resolve().parents[3]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from modules.verint.services.verint_api_client import VerintAPIClient
 

@@ -122,12 +122,16 @@ El archivo `.env` se transferirá **directamente de forma segura** desde el usua
 
 ## 🛠️ 5. Herramientas y Utilidades Complementarias
 
-El repositorio incluye herramientas operativas independientes ubicadas en `tools/`:
+El repositorio incluye herramientas operativas organizadas por dominio modular (`modules/<dominio>/tools/` e `infrastructure/tools/`):
 
-1. **Auditoría WhatsApp / WSP (`tools/audit_cumplimiento_pa_tc.py`):**
-   - Utilidad para la auditoría de cumplimiento y calidad en gestiones de WhatsApp asistida por modelos LLM.
-2. **SQL Formatter (.exe) (`tools/sql_formatter.py` / `sql_formatter.exe`):**
-   - Herramienta para formatear, limpiar comentarios y estandarizar la sintaxis de consultas SQL de Teradata de forma local e independiente.
+1. **Auditoría WhatsApp / WSP (`modules/calidad/tools/audit_cumplimiento_pa_tc.py` y `modules/transcripciones/tools/run_transcript_audit.py`):**
+   - Utilidad para la auditoría de cumplimiento y calidad en gestiones asistida por modelos LLM.
+2. **SQL Formatter (`infrastructure/tools/sql_formatter.py`):**
+   - Herramienta para formatear listas y estandarizar cláusulas SQL `IN ('...')` de forma local e independiente.
+3. **Televentas Ejecutivos (`modules/dotacion/tools/run_televentas_ejecutivos.py`):**
+   - Herramienta para generar y reconciliar el maestro de ejecutivos de televentas (Fase 4).
+4. **Speech & Verint Tools (`modules/speech/tools/` y `modules/verint/tools/`):**
+   - Extracción y sincronización de transcripciones desde Verint e Insight hacia Teradata y SQL Server.
 
 ---
 

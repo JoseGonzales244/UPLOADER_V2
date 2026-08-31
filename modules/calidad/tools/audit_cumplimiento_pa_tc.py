@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

@@ -2,8 +2,9 @@
 """
 Herramienta manual para forzar el reprocesamiento (corrección) de TELEVENTAS_EJECUTIVOS_GROUPED.
 Uso:
-    python tools/reprocesar_televentas_grouped.py --periodo 202608
+    python -m modules.calidad.televentas.tools.reprocesar_televentas_grouped --periodo 202608
 """
+from __future__ import annotations
 
 import sys
 import argparse
@@ -11,8 +12,9 @@ import logging
 from pathlib import Path
 
 # Añadir directorio raíz al PYTHONPATH
-root_dir = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(root_dir))
+root_dir = Path(__file__).resolve().parents[4]
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 from modules.calidad.televentas.use_cases.grouped_orchestrator import process_televentas_grouped
 

@@ -5,8 +5,12 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 
-# Asegurar importación de módulos del proyecto
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+
+# Asegurar importación de módulos del proyecto desde la raíz
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.verint.transcripciones.extractors.verint_transcript_extractor import (
     initialize_verint_session,
