@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import pandas as pd
 
-from core.interfaces.report_presenter import IReportPresenter
+from domain.interfaces.report_presenter import IReportPresenter
 
 logger = logging.getLogger("modules.transcripciones.presenters.excel_presenter")
 

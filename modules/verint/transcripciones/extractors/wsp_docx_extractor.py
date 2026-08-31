@@ -11,7 +11,7 @@ import docx
 import pandas as pd
 from typing import List, Dict, Any, Optional
 
-from core.interfaces.transcript_extractor import ITranscriptExtractor
+from domain.interfaces.transcript_extractor import ITranscriptExtractor
 
 logger = logging.getLogger("modules.transcripciones.extractors.wsp_docx_extractor")
 

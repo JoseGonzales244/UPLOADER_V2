@@ -21,10 +21,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from modules.transcripciones.use_cases.auditor import TranscriptAuditorUseCase
-from modules.transcripciones.extractors.wsp_docx_extractor import WhatsAppTranscriptExtractor
-from modules.transcripciones.domain.wsp_rules import load_whatsapp_templates_prompt
-from modules.transcripciones.presenters.excel_presenter import TranscriptExcelPresenter
+from modules.verint.transcripciones.use_cases.auditor import TranscriptAuditorUseCase
+from modules.verint.transcripciones.extractors.wsp_docx_extractor import WhatsAppTranscriptExtractor
+from modules.verint.transcripciones.domain.wsp_rules import load_whatsapp_templates_prompt
+from modules.verint.transcripciones.presenters.excel_presenter import TranscriptExcelPresenter
 from infrastructure.llm.gemini_client import GeminiClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
