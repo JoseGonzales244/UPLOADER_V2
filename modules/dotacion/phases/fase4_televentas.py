@@ -29,20 +29,7 @@ SHEET_TO_SUB2 = {
     "BN_C": "BPE AGENDAMIENTO"
 }
 
-SUB2_TO_JEFE_SUBG = {
-    'BPE AGENDAMIENTO': ('JUAN PABLO GONZALES RIOS', 'CHRISTIAN RAMON ALVARADO PEREZ'),
-    'BPE DESEMBOLSOS': ('JUAN PABLO GONZALES RIOS', 'CHRISTIAN RAMON ALVARADO PEREZ'),
-    'COMPRA DE DEUDA': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON'),
-    'CONVENIOS TLV': ('MARIA LUISA FERRADAS MARTINEZ', 'CECILIA DEL ROSARIO ARNAO Y CACHO'),
-    'EXTRACASH': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON'),
-    'HIPOTECARIO': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON'),
-    'PRESTAMOS': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON'),
-    'RETENCION CONVENIOS': ('LUIS ALBERTO SILVERA SACHUN', 'CHRISTIAN RAMON ALVARADO PEREZ'),
-    'RETENCION TC': ('LUIS ALBERTO SILVERA SACHUN', 'CHRISTIAN RAMON ALVARADO PEREZ'),
-    'SEGUROS': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON'),
-    'SELECT': ('NORYBELL DAYANARA ROLLET GUTIERREZ', 'DIEGO VEGAS LA ROSA'),
-    'TARJETAS': ('SAUL LLERENA QUISPE', 'JAIRO EMILIO ROMERO CALDERON')
-}
+
 
 def run(wb_test, cfg: Optional[DotacionConfig] = None):
     if cfg is None:
@@ -66,7 +53,7 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
     shutil.copy(prev_exec_file, curr_exec_file)
 
     # 3. Cargar la dotación de julio para lookups
-    print("[Step 2] Indexing standard DOTACION for supervisor/jefe lookups...")
+    print("[Step 2] Indexing standard DOTACION and SELECT DOTACION for supervisor/jefe lookups...")
     dot_sheet_names = [n for n in wb_test.sheetnames if n.upper() in ["DOTACIÓN", "DOTACION"]]
     if not dot_sheet_names:
         raise ValueError("DOTACION sheet not found in workbook!")
@@ -85,6 +72,23 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
                 if h:
                     row_dict[h] = dot_ws.cell(row=r_idx, column=col_idx + 1).value
             standard_dot_by_reg[reg] = row_dict
+
+    # Indexar hoja Dotación SELECT si existe
+    select_dot_by_reg = {}
+    sel_dot_sheet_names = [n for n in wb_test.sheetnames if "SELECT" in n.upper() and "DOTACI" in n.upper()]
+    if sel_dot_sheet_names:
+        sel_ws = wb_test[sel_dot_sheet_names[0]]
+        sel_headers, sel_header_row = find_headers_and_row(sel_ws, "REGISTRO")
+        col_sel_reg = sel_headers.index("REGISTRO")
+        for r_idx in range(sel_header_row + 1, sel_ws.max_row + 1):
+            reg_val = sel_ws.cell(row=r_idx, column=col_sel_reg + 1).value
+            if reg_val is not None and str(reg_val).strip() != "":
+                reg = str(reg_val).strip().upper()
+                row_dict = {}
+                for col_idx, h in enumerate(sel_headers):
+                    if h:
+                        row_dict[h] = sel_ws.cell(row=r_idx, column=col_idx + 1).value
+                select_dot_by_reg[reg] = row_dict
 
     # 4. Extraer asesores activos de las hojas de productos
     print("[Step 3] Extracting active advisors from product sheets...")
@@ -166,18 +170,12 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
         # Mapeos de jefes y subequipos
         sub_equipo_2 = SHEET_TO_SUB2.get(adv['sheet_source'], "SELECT")
         if adv['sheet_source'] == "SELECT":
-            jefe_name = "NORYBELL DAYANARA ROLLET GUTIERREZ"
-            subgerente_name = "DIEGO VEGAS LA ROSA"
+            dot_info = select_dot_by_reg.get(adv['reg']) or standard_dot_by_reg.get(adv['reg'], {})
         else:
             dot_info = standard_dot_by_reg.get(adv['reg'], {})
-            jefe_name = dot_info.get("JEFE")
-            subgerente_name = dot_info.get("SUBGERENTE")
-            
-            # Fallback a mappings estáticos si no se encuentra en dotación
-            if not jefe_name or not subgerente_name:
-                mapping = SUB2_TO_JEFE_SUBG.get(sub_equipo_2, (None, None))
-                jefe_name = jefe_name or mapping[0]
-                subgerente_name = subgerente_name or mapping[1]
+
+        jefe_name = dot_info.get("JEFE")
+        subgerente_name = dot_info.get("SUBGERENTE")
 
         # Formulas exactas de VLOOKUP y CONCAT
         formula_reg_jefe = f'=VLOOKUP(Tabla15[[#This Row],[NOM_JEFE]],JEFE[],2,FALSE)'
