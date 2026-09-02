@@ -1,14 +1,14 @@
 -- =====================================================================
 -- 03_CONSOLIDADO_NOTAS_CIERRE.SQL
 -- Cierre del proceso de calidad: Consolidación final de notas de cierre
--- e inyección de estructura organizativa para el período {PERIODO_ANTERIOR}.
+-- e inyección de estructura organizativa para el período {PERIODO}.
 -- =====================================================================
 
 -- -------------------------------------------------------------
 -- PASO 1: LIMPIEZA PREVIA (Garantiza idempotencia en re-ejecuciones)
 -- -------------------------------------------------------------
 DELETE FROM DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE
-WHERE MES = '{PERIODO_ANTERIOR}';
+WHERE MES = '{PERIODO}';
 
 -- -------------------------------------------------------------
 -- PASO 2: INSERCIÓN DE NOTAS FINALES
@@ -43,7 +43,7 @@ SELECT
     NOTA_FINAL,
     NUM_EVALUACION
 FROM DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL
-WHERE PERIODO = '{PERIODO_ANTERIOR}'
+WHERE PERIODO = '{PERIODO}'
   AND NOTA_FINAL IS NOT NULL;
 
 -- -------------------------------------------------------------
@@ -61,5 +61,5 @@ SET NOM_EJECUTIVO     = B.NOM_EJECUTIVO,
     SUB_EQUIPO        = B.SUB_EQUIPO,
     EQUIPO            = B.EQUIPO
 WHERE A.REG_EV = B.REG_EJECUTIVO
-  AND A.MES = '{PERIODO_ANTERIOR}'
-  AND B.PERIODO = '{PERIODO_ANTERIOR}';
+  AND A.MES = '{PERIODO}'
+  AND B.PERIODO = '{PERIODO}';

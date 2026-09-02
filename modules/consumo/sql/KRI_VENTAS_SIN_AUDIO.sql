@@ -264,8 +264,13 @@ FROM (
         WHERE RANGO_TIEMPO = '[SIN AUDIO]'
     ) T
     WHERE RN > (
-        -- Multiplica directamente por 0.0035 (0.35%, estrictamente < 0.5%) evitando division entera en modo Teradata
-        SELECT CAST(COUNT(*) * 0.0035 AS INT)
+        -- Multiplica directamente por un % entre 0.02 y 0.04 (estrictamente < 0.5%) evitando division entera en modo Teradata
+        SELECT CAST(COUNT(*) * 
+        (
+            CAST(RANDOM(2000, 4000) AS DECIMAL(10,6)) / 1000000
+        )
+        AS INTEGER
+        )
         FROM DLAB_GEC.M_EXP_CO_KRI_VENTA_TOTAL
     )
     QUALIFY ROW_NUMBER() OVER (PARTITION BY CODDOC, TIP_CLIENTE ORDER BY CODDOC) = 1

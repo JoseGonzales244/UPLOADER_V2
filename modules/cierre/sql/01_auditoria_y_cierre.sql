@@ -1,12 +1,12 @@
 -- =====================================================================
 -- 01_AUDITORIA_Y_CIERRE.SQL
 -- Cierre del proceso de calidad: consolidación del período cerrado
--- {PERIODO_ANTERIOR} en tablas históricas y mapeo de la estructura organizativa.
+-- {PERIODO} en tablas históricas y mapeo de la estructura organizativa.
 -- =====================================================================
 
 -- Limpieza previa para garantizar idempotencia en re-ejecuciones
 DELETE FROM DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL
-WHERE PERIODO = '{PERIODO_ANTERIOR}';
+WHERE PERIODO = '{PERIODO}';
 
 -- Insertar datos del período cerrado en la tabla consolidadora gerencial
 INSERT INTO DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL
@@ -38,7 +38,7 @@ SELECT
     NOTA_SA,
     NOTA_FINAL
 FROM DLAB_GEC.V_EXP_CALIDAD_NOTA_FINAL
-WHERE PERIODO = '{PERIODO_ANTERIOR}';
+WHERE PERIODO = '{PERIODO}';
 
 -- Actualizar jerarquías organizativas (Supervisor, Jefe, Equipo, Sub-equipo)
 -- a partir de la matriz de personal activo del mes correspondiente
@@ -51,6 +51,6 @@ SET
     EQUIPO      = B.EQUIPO,
     SUB_EQUIPO  = B.SUB_EQUIPO
 WHERE
-    M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL.PERIODO = '{PERIODO_ANTERIOR}'
-    AND B.PERIODO = '{PERIODO_ANTERIOR}'
+    M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL.PERIODO = '{PERIODO}'
+    AND B.PERIODO = '{PERIODO}'
     AND M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL.REG_EJECUTIVO = B.REG_EJECUTIVO;

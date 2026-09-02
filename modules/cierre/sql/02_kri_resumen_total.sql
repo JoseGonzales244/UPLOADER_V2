@@ -1,12 +1,12 @@
 -- =====================================================================
 -- 02_KRI_RESUMEN_TOTAL.SQL
 -- Cierre KRI: Inserción mensual del resumen total de ventas sin audio
--- y teléfonos no autorizados para el periodo cerrado {PERIODO_ANTERIOR}
+-- y teléfonos no autorizados para el período {PERIODO}
 -- =====================================================================
 
 -- Limpieza previa para garantizar idempotencia en re-ejecuciones
 DELETE FROM DLAB_GEC.M_KRI_RESUMEN_TOTAL
-WHERE PERIODO = CAST('{PERIODO_ANTERIOR}' AS INTEGER);
+WHERE PERIODO = CAST('{PERIODO}' AS INTEGER);
 
 INSERT INTO DLAB_GEC.M_KRI_RESUMEN_TOTAL (
     PERIODO,
@@ -23,7 +23,7 @@ WITH VNT AS (
         COUNT(TIP_CLIENTE) AS VENTAS,
         COUNT(TIP_CLIENTE) - COUNT(ORIGEN_LLAMADA) AS SIN_AUDIO
     FROM DLAB_GEC.T_EXP_KRI_VENTAS_SINAUDIO
-    WHERE CAST(MESDESEMBOLSO AS INTEGER) = CAST('{PERIODO_ANTERIOR}' AS INTEGER)
+    WHERE CAST(MESDESEMBOLSO AS INTEGER) = CAST('{PERIODO}' AS INTEGER)
     GROUP BY 1
 ),
 TLF AS (
@@ -32,7 +32,7 @@ TLF AS (
         COUNT(NUM_DOCUMENTO) AS TOTAL_TLF,
         COUNT(NUM_DOCUMENTO) - COUNT(TIPO_VAL) AS TLF_NOVALIDO
     FROM DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO
-    WHERE CAST(SUBSTR(CAST(FECDESEMB AS VARCHAR(10)), 1, 4) || SUBSTR(CAST(FECDESEMB AS VARCHAR(10)), 6, 2) AS INTEGER) = CAST('{PERIODO_ANTERIOR}' AS INTEGER)
+    WHERE CAST(SUBSTR(CAST(FECDESEMB AS VARCHAR(10)), 1, 4) || SUBSTR(CAST(FECDESEMB AS VARCHAR(10)), 6, 2) AS INTEGER) = CAST('{PERIODO}' AS INTEGER)
     GROUP BY 1
 )
 SEL 

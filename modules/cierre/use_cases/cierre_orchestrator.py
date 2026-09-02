@@ -1,7 +1,7 @@
 """
 Módulo Orquestador de Cierre Mensual:
 Ejecuta la consolidación de nota gerencial (01_auditoria_y_cierre.sql)
-e inserción de resumen KRI (02_kri_resumen_total.sql) para el período cerrado {PERIODO_ANTERIOR}.
+e inserción de resumen KRI (02_kri_resumen_total.sql) para el período indicado.
 Garantiza idempotencia eliminando datos previos del período antes de la inserción.
 """
 import os
@@ -35,7 +35,7 @@ def run_cierre_process_flow(
     Ejecuta el flujo de Cierre Mensual seleccionando individualmente los scripts deseados.
     """
     params = get_cierre_period_params(period_str)
-    periodo_cerrado = params["PERIODO_ANTERIOR"]
+    periodo_cerrado = params["PERIODO"]
     
     cierre_scripts = []
     if run_cierre_01:

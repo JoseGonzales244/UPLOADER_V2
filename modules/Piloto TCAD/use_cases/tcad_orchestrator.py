@@ -311,5 +311,5 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S"
     )
-    p = sys.argv[1] if len(sys.argv) > 1 else None
+    p = sys.argv[2] if len(sys.argv) > 2 else None
     run_tcad_monthly_ingest(p)
