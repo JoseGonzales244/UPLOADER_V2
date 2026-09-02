@@ -28,7 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sincronizar transcripciones de TC hacia SQL Server DB_SPEECH.TRANSCRIPCION.")
     parser.add_argument("--plantilla", type=str, default="Exp. Compra - TC", help="Nombre de plantilla en Teradata (default: 'Exp. Compra - TC')")
     parser.add_argument("--limit", type=int, default=None, help="Límite de registros para prueba rápida (ej: 5, 10)")
-    parser.add_argument("--min-date", type=str, default="2026-07-01", help="Fecha mínima para búsqueda histórica de TIPO_LEAD en Insight (YYYY-MM-DD)")
+    parser.add_argument("--min-date", type=str, default="2026-08-01", help="Fecha mínima para búsqueda histórica de TIPO_LEAD en Insight (YYYY-MM-DD)")
     parser.add_argument("--skip-sql", action="store_true", help="Detiene el pipeline tras descargar los .txt y omite la carga a SQL Server.")
 
     args = parser.parse_args()
