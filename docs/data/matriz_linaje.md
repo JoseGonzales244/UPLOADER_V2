@@ -51,3 +51,11 @@ flowchart LR
 | **Bases de Desembolsos**| SQL Server (`pyodbc`) | Extracción por fecha de desembolso | `DLAB_GEC.BN_DESEMBOLSOS_GENERAL` |
 | **Muestreos Insight** | Web Scraping / API | Parsing JSON, filtros de no conformidades | `DLAB_GEC.EVALUACIONES_CALIDAD` |
 | **Audios Genesys** | Chrome CDP / Outlook | Enriquecimiento telefónico y descarga MP3 | Almacén local `data/downloads/` |
+
+---
+
+## 🔍 Trazabilidad Técnica Detallada por Proceso
+
+Para consultar el mapa detallado de archivos fuente (`.py`), queries (`.sql`), endpoints de API y variables de entorno requeridas por cada flujo, consulta la:
+👉 **[trazabilidad_end_to_end.md:L1](trazabilidad_end_to_end.md)**.
+

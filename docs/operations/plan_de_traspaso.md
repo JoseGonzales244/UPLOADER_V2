@@ -135,19 +135,31 @@ El repositorio incluye herramientas operativas organizadas por dominio modular (
 
 ---
 
-## 🧪 6. Verificación de Salud (Health Check)
+## 🧪 6. Verificación de Salud (Health Check & Readiness)
 
-Verifica que toda la suite de pruebas unitarias pase al 100%:
+### Diagnóstico Rápido de Accesos y Entorno (Semáforo)
+El nuevo operador puede validar en 2 segundos si cuenta con el archivo `.env`, variables configuradas, carpetas locales y drivers ODBC:
 
 ```powershell
-python -m unittest discover -s tests
+.\.venv\Scripts\python tests/test_environment_readiness.py --report
+```
+
+### Ejecución de la Suite Completa de Pruebas Unitarias
+Verifica que toda la suite de pruebas unitarias (55 tests) pase al 100%:
+
+```powershell
+.\.venv\Scripts\python -m unittest discover -s tests
 ```
 
 **Resultado esperado:**
 ```text
-Ran 48 tests in 0.250s
+Ran 55 tests in 0.350s
 OK
 ```
+
+> [!TIP]
+> Para conocer el mapa completo de archivos, scripts SQL, APIs y variables requeridas por cada uno de los 8 módulos, consulta la **[trazabilidad_end_to_end.md:L1](../data/trazabilidad_end_to_end.md)**.
+
 
 ---
 

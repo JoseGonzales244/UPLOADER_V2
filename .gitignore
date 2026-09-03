@@ -8,6 +8,7 @@ __pycache__/
 # Archivos de configuración y credenciales sensibles
 .env
 .env.*
+!.env.example
 ACCESOS_EXPERIENCIA.txt
 
 # Runtime, perfiles y cachés

@@ -24,6 +24,7 @@ graph TD
 
     DAT --> D1[diccionario_tablas.md]
     DAT --> D2[matriz_linaje.md]
+    DAT --> D3[trazabilidad_end_to_end.md]
 ```
 
 ---
@@ -53,7 +54,9 @@ graph TD
 
 ## 🗄️ 3. Dominio: Catálogo y Linaje de Datos (`docs/data/`)
 
-> **Audiencia:** BI, Gobierno de Datos, Auditores.
+> **Audiencia:** BI, Gobierno de Datos, Desarrolladores, Auditores.
 
+- 🗺️ **[Trazabilidad Técnica End-to-End](data/trazabilidad_end_to_end.md):** Mapa exhaustivo de archivos de código, scripts SQL, triggers y destinos de los 8 módulos.
 - 📋 **[Diccionario de Tablas](data/diccionario_tablas.md):** Catálogo de tablas en `DLAB_GEC` y esquemas de tipos.
-- 🗺️ **[Matriz de Linaje de Datos](data/matriz_linaje.md):** Trazabilidad completa desde orígenes hasta PowerBI.
+- 🔄 **[Matriz de Linaje de Datos](data/matriz_linaje.md):** Trazabilidad conceptual desde orígenes hasta PowerBI.
+
