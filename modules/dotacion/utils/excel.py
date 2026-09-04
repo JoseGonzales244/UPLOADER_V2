@@ -3,12 +3,30 @@ import openpyxl
 from copy import copy
 
 def find_headers_and_row(sheet, search_term):
-    for r_idx in range(1, 10):
+    search_terms = [search_term] if isinstance(search_term, str) else list(search_term)
+    for r_idx in range(1, 15):
         row_vals = [sheet.cell(row=r_idx, column=c).value for c in range(1, sheet.max_column + 1)]
-        if any(row_vals) and any(search_term in str(v) for v in row_vals if v):
-            headers = [str(v).strip() if v is not None else None for v in row_vals]
-            return headers, r_idx
-    raise ValueError(f"Could not find header row containing '{search_term}' in sheet '{sheet.title}'")
+        if any(row_vals):
+            for term in search_terms:
+                term_upper = str(term).strip().upper()
+                if any(term_upper in str(v).strip().upper() for v in row_vals if v is not None):
+                    headers = [str(v).strip() if v is not None else None for v in row_vals]
+                    return headers, r_idx
+    raise ValueError(f"Could not find header row containing any of {search_terms} in sheet '{sheet.title}'")
+
+def find_advisor_reg_col_idx(headers):
+    """Encuentra el índice de la columna de registro del asesor (evitando columnas de supervisor o jefe)."""
+    candidates = ["REGISTRO COLABORADOR", "REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO", "REGISTRO"]
+    for cand in candidates:
+        for idx, h in enumerate(headers):
+            if h and str(h).strip().upper() == cand:
+                return idx
+    for idx, h in enumerate(headers):
+        if h:
+            h_upper = str(h).strip().upper()
+            if any(c in h_upper for c in candidates) and "SUPER" not in h_upper and "JEFE" not in h_upper:
+                return idx
+    return None
 
 def copy_row_style(ws, src_row, tgt_row):
     for col_idx in range(1, ws.max_column + 1):
@@ -25,9 +43,10 @@ def copy_sheet_data(source_ws, target_ws, period_filter=None):
     # Encontrar la fila de cabecera dinámicamente en el origen
     headers = None
     hdr_row = 1
-    for r in range(1, 10):
+    reg_candidates = ["REGISTRO COLABORADOR", "REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO", "REGISTRO"]
+    for r in range(1, 15):
         vals = [source_ws.cell(row=r, column=c).value for c in range(1, source_ws.max_column+1)]
-        if any("REGISTRO" in str(v) for v in vals if v):
+        if any(vals) and any(any(cand in str(v).upper() for cand in reg_candidates) for v in vals if v):
             headers = [str(v).strip() if v is not None else "" for v in vals]
             hdr_row = r
             break
@@ -46,8 +65,15 @@ def copy_sheet_data(source_ws, target_ws, period_filter=None):
         for c in range(1, target_ws.max_column + 1):
             target_ws.cell(row=r, column=c).value = None
 
+    # Normalizar cabecera de registro en destino si viene como REG_COLAB, REG_PROMOTOR o REG_EJECUTIVO
+    norm_headers = list(headers)
+    for col_idx, h_val in enumerate(norm_headers):
+        h_upper = str(h_val).strip().upper()
+        if h_upper in ["REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO"]:
+            norm_headers[col_idx] = "REGISTRO"
+
     # Copiar cabecera
-    for col_idx, h_val in enumerate(headers):
+    for col_idx, h_val in enumerate(norm_headers):
         target_ws.cell(row=1, column=col_idx + 1, value=h_val)
 
     # Copiar datos
@@ -65,7 +91,7 @@ def copy_sheet_data(source_ws, target_ws, period_filter=None):
             h_name = str(headers[col_idx-1]).upper()
             if "COLABORADOR" in h_name or "NOMBRE" in h_name:
                 colab_val = source_ws.cell(row=src_row_idx, column=col_idx).value
-            if "REGISTRO" in h_name and "SUPER" not in h_name and "JEFE" not in h_name:
+            if any(cand == h_name.strip() for cand in reg_candidates) and "SUPER" not in h_name and "JEFE" not in h_name:
                 reg_col_idx = col_idx
 
         for col_idx in range(1, len(headers) + 1):

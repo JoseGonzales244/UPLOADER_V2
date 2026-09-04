@@ -5,7 +5,7 @@ from typing import Optional
 from modules.dotacion.dotacion_config import DotacionConfig
 from modules.dotacion.core.absence import check_absence_status
 from modules.dotacion.core.matching import mismo_supervisor
-from modules.dotacion.utils.excel import find_headers_and_row, copy_row_style, get_working_days
+from modules.dotacion.utils.excel import find_headers_and_row, copy_row_style, get_working_days, find_advisor_reg_col_idx
 
 def get_new_seniority(prev_val):
     if not prev_val:
@@ -62,8 +62,12 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
     sel_ws = wb[sel_dot_sheet_names[0]]
     
     select_dot_by_reg = {}
-    sel_headers, sel_header_row = find_headers_and_row(sel_ws, "REGISTRO")
-    col_sel_reg = sel_headers.index("REGISTRO")
+    sel_headers, sel_header_row = find_headers_and_row(
+        sel_ws, ["REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO", "REGISTRO"]
+    )
+    col_sel_reg = find_advisor_reg_col_idx(sel_headers)
+    if col_sel_reg is None:
+        raise ValueError(f"Could not find advisor registration column in sheet '{sel_ws.title}'")
     
     col_sel_colab = None
     for idx_h, h_name in enumerate(sel_headers):
@@ -309,23 +313,28 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
         for reg, row_num in current_advisors.items():
             if reg in filtered_roster:
                 r_dict = filtered_roster[reg]
-                colab_name = r_dict.get('COLABORADOR') or r_dict.get('APELLIDOS Y NOMBRES') or r_dict.get('NOMBRE')
+                colab_name = (
+                    r_dict.get('COLABORADOR') or 
+                    r_dict.get('NOMBRE_COLABORADOR') or 
+                    r_dict.get('APELLIDOS Y NOMBRES') or 
+                    r_dict.get('NOMBRE')
+                )
                 
                 if config_filter["dot_source"] == "standard":
                     reg_super = r_dict.get('REG SUPERVISOR JEFE')
                     super_name = r_dict.get('SUPERVISOR / JEFE')
                     jefe_name = None
                 else:
-                    reg_super = r_dict.get('REGISTRO_SUPER')
-                    super_name = r_dict.get('SUPERVISOR')
-                    jefe_name = r_dict.get('JEFE')
+                    reg_super = r_dict.get('REGISTRO_SUPER') or r_dict.get('REG_SUP')
+                    super_name = r_dict.get('SUPERVISOR') or r_dict.get('NOM_SUP')
+                    jefe_name = r_dict.get('JEFE') or r_dict.get('NOM_JEFE')
                 
                 old_ant = sheet.cell(row=row_num, column=col_ant_idx).value if col_ant_idx else None
                 old_ant_prev = prev_seniorities.get((s_name, reg))
                 if old_ant_prev:
                     new_ant = get_new_seniority(old_ant_prev)
                 else:
-                    new_ant = str(r_dict.get('ANTIGÜEDAD') or r_dict.get('ANTIGUEDAD') or 'R0').strip().upper()
+                    new_ant = str(r_dict.get('ANTIGÜEDAD') or r_dict.get('ANTIGUEDAD') or r_dict.get('ANTIGUEDAD CANAL') or 'R0').strip().upper()
                 old_super = sheet.cell(row=row_num, column=col_super_idx).value if col_super_idx else None
                 
                 if col_ant_idx:
@@ -376,8 +385,13 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
                 if s_name == "CxC 1" and reg in cxc_current_regs:
                     continue
                     
-                colab_name = r_dict.get('COLABORADOR') or r_dict.get('APELLIDOS Y NOMBRES') or r_dict.get('NOMBRE')
-                new_sup = r_dict.get('SUPERVISOR / JEFE') if config_filter["dot_source"] == "standard" else r_dict.get('SUPERVISOR')
+                colab_name = (
+                    r_dict.get('COLABORADOR') or 
+                    r_dict.get('NOMBRE_COLABORADOR') or 
+                    r_dict.get('APELLIDOS Y NOMBRES') or 
+                    r_dict.get('NOMBRE')
+                )
+                new_sup = r_dict.get('SUPERVISOR / JEFE') if config_filter["dot_source"] == "standard" else (r_dict.get('SUPERVISOR') or r_dict.get('NOM_SUP'))
                 added_advisors.append((s_name, reg, colab_name, new_sup))
                 
                 if config_filter["dot_source"] == "standard":
@@ -385,15 +399,15 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
                     super_name = r_dict.get('SUPERVISOR / JEFE')
                     jefe_name = None
                 else:
-                    reg_super = r_dict.get('REGISTRO_SUPER')
-                    super_name = r_dict.get('SUPERVISOR')
-                    jefe_name = r_dict.get('JEFE')
+                    reg_super = r_dict.get('REGISTRO_SUPER') or r_dict.get('REG_SUP')
+                    super_name = r_dict.get('SUPERVISOR') or r_dict.get('NOM_SUP')
+                    jefe_name = r_dict.get('JEFE') or r_dict.get('NOM_JEFE')
                 
                 old_ant_prev = prev_seniorities.get((s_name, reg))
                 if old_ant_prev:
                     new_ant = get_new_seniority(old_ant_prev)
                 else:
-                    new_ant = str(r_dict.get('ANTIGÜEDAD') or r_dict.get('ANTIGUEDAD') or 'R0').strip().upper()
+                    new_ant = str(r_dict.get('ANTIGÜEDAD') or r_dict.get('ANTIGUEDAD') or r_dict.get('ANTIGUEDAD CANAL') or 'R0').strip().upper()
                 
                 # Check absence for new advisors too
                 absence = None

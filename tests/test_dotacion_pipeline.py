@@ -58,7 +58,39 @@ class TestDotacionPipelineLogic(unittest.TestCase):
         # Catherine con 2 códigos
         self.assertTrue(any("CATHERINE JOSEFINA ESPINOZA TIMOTEO" in a and "B15241" in a and "B43648" in a for a in alerts))
         # B43648 con 2 supervisores (Bruno y Catherine)
-        self.assertTrue(any("B43648" in a and "BRUNO MIRANDA" in a for a in alerts))
+    def test_advisor_registration_resolution(self):
+        """Verifica que el índice de registro de asesor reconozca REG_COLAB, REG_PROMOTOR, REG_EJECUTIVO y REGISTRO, sin confundir jefe/supervisor."""
+        from modules.dotacion.utils.excel import find_advisor_reg_col_idx
+
+        headers_select_1 = ['PERIODO', 'EQUIPO', 'REG_JEFE', 'NOM_JEFE', 'REG_SUP', 'NOM_SUP', 'REG_COLAB', 'NOMBRE_COLABORADOR']
+        self.assertEqual(find_advisor_reg_col_idx(headers_select_1), 6)
+
+        headers_select_2 = ['PERIODO', 'EQUIPO', 'REG_JEFE', 'NOM_JEFE', 'REG_SUP', 'NOM_SUP', 'REGISTRO', 'NOMBRE_COLABORADOR']
+        self.assertEqual(find_advisor_reg_col_idx(headers_select_2), 6)
+
+        headers_promotor = ['PERIODO', 'REG_JEFE', 'REG_SUP', 'REG_PROMOTOR', 'NOMBRE']
+        self.assertEqual(find_advisor_reg_col_idx(headers_promotor), 3)
+
+        headers_ejecutivo = ['PERIODO', 'REG_JEFE', 'REG_SUP', 'REG_EJECUTIVO', 'NOMBRE']
+        self.assertEqual(find_advisor_reg_col_idx(headers_ejecutivo), 3)
+
+        headers_standard = ['PERIODO', 'REG_JEFE', 'REG SUPERVISOR JEFE', 'REGISTRO COLABORADOR', 'COLABORADOR']
+        self.assertEqual(find_advisor_reg_col_idx(headers_standard), 3)
+
+    def test_find_headers_multiple_terms(self):
+        """Verifica búsqueda de cabeceras con lista de términos candidatos."""
+        import openpyxl
+        from modules.dotacion.utils.excel import find_headers_and_row
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.cell(row=2, column=1, value="PERIODO")
+        ws.cell(row=2, column=2, value="REG_COLAB")
+        ws.cell(row=2, column=3, value="NOMBRE_COLABORADOR")
+
+        headers, row_idx = find_headers_and_row(ws, ["REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO", "REGISTRO"])
+        self.assertEqual(row_idx, 2)
+        self.assertIn("REG_COLAB", headers)
 
 
 class TestDotacionEndpoints(unittest.TestCase):

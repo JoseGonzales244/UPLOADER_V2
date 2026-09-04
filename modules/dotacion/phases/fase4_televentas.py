@@ -5,7 +5,7 @@ from copy import copy
 from typing import Optional
 from modules.dotacion.dotacion_config import DotacionConfig
 from modules.dotacion.core.names import format_nom_ejecutivo_old
-from modules.dotacion.utils.excel import find_headers_and_row
+from modules.dotacion.utils.excel import find_headers_and_row, find_advisor_reg_col_idx
 
 MONTH_NAMES = {
     1: "ENERO", 2: "FEBRERO", 3: "MARZO", 4: "ABRIL",
@@ -78,17 +78,20 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
     sel_dot_sheet_names = [n for n in wb_test.sheetnames if "SELECT" in n.upper() and "DOTACI" in n.upper()]
     if sel_dot_sheet_names:
         sel_ws = wb_test[sel_dot_sheet_names[0]]
-        sel_headers, sel_header_row = find_headers_and_row(sel_ws, "REGISTRO")
-        col_sel_reg = sel_headers.index("REGISTRO")
-        for r_idx in range(sel_header_row + 1, sel_ws.max_row + 1):
-            reg_val = sel_ws.cell(row=r_idx, column=col_sel_reg + 1).value
-            if reg_val is not None and str(reg_val).strip() != "":
-                reg = str(reg_val).strip().upper()
-                row_dict = {}
-                for col_idx, h in enumerate(sel_headers):
-                    if h:
-                        row_dict[h] = sel_ws.cell(row=r_idx, column=col_idx + 1).value
-                select_dot_by_reg[reg] = row_dict
+        sel_headers, sel_header_row = find_headers_and_row(
+            sel_ws, ["REG_COLAB", "REG_PROMOTOR", "REG_EJECUTIVO", "REGISTRO"]
+        )
+        col_sel_reg = find_advisor_reg_col_idx(sel_headers)
+        if col_sel_reg is not None:
+            for r_idx in range(sel_header_row + 1, sel_ws.max_row + 1):
+                reg_val = sel_ws.cell(row=r_idx, column=col_sel_reg + 1).value
+                if reg_val is not None and str(reg_val).strip() != "":
+                    reg = str(reg_val).strip().upper()
+                    row_dict = {}
+                    for col_idx, h in enumerate(sel_headers):
+                        if h:
+                            row_dict[h] = sel_ws.cell(row=r_idx, column=col_idx + 1).value
+                    select_dot_by_reg[reg] = row_dict
 
     # 4. Extraer asesores activos de las hojas de productos
     print("[Step 3] Extracting active advisors from product sheets...")

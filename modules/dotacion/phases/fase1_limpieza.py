@@ -24,7 +24,14 @@ def run(wb_out, cfg: Optional[DotacionConfig] = None):
     
     # Handle Select Dotacion sheet character encodings
     wb_select = openpyxl.load_workbook(SELECT_DOTACION_FILE, keep_links=False, data_only=True)
-    select_sheet_name = next((n for n in wb_select.sheetnames if n.startswith("Dotac") or "SELECT" in n.upper() or "HOJA1" in n.upper()), wb_select.sheetnames[0])
+    select_sheet_candidates = [n for n in wb_select.sheetnames if "SELECT" in n.upper()]
+    if select_sheet_candidates:
+        select_sheet_name = select_sheet_candidates[0]
+    else:
+        select_sheet_name = next(
+            (n for n in wb_select.sheetnames if n.upper().startswith("DOTAC") or "HOJA1" in n.upper()),
+            wb_select.sheetnames[0]
+        )
 
     
     # 3. Replace DOTACIÓN and Dotación SELECT sheets
