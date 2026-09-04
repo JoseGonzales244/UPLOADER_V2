@@ -75,7 +75,11 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
 
     # Indexar hoja Dotación SELECT si existe
     select_dot_by_reg = {}
-    sel_dot_sheet_names = [n for n in wb_test.sheetnames if "SELECT" in n.upper() and "DOTACI" in n.upper()]
+    sel_dot_sheet_names = [n for n in wb_test.sheetnames if "SELECT" in n.upper() and ("DOTACI" in n.upper() or "DOT" in n.upper())]
+    if not sel_dot_sheet_names:
+        # Fallback: buscar cualquier hoja que contenga SELECT excepto la hoja de producto pura
+        sel_dot_sheet_names = [n for n in wb_test.sheetnames if "SELECT" in n.upper() and n.strip().upper() != "SELECT"]
+
     if sel_dot_sheet_names:
         sel_ws = wb_test[sel_dot_sheet_names[0]]
         sel_headers, sel_header_row = find_headers_and_row(
@@ -90,7 +94,9 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
                     row_dict = {}
                     for col_idx, h in enumerate(sel_headers):
                         if h:
-                            row_dict[h] = sel_ws.cell(row=r_idx, column=col_idx + 1).value
+                            val = sel_ws.cell(row=r_idx, column=col_idx + 1).value
+                            row_dict[h] = val
+                            row_dict[str(h).strip().upper()] = val
                     select_dot_by_reg[reg] = row_dict
 
     # 4. Extraer asesores activos de las hojas de productos
@@ -188,11 +194,29 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
         else:
             dot_info = standard_dot_by_reg.get(adv['reg'], {})
 
-        jefe_name = dot_info.get("JEFE")
-        subgerente_name = dot_info.get("SUBGERENTE")
+        # Buscar nombre de jefe con fallbacks flexibles (en Select la columna suele llamarse NOM_JEFE)
+        jefe_name = (
+            dot_info.get("NOM_JEFE") or
+            dot_info.get("JEFE") or
+            dot_info.get("JEFE DIRECTO") or
+            dot_info.get("JEFE DE VENTAS") or
+            dot_info.get("NOMBRE_JEFE")
+        )
+        subgerente_name = (
+            dot_info.get("SUBGERENTE") or
+            dot_info.get("NOM_SUBGERENTE") or
+            dot_info.get("SUB_GERENTE")
+        )
+
+        # Si el supervisor o su registro estaban vacíos en la hoja de producto, completar desde dotación
+        super_name = adv['super'] or dot_info.get("SUPERVISOR") or dot_info.get("NOM_SUP") or dot_info.get("SUPERVISOR / JEFE")
+        reg_super = adv['reg_super'] or dot_info.get("REG_SUPER") or dot_info.get("REG_SUP") or dot_info.get("REGISTRO_SUPER") or dot_info.get("REG SUPERVISOR JEFE")
+
+        # Si dot_info ya tiene REG_JEFE explícito (como en Dotación Select), usarlo directamente si el VLOOKUP fallara
+        reg_jefe_direct = dot_info.get("REG_JEFE") or dot_info.get("REGISTRO_JEFE")
+        formula_reg_jefe = reg_jefe_direct if reg_jefe_direct else f'=VLOOKUP(Tabla15[[#This Row],[NOM_JEFE]],JEFE[],2,FALSE)'
 
         # Formulas exactas de VLOOKUP y CONCAT
-        formula_reg_jefe = f'=VLOOKUP(Tabla15[[#This Row],[NOM_JEFE]],JEFE[],2,FALSE)'
         formula_equipo = f'=VLOOKUP(Tabla15[[#This Row],[SUB_EQUIPO_2]],EQUIPOS[],3,FALSE)'
         formula_sub_equipo = f'=VLOOKUP(Tabla15[[#This Row],[SUB_EQUIPO_2]],EQUIPOS[],2,FALSE)'
         formula_codigo = f'=_xlfn.CONCAT(Tabla15[[#This Row],[PERIODO]],"_",Tabla15[[#This Row],[REG_EJECUTIVO]])'
@@ -201,8 +225,8 @@ def run(wb_test, cfg: Optional[DotacionConfig] = None):
         ws_exec.cell(row=target_row, column=1, value=period_val)
         ws_exec.cell(row=target_row, column=2, value=adv['reg'])
         ws_exec.cell(row=target_row, column=3, value=adv['nombre'])
-        ws_exec.cell(row=target_row, column=4, value=adv['reg_super'])
-        ws_exec.cell(row=target_row, column=5, value=adv['super'])
+        ws_exec.cell(row=target_row, column=4, value=reg_super)
+        ws_exec.cell(row=target_row, column=5, value=super_name)
         ws_exec.cell(row=target_row, column=6, value=formula_reg_jefe)
         ws_exec.cell(row=target_row, column=7, value=jefe_name)
         ws_exec.cell(row=target_row, column=8, value=formula_equipo)

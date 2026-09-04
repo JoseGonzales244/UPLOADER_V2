@@ -153,6 +153,60 @@ class TestDotacionPipelineLogic(unittest.TestCase):
             for c in range(3, 20):
                 self.assertIsNone(ws_res.cell(row=r, column=c).value)
 
+    def test_fase4_select_advisor_boss_name_resolution(self):
+        """Verifica que fase4_televentas extraiga NOM_JEFE y REG_JEFE de Dotación Select aunque la columna se llame NOM_JEFE."""
+        import os
+        import tempfile
+        import openpyxl
+        from modules.dotacion.phases import fase4_televentas
+
+        wb_test = openpyxl.Workbook()
+        # Sheet DOTACIÓN
+        ws_dot = wb_test.active
+        ws_dot.title = "DOTACIÓN"
+        ws_dot.append(["REGISTRO COLABORADOR", "COLABORADOR", "JEFE", "SUBGERENTE"])
+        ws_dot.append(["B11111", "ASESOR TC", "GUILLERMO VIA", "TITA ARNAO"])
+
+        # Sheet DOTACION SELECT
+        ws_sel_dot = wb_test.create_sheet("DOTACION SELECT")
+        ws_sel_dot.append(["PERIODO", "EQUIPO", "REG_JEFE", "NOM_JEFE", "REG_SUP", "NOM_SUP", "REG_COLAB", "NOMBRE_COLABORADOR"])
+        ws_sel_dot.append(["202609", "TLV SELECT", "B47190", "BRENDIE VERGARA", "B23510", "MERCE ALARCON", "B44999", "ASESOR SELECT PRUEBA"])
+
+        # Product sheet SELECT
+        ws_sel_prod = wb_test.create_sheet("SELECT")
+        ws_sel_prod.append(["REG_EV", "NOMBRE_EV", "ANTIGÜEDAD"])
+        ws_sel_prod.append(["B44999", "ASESOR SELECT PRUEBA", "R1"])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prev_file = os.path.join(tmpdir, "8 AGOSTO_TELEVENTAS_EJECUTIVOS.xlsx")
+            curr_file = os.path.join(tmpdir, "9 SETIEMBRE_TELEVENTAS_EJECUTIVOS_PRELIMINAR.xlsx")
+
+            wb_prev = openpyxl.Workbook()
+            ws_h2 = wb_prev.active
+            ws_h2.title = "Hoja2"
+            ws_h2.append(["PERIODO", "REG_EJECUTIVO", "NOM_EJECUTIVO", "REG_SUPERVISOR", "NOM_SUPERVISOR", "REG_JEFE", "NOM_JEFE", "EQUIPO", "SUB_EQUIPO", "SUB_EQUIPO_2", "SUBGERENTE", "COD_ANTIG", "NOM_EJECUTIVO_OLD", "CODIGO"])
+            ws_h2.append([202608, "B99999", "OLD", "B000", "OLD SUPER", "B001", "OLD JEFE", "OLD EQ", "OLD SUB", "SELECT", "SUBG", "R0", "OLD", "202608_B99999"])
+            wb_prev.save(prev_file)
+            wb_prev.close()
+
+            mock_cfg = MagicMock()
+            mock_cfg.PREV_EXEC_FILE = prev_file
+            mock_cfg.CURR_EXEC_FILE = curr_file
+            mock_cfg.TARGET_PERIOD = "2026-09"
+
+            fase4_televentas.run(wb_test, mock_cfg)
+
+            wb_res = openpyxl.load_workbook(curr_file, data_only=False)
+            ws_res = wb_res["Hoja2"]
+
+            # Fila 2: Asesor Select
+            self.assertEqual(ws_res.cell(row=2, column=2).value, "B44999")
+            self.assertEqual(ws_res.cell(row=2, column=7).value, "BRENDIE VERGARA") # NOM_JEFE
+            self.assertEqual(ws_res.cell(row=2, column=6).value, "B47190")          # REG_JEFE
+            self.assertEqual(ws_res.cell(row=2, column=5).value, "MERCE ALARCON")   # NOM_SUPERVISOR
+            self.assertEqual(ws_res.cell(row=2, column=4).value, "B23510")          # REG_SUPERVISOR
+            wb_res.close()
+
 
 class TestDotacionEndpoints(unittest.TestCase):
 

@@ -48,6 +48,7 @@
 | 5 | **Tests automatizados insuficientes** | Medio | Correr el pipeline en período de prueba |
 | 6 | **Piloto No Venta sin pipeline completo** — tiene SQL pero no está integrado a la UI | Bajo | Ejecutar SQL directamente en Teradata |
 | 7 | **Convenios — algunos pasos de nuevos convenios aún son manuales** | Bajo | Coordinar con responsable de Convenios |
+| 8 | **Insumos dispersos en OneDrives individuales** — `1. EXPERIENCIA DE COMPRA` reside en el OneDrive de **Janesy Lopez** y `Dotación` en la carpeta de **Rossmery** | Alto | Migrar a un SharePoint institucional del área para independizar insumos de personas específicas y evitar fallos de rutas |
 
 ---
 
