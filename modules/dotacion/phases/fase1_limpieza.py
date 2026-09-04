@@ -102,6 +102,9 @@ def run(wb_out, cfg: Optional[DotacionConfig] = None):
                     date_cell.value = datetime.datetime(working_days[idx].year, working_days[idx].month, working_days[idx].day)
                 else:
                     date_cell.value = None
+                # Limpiar celdas C a S (columnas 3 a 19): C7:S26, C31:S50, C55:S74, C79:S98
+                for col_idx in range(3, 20):
+                    av_sheet.cell(row=r_idx, column=col_idx).value = None
                     
         # Fix self-referencing formulas
         for sec in sections:
@@ -123,7 +126,13 @@ def run(wb_out, cfg: Optional[DotacionConfig] = None):
                 res_sheet.cell(row=r_idx, column=col_idx).value = None
             # Clear Column V (VACACIONES / DM / OTROS)
             res_sheet.cell(row=r_idx, column=22).value = None
-        print("  RESULTADOS sheet cleared.")
+
+        # Limpiar filas manuales C18:S18, C21:S21, C24:S24, C27:S27
+        for r_idx in [18, 21, 24, 27]:
+            for col_idx in range(3, 20):
+                res_sheet.cell(row=r_idx, column=col_idx).value = None
+
+        print("  RESULTADOS sheet cleared (resumen superior y filas manuales 18, 21, 24, 27).")
     else:
         print("  WARNING: RESULTADOS sheet not found!")
  

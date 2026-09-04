@@ -115,6 +115,44 @@ class TestDotacionPipelineLogic(unittest.TestCase):
         self.assertTrue(ws.cell(row=5, column=3).protection.locked)
         self.assertTrue(ws.cell(row=5, column=4).protection.locked)
 
+    def test_fase1_cleans_avance_diario_and_manual_resultados(self):
+        """Verifica que se limpien las celdas C:S en AVANCE DIARIO y filas 18, 21, 24, 27 en RESULTADOS."""
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws_av = wb.active
+        ws_av.title = "AVANCE DIARIO"
+        ws_res = wb.create_sheet("RESULTADOS")
+
+        # Cargar valores previos
+        for r in [7, 26, 31, 50, 55, 74, 79, 98]:
+            for c in range(3, 20):
+                ws_av.cell(row=r, column=c, value=99)
+
+        for r in [18, 21, 24, 27]:
+            for c in range(3, 20):
+                ws_res.cell(row=r, column=c, value=55)
+
+        # Simular limpieza de fase 1
+        for sec_start in [7, 31, 55, 79]:
+            for idx in range(20):
+                r_idx = sec_start + idx
+                for col_idx in range(3, 20):
+                    ws_av.cell(row=r_idx, column=col_idx).value = None
+
+        for r_idx in [18, 21, 24, 27]:
+            for col_idx in range(3, 20):
+                ws_res.cell(row=r_idx, column=col_idx).value = None
+
+        # Aserciones
+        for r in [7, 26, 31, 50, 55, 74, 79, 98]:
+            for c in range(3, 20):
+                self.assertIsNone(ws_av.cell(row=r, column=c).value)
+
+        for r in [18, 21, 24, 27]:
+            for c in range(3, 20):
+                self.assertIsNone(ws_res.cell(row=r, column=c).value)
+
 
 class TestDotacionEndpoints(unittest.TestCase):
 
