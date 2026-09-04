@@ -58,12 +58,21 @@ def get_analyst_vacations(year, month, holidays_set, vacation_file=None):
     try:
         wb = openpyxl.load_workbook(target_file, data_only=True)
         import unicodedata
-        sheet_candidates = [s for s in wb.sheetnames if "(2)" in s and str(year) in s]
+        # 1. Prioridad: Hoja oficial "Programación de Fechas {year}"
+        sheet_candidates = []
+        for s in wb.sheetnames:
+            norm = unicodedata.normalize('NFKD', s).upper()
+            if str(year) in norm and 'PROGRAMA' in norm and 'FECHA' in norm:
+                sheet_candidates.append(s)
+
+        # 2. Fallbacks si la hoja tiene otro formato de nombre
         if not sheet_candidates:
             for s in wb.sheetnames:
-                norm = unicodedata.normalize('NFC', s).upper()
+                norm = unicodedata.normalize('NFKD', s).upper()
                 if str(year) in norm and ('PROGRAMA' in norm or 'FECHA' in norm or 'TEAM' in norm):
                     sheet_candidates.append(s)
+        if not sheet_candidates:
+            sheet_candidates = [s for s in wb.sheetnames if "(2)" in s and str(year) in s]
         if not sheet_candidates:
             sheet_candidates = [s for s in wb.sheetnames if str(year) in s]
         
@@ -112,13 +121,14 @@ def get_analyst_vacations(year, month, holidays_set, vacation_file=None):
                     if any(pat in nom_cell for pat in patterns):
                         analyst_row_map[key] = r_idx
 
-        # Calcular días útiles de evaluación para saber la fecha de inicio del periodo
+        # Calcular días útiles de evaluación para saber la fecha de inicio y fin del periodo
         working_days = get_working_days(year, month, holidays_set)
-        first_eval_day = working_days[0] if working_days else None
-
-        # Contar días de vacaciones útiles dentro del periodo estricto de evaluación (10 al 28 de agosto)
-        eval_start = datetime.date(year, month, 10)
-        eval_end = datetime.date(year, month, 28)
+        if working_days:
+            eval_start = working_days[0]
+            eval_end = working_days[-1]
+        else:
+            eval_start = datetime.date(year, month, 1)
+            eval_end = datetime.date(year, month, 28)
         
         for key, r_idx in analyst_row_map.items():
             r = rows[r_idx]
