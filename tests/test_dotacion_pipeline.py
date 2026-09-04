@@ -92,6 +92,29 @@ class TestDotacionPipelineLogic(unittest.TestCase):
         self.assertEqual(row_idx, 2)
         self.assertIn("REG_COLAB", headers)
 
+    def test_lock_resultados_sheet_protects_and_locks_cells(self):
+        """Verifica que lock_resultados_sheet active la protección de hoja y fuerce todas las celdas a locked=True."""
+        import openpyxl
+        from modules.dotacion.utils.excel import lock_resultados_sheet
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "RESULTADOS"
+        # Simular celdas explícitamente desbloqueadas
+        ws.cell(row=5, column=3, value="CAROLINA")
+        ws.cell(row=5, column=3).protection = openpyxl.styles.Protection(locked=False)
+        ws.cell(row=5, column=4, value=25)
+        ws.cell(row=5, column=4).protection = openpyxl.styles.Protection(locked=False)
+
+        self.assertFalse(ws.cell(row=5, column=3).protection.locked)
+        self.assertFalse(ws.protection.sheet)
+
+        lock_resultados_sheet(wb)
+
+        self.assertTrue(ws.protection.sheet)
+        self.assertTrue(ws.cell(row=5, column=3).protection.locked)
+        self.assertTrue(ws.cell(row=5, column=4).protection.locked)
+
 
 class TestDotacionEndpoints(unittest.TestCase):
 

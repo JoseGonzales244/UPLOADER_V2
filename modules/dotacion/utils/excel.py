@@ -126,16 +126,6 @@ def get_working_days(year, month, holidays_set):
         
     return working_days
 
-def recreate_unlocked_resultados_sheet(wb):
-    if "RESULTADOS" not in wb.sheetnames:
-        return
-    ws = wb["RESULTADOS"]
-    ws.protection.sheet = False
-    ws.protection.disable()
-    unlocked_protection = openpyxl.styles.Protection(locked=False)
-    for row in ws.iter_rows():
-        for cell in row:
-            cell.protection = copy(unlocked_protection)
 def lock_resultados_sheet(wb):
     if "RESULTADOS" not in wb.sheetnames:
         return
@@ -143,6 +133,14 @@ def lock_resultados_sheet(wb):
     ws.protection.sheet = True
     ws.protection.objects = True
     ws.protection.scenarios = True
+    # Asegurar que todas las celdas estén bloqueadas (locked=True) para que Excel prohíba modificaciones al usuario
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.protection is not None and not cell.protection.locked:
+                cell.protection = openpyxl.styles.Protection(
+                    locked=True,
+                    hidden=cell.protection.hidden
+                )
     print("  [OK] RESULTADOS sheet protection restored (re-locked)!")
 
 

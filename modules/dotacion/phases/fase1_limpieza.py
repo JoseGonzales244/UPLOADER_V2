@@ -3,7 +3,7 @@ import datetime
 import openpyxl
 from typing import Optional
 from modules.dotacion.dotacion_config import DotacionConfig
-from modules.dotacion.utils.excel import copy_sheet_data, get_working_days, recreate_unlocked_resultados_sheet
+from modules.dotacion.utils.excel import copy_sheet_data, get_working_days
 
 def run(wb_out, cfg: Optional[DotacionConfig] = None):
     if cfg is None:
@@ -113,9 +113,8 @@ def run(wb_out, cfg: Optional[DotacionConfig] = None):
                 av_sheet.cell(row=r_fix, column=c_fix).value = fixed
                 print(f"  Fixed self-ref formula at row {r_fix} col H: {cell_val} -> {fixed}")
  
-    # 5.5. Recreate RESULTADOS sheet to remove password locks while preserving formulas and formatting
-    print("\n[Step 3.5] Recreating and unlocking RESULTADOS sheet...")
-    recreate_unlocked_resultados_sheet(wb_out)
+    # 5.5. Clear previous monthly summary in RESULTADOS sheet
+    print("\n[Step 3.5] Cleaning previous monthly summary in RESULTADOS sheet...")
     if "RESULTADOS" in wb_out.sheetnames:
         res_sheet = wb_out["RESULTADOS"]
         for r_idx in [5, 6, 7, 8]:
@@ -124,7 +123,7 @@ def run(wb_out, cfg: Optional[DotacionConfig] = None):
                 res_sheet.cell(row=r_idx, column=col_idx).value = None
             # Clear Column V (VACACIONES / DM / OTROS)
             res_sheet.cell(row=r_idx, column=22).value = None
-        print("  RESULTADOS sheet unlocked and cleared.")
+        print("  RESULTADOS sheet cleared.")
     else:
         print("  WARNING: RESULTADOS sheet not found!")
  
