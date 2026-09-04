@@ -46,6 +46,9 @@ logs/
 !Diccionario_Categorias_Verint.xlsx
 !*diccionario*categoria*.xlsx
 !data/**/Diccionario_Categorias_Verint.xlsx
+!data/input/base_consumo/CD40K_NEW.xlsx
+!data/input/base_consumo/CD40K.xlsx
+!data/input/proceso_calidad/ACCION_TOMADA.xlsx
 *.csv
 !data/input/proceso_calidad/*.csv
 
