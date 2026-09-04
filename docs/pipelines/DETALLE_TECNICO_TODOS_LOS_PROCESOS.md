@@ -26,57 +26,48 @@
 **Orquestador:** [quality_orchestrator.py](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/modules/calidad/use_cases/quality_orchestrator.py)  
 **Cómo ejecutar:** UI → Sección *Calidad* → Botón *Ejecutar Pipeline Completo* (o fases individuales)
 
-### 1.1 Flujo de Ingesta (Fases 1–3)
-
-```mermaid
-flowchart LR
-    I1["Insight Cloud\n(Query: EVALUATIONS)"] -->|"Descarga TSV Unicode"| F1["Fase 1\nphase1_ingest_insight.py"]
-    F1 -->|"Plantilla P008-INSIGHT_07_EVALUATIONS\nLimpieza Polars"| T1[("DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE")]
-
-    I2["Verint WFO API REST\n(Export_Calidad_*.xlsx)"] -->|"Descarga XLSX"| F2["Fase 2\nphase2_ingest_verint.py"]
-    F2 -->|"Plantilla P001-CALIDAD_SA\nLimpieza Polars"| T2[("DLAB_GEC.M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS")]
-
-    I3["SharePoint Calidad\n(ACCION_TOMADA.xlsx)"] -->|"Auto-refresh COM Excel"| F3["Fase 3\nphase3_ingest_accion_tomada.py"]
-    F3 -->|"Plantilla P004-ACC_TOMADA\nDeduplicación por severidad"| T3[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE")]
-```
-
-### 1.2 Pipeline SQL (Fase 4) — Detalle por Script
+### 1.1 Diagrama End-to-End de Calidad NTD
 
 ```mermaid
 flowchart TD
-    PRE[("DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE")] --> S01["01_evaluacion_manual_pc.sql\nMapeo de homologaciones y cálculo de pesos\nGenera NUM_EVALUACION en memoria"]
-    S01 --> D1[("DLAB_GEC.M_EXP_CALIDAD_DETALLE_PURE_CLOUD")]
+    subgraph S_ING ["1. Fases de Ingesta (Fases 1 a 3)"]
+        IN1["Insight Cloud\n(Query: EVALUATIONS)"] -->|"phase1_ingest_insight.py\nPlantilla P008"| T1[("DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE\n(Evaluaciones Manuales)")]
+        IN2["Verint WFO SA\n(Export_Calidad_*.xlsx)"] -->|"phase2_ingest_verint.py\nPlantilla P001"| T2[("DLAB_GEC.M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS\n(Evaluaciones Speech Analytics)")]
+        IN3["SharePoint Calidad\n(ACCION_TOMADA.xlsx)"] -->|"phase3_ingest_accion_tomada.py\nPlantilla P004"| T3[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE\n(Observaciones y Severidad)")]
+    end
 
-    SA[("DLAB_GEC.M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS")] --> S02["02_sa_marcacion_ventas_lpdp.sql\nMarcación de ventas TC / PP / LPDP\nDeduplicación vía ROW_NUMBER()"]
-    S02 --> S03["03_sa_calculo_pesos_unpivot.sql\nUnpivot de categorías Speech Analytics\nCálculo de promedios de detección"]
-    S03 --> S04["04_sa_ajustes_curva.sql\nCruce con DLAB_GEC.M_EXP_CALIDAD_MAESTRA_SA\nAplica pesos, curvas y topes"]
-    S04 --> S04b["04_b_sa_parche_nota_cero.sql\nReemplaza evaluaciones nota 0 en ejecutivos mixtos"]
-    S04b --> D2[("DLAB_GEC.M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS")]
+    subgraph S_SQL ["2. Pipeline de Transformación SQL (Fase 4)"]
+        T1 --> SQL1["01_evaluacion_manual_pc.sql\nHomologaciones y cálculo de pesos PC"]
+        SQL1 --> D1[("DLAB_GEC.M_EXP_CALIDAD_DETALLE_PURE_CLOUD")]
 
-    D1 --> S05["05_consolidacion_nota_final.sql\nConsolidación de notas PC y SA\nAplica reglas de ponderación y caps"]
-    D2 --> S05
-    S05 --> NF[("DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL")]
-    NF --> V["VIEW: DLAB_GEC.V_EXP_CALIDAD_NOTA_FINAL"]
+        T2 --> SQL2["02_sa_marcacion_ventas_lpdp.sql\nMarcación ventas TC/PP/LPDP"]
+        SQL2 --> SQL3["03_sa_calculo_pesos_unpivot.sql\nUnpivot categorías SA"]
+        SQL3 --> SQL4["04_sa_ajustes_curva.sql\nPesos x Maestra SA + Curvas y Topes"]
+        SQL4 --> SQL4b["04_b_sa_parche_nota_cero.sql\nParche automáticos mixtos nota 0"]
+        SQL4b --> D2[("DLAB_GEC.M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS")]
 
-    style D1 fill:#dff0d8
-    style D2 fill:#dff0d8
-    style NF fill:#d9edf7
-    style V fill:#d9edf7
-```
+        D1 --> SQL5["05_consolidacion_nota_final.sql\nPonderación PC + SA y Topes"]
+        D2 --> SQL5
+        SQL5 --> NF[("DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL")]
+        NF --> VNF["VIEW: DLAB_GEC.V_EXP_CALIDAD_NOTA_FINAL"]
+    end
 
-**Validaciones automáticas en Fase 4:**
-- Verificar `COUNT > 0` en todas las tablas origen (configurable en `config.json → quality_validation_settings`).
-- Detectar preguntas sin mapear cruzando `DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE` vs `DLAB_GEC.M_EXP_CALIDAD_HOMOLOGA_PREGUNTA` y `DLAB_GEC.M_EXP_CALIDAD_MAESTRA_GRUPO_PREGUNTAS_PCLOUD`.
-- Validar o generar automáticamente los datos del período en `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED` antes de ejecutar los scripts SQL (`ensure_grouped_data_for_period`).
+    subgraph S_NTD ["3. Proceso No Te Dejes - NTD (Fase 5)"]
+        T1 --> SQL6["06_carga_ntd.sql\nCruce con Observaciones"]
+        T3 --> SQL6
+        SQL6 --> NTD_TAB[("DLAB_GEC.M_EXP_NOT_TO_DO\n(Histórico acumulado)")]
+        SQL6 --> NTD_NEW[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_NEW")]
+    end
 
-### 1.3 Proceso NTD (Fase 5)
-
-```mermaid
-flowchart LR
-    PRE[("DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE")] -->|"Valida período y COUNT > 0"| F5["Fase 5\n06_carga_ntd.sql"]
-    OBS[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE")] -->|"Valida COUNT > 0"| F5
-    F5 --> NT[("DLAB_GEC.M_EXP_NOT_TO_DO\n(Histórico acumulado)")]
-    F5 --> OB2[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_NEW\n(Tabla derivada interna)")]
+    style T1 fill:#e1f5fe,stroke:#0288d1
+    style T2 fill:#e1f5fe,stroke:#0288d1
+    style T3 fill:#e1f5fe,stroke:#0288d1
+    style D1 fill:#dff0d8,stroke:#4caf50
+    style D2 fill:#dff0d8,stroke:#4caf50
+    style NF fill:#fff9c4,stroke:#fbc02d
+    style VNF fill:#fff9c4,stroke:#fbc02d
+    style NTD_TAB fill:#fce4ec,stroke:#e91e63
+    style NTD_NEW fill:#fce4ec,stroke:#e91e63
 ```
 
 **Archivos SQL:**
@@ -122,27 +113,62 @@ flowchart LR
 ## 3. Dotación — Pipeline 4 Fases + Licencias SA
 
 **Orquestador:** [dotacion_orchestrator.py](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/modules/dotacion/use_cases/dotacion_orchestrator.py)  
-**Config:** [dotacion_config.py](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/modules/dotacion/dotacion_config.py)
+**Config:** [dotacion_config.py](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/modules/dotacion/dotacion_config.py)  
+**Cómo ejecutar:** UI → Sección *Dotación* → Botón *Ejecutar Pipeline Dotación* (o *Ejecutar Licencias SA*)
 
 ```mermaid
-flowchart LR
-    SRC1["Consolidado Planilla\nausentismo YYYYMM.xlsx"] --> F1
-    SRC2["Select Dotación FILE\n(SELECT_DOTACION_FILE)"] --> F1
+flowchart TD
+    subgraph INSUMOS ["Insumos de Entrada (OneDrive / Local)"]
+        I1["INPUT_WORKBOOK\n(Mes Anterior)"]
+        I2["Consolidado Planilla\nausentismo YYYYMM.xlsx"]
+        I3["Dotación Ausencias Select\n(SELECT_DOTACION_FILE)"]
+        I4["Gestión de Vacaciones\ny Horarios YYYY.xlsx"]
+        I5["TELEVENTAS_EJECUTIVOS\n(Mes Anterior)"]
+    end
 
-    F1["Fase 1 — Limpieza\nfase1_limpieza.py\nLimpia hojas, copia período"]
-    F2["Fase 2 — Sincronización Verint\nfase2_sincronizacion.py\nSincroniza horarios/turnos WFO"]
-    F3["Fase 3 — Distribución\nfase3_distribucion.py\nDistribuye por equipo/sub-equipo"]
-    F4["Fase 4 — Televentas\nfase4_televentas.py\nPlanilla final ejecutivos activos\n→ DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"]
-    FL["Licencias SA\nfase_licencias_sa.py\nSincroniza LICENCIAS_SA_YYYY.xlsx\nExcluye BackOffice permanente"]
+    subgraph PIPELINE ["Pipeline Dotación (Fases 1 a 4)"]
+        I1 & I2 & I3 & I4 --> F1["Fase 1 — Limpieza\nfase1_limpieza.py\nLimpia AVANCE DIARIO, RESULTADOS\ny hojas de productos"]
+        F1 --> F2["Fase 2 — Sincronización Roster\nfase2_sincronizacion.py\nAltas, Bajas y Antigüedad (R0 -> R1 -> R2 -> R3)"]
+        F2 --> F3["Fase 3 — Distribución de Cuotas\nfase3_distribucion.py\nCálculo de vacaciones y reparto a 4 analistas\n(Karin +12% en SELECT; BN_B primero)"]
+        F3 --> F4["Fase 4 — Televentas Ejecutivos\nfase4_televentas.py\nGenera archivo preliminar de planilla activa"]
+    end
 
-    F1 --> F2 --> F3 --> F4
-    F4 -.->|"Proceso independiente"| FL
+    subgraph SALIDAS ["Entregables Generados"]
+        F3 --> O1["EQUIPO DE VENTAS {MES} {YYYY}_PRELIMINAR.xlsx\n(Hojas protegidas con bloqueo estricto)"]
+        F4 --> O2["{MES}_TELEVENTAS_EJECUTIVOS_PRELIMINAR.xlsx"]
+    end
+
+    subgraph TERADATA ["Ingesta a Teradata (Vía Web Uploader)"]
+        O2 -->|"Uploader Web: Plantilla P021\n(Validación humana previa)"| TD1[("DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS")]
+        TD1 -->|"Hook automático post-carga\nprocess_televentas_grouped()"| TD2[("DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED")]
+    end
+
+    subgraph LICENCIAS ["Sub-proceso Paralelo: Licencias SA"]
+        L_IN["LICENCIAS_SA_{YYYY}.xlsx\n(Mes Anterior)"] --> FL["Licencias SA\nfase_licencias_sa.py\nExcluye BackOffice permanente (preserva interinos)"]
+        FL --> L_OUT["Pestaña nuevo periodo en\nLICENCIAS_SA_{YYYY}.xlsx"]
+    end
 ```
 
-**Notas técnicas:**
-- La función `is_backoffice()` en Licencias SA excluye puestos BackOffice permanentes pero preserva los BO interinos.
-- Licencias SA compara mes actual vs mes anterior para identificar altas, bajas y licencias vigentes.
-- `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED` se genera y valida automáticamente en Calidad Fase 4 vía `ensure_grouped_data_for_period`.
+### 3.1 Mapa de Rutas de Insumos y Entregables (OneDrive)
+
+El orquestador resuelve automáticamente la carpeta base de OneDrive del usuario (`OneDrive - Interbank` o `OneDrive`):
+
+| Insumo / Entregable | Tipo | Ruta Relativa en OneDrive | Archivo Dinámico por Período |
+| :--- | :--- | :--- | :--- |
+| **Plantilla Mes Anterior** | Insumo | `1. EXPERIENCIA DE COMPRA\EQUIPO DE VENTAS {YYYY}\` | `{M_ANT} EQUIPO DE VENTAS {MES_ANT_UPPER} {Y_ANT}.xlsx` |
+| **Consolidado Ausentismo** | Insumo | `Dotación {YYYY}\Dotación {YYYYMM}\` | `Consolidado Planilla ausentismo {YYYYMM}.xlsx` |
+| **Dotación Select** | Insumo | `Dotación {YYYY}\Dotación {YYYYMM}\Equipo Select\` | `Dotacion_Ausencias_Select_{MesCap}{YY}.xlsx` |
+| **Gestión de Vacaciones** | Insumo | `1. EXPERIENCIA DE COMPRA\GESTIÓN {YYYY}\VACACIONES\` | `Gestión de Vacaciones y Horarios {YYYY}.xlsx` (hoja: `Programación de Fechas {YYYY}`) |
+| **Televentas Mes Anterior** | Insumo | `1. EXPERIENCIA DE COMPRA\GESTIÓN {YYYY}\DOTACION\TERADATA\` | `{M_ANT} {MES_ANT_UPPER}_TELEVENTAS_EJECUTIVOS.xlsx` |
+| **Libro Maestro Licencias** | Insumo / Salida | `1. EXPERIENCIA DE COMPRA\GESTIÓN {YYYY}\DOTACION\` | `LICENCIAS_SA_{YYYY}.xlsx` |
+| **Equipo de Ventas Final** | Entregable | `1. EXPERIENCIA DE COMPRA\EQUIPO DE VENTAS {YYYY}\` | `{M_ACT} EQUIPO DE VENTAS {MES_ACT_UPPER} {YYYY}_PRELIMINAR.xlsx` |
+| **Televentas Final** | Entregable | `1. EXPERIENCIA DE COMPRA\GESTIÓN {YYYY}\DOTACION\TERADATA\` | `{M_ACT} {MES_ACT_UPPER}_TELEVENTAS_EJECUTIVOS_PRELIMINAR.xlsx` |
+
+**Reglas de negocio críticas:**
+- **Seguridad en RESULTADOS:** La hoja `RESULTADOS` se limpia en filas manuales (18, 21, 24, 27) y se re-bloquea estrictamente a nivel de celda (`locked=True`, `ws.protection.sheet=True`) para impedir modificaciones manuales de usuario.
+- **Reparto a 4 analistas:** Las hojas con 2 evaluaciones (`BN_B`, `PP`, `SEG`, `CxC 1`) se reparten equitativamente primero. Karin absorbe su meta adicional (+12%) en hojas de 1 evaluación (`SELECT`).
+- **Licencias SA:** La función `is_backoffice()` excluye puestos BackOffice permanentes pero preserva asesores BO interinos.
+- **Ingesta a Teradata:** El pipeline no sube directamente a Teradata para permitir validación humana del archivo preliminar. La subida se realiza mediante la plantilla **`P021-TELEVENTAS_EJECUTIVOS`** en la web, la cual ejecuta automáticamente el hook para generar `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED`.
 
 ---
 
@@ -327,17 +353,21 @@ flowchart TD
 
 ## 9. Genesys — Audio y Outlook
 
-**Módulo:** `modules/genesys/`
+**Módulo:** `modules/genesys/`  
+**Cómo ejecutar:** UI → Sección *Genesys* (o CLI: `python -m modules.genesys.genesys_downloader`)
 
 ```mermaid
 flowchart LR
-    OL["Outlook Local\nCorreos con solicitudes"] -->|"outlook_reader.py\nExtracción de adjuntos y cuerpo"| GD["Datos de Solicitud:\nConversationId, DNI, Fecha"]
-    GD --> GD2["genesys_downloader.py\nDescarga audio Genesys Cloud"]
-    GD2 --> AUD["Archivos de audio:\n.mp3 / .wav"]
+    OL["Outlook Desktop\nCorreos con solicitudes"] -->|"outlook_reader.py\nLectura MAPI (pywin32)"| GD["Extracción Solicitud:\nConversationId, DNI, Teléfono"]
+    GD --> API["Genesys Cloud REST API v2\nConsultas Analytics e Interacciones"]
+    API --> AUD["Descarga Directa de Audio:\n.mp3 / .wav a data/downloads/audios/"]
 
-    BC["Chrome CDP\nPerfil persistente"] -->|"GenesysBrowserAutomation\nCaptura Bearer Token"| API["Genesys REST API v2\nAnalytics Query"]
-    API --> CID["conversationId localizado"]
+    SES["Sesión Genesys\n(Bearer Token)"] -.-> API
 ```
+
+**Precisiones de Arquitectura (API vs Playwright):**
+- **Genesys Cloud (100% API):** La descarga y consulta de interacciones se realiza directamente mediante la **API REST v2** de Genesys (`requests`). No se utiliza Playwright para navegación web ni descargas interactivas de audio.
+- **Verint WFO (Playwright sólo para Cookies):** El único uso de Playwright en toda la plataforma es el cosechador de cookies [verint_cookie_harvester.py](file:///c:/Users/USER/Documents/Documentos%20Personales/INTERBANK/APP_CALIDAD/modules/verint/services/verint_cookie_harvester.py), el cual automatiza el login para obtener las cookies de sesión. Una vez capturadas las cookies, toda la extracción y descarga de transcripciones se hace vía HTTP REST con `VerintAPIClient` sin abrir navegadores.
 
 ---
 
