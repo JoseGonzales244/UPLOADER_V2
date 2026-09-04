@@ -28,8 +28,19 @@ def get_powerbi_dir() -> Path:
     if sibling_dir.exists():
         return sibling_dir
 
-    onedrive_dir = Path.home() / "OneDrive - Interbank" / "Televentas" / "POWER BI"
-    return sibling_dir if not onedrive_dir.exists() else onedrive_dir
+    user_home = Path.home()
+    env_onedrive = os.getenv("ONEDRIVE_DIR")
+    candidates = [
+        Path(env_onedrive) / "Televentas" / "POWER BI" if env_onedrive else None,
+        user_home / "OneDrive - Interbank" / "Televentas" / "POWER BI",
+        user_home / "OneDrive" / "Televentas" / "POWER BI",
+        user_home / "Interbank" / "Televentas" / "POWER BI",
+    ]
+    for c in candidates:
+        if c and c.exists():
+            return c
+
+    return sibling_dir
 
 
 def write_powerbi_timestamp(filename: str) -> None:

@@ -19,9 +19,16 @@ from ui.components import load_templates
 logger = logging.getLogger(__name__)
 
 user_home = os.path.expanduser("~")
+env_televentas = os.getenv("TELEVENTAS_DIR")
+env_onedrive = os.getenv("ONEDRIVE_DIR")
 ONEDRIVE_DIRS = [
-    os.path.join(user_home, "OneDrive - Interbank", "Televentas"),
-    os.path.join(user_home, "OneDrive", "Televentas"),
+    d for d in [
+        env_televentas,
+        os.path.join(env_onedrive, "Televentas") if env_onedrive else None,
+        os.path.join(user_home, "OneDrive - Interbank", "Televentas"),
+        os.path.join(user_home, "OneDrive", "Televentas"),
+        os.path.join(user_home, "Interbank", "Televentas"),
+    ] if d
 ]
 
 SQL_SCRIPT_PATH = Path(__file__).parent.parent / "sql" / "01_proceso_televentas_grouped.sql"

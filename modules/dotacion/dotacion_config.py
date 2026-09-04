@@ -56,17 +56,24 @@ class DotacionConfig:
 
         # Resolución de OneDrive
         home = os.path.expanduser("~")
+        env_onedrive = os.getenv("ONEDRIVE_DIR") or os.getenv("BASE_ONEDRIVE_DIR")
         candidates = [
-            os.path.join(home, "OneDrive - Interbank"),
-            os.path.join(home, "OneDrive")
+            c for c in [
+                env_onedrive,
+                os.path.join(home, "OneDrive - Interbank"),
+                os.path.join(home, "OneDrive"),
+                os.path.join(home, "Interbank"),
+            ] if c
         ]
         self.base_onedrive = base_dir_override or next((c for c in candidates if os.path.exists(c)), candidates[0])
 
-        self.dir_equipo_ventas = os.path.join(self.base_onedrive, rf"1. EXPERIENCIA DE COMPRA\EQUIPO DE VENTAS {self.year}")
-        self.dir_licencias = os.path.join(self.base_onedrive, rf"1. EXPERIENCIA DE COMPRA\GESTIÓN {self.year}\DOTACION")
-        self.dir_televentas = os.path.join(self.base_onedrive, rf"1. EXPERIENCIA DE COMPRA\GESTIÓN {self.year}\DOTACION\TERADATA")
-        self.dir_vacaciones = os.path.join(self.base_onedrive, rf"1. EXPERIENCIA DE COMPRA\GESTIÓN {self.year}\VACACIONES")
-        self.base_dotacion = os.path.join(self.base_onedrive, rf"Dotación {self.year}")
+        exp_base = os.getenv("EXPERIENCIA_COMPRA_DIR") or os.path.join(self.base_onedrive, "1. EXPERIENCIA DE COMPRA")
+        self.dir_equipo_ventas = os.path.join(exp_base, f"EQUIPO DE VENTAS {self.year}")
+        self.dir_licencias = os.path.join(exp_base, f"GESTIÓN {self.year}", "DOTACION")
+        self.dir_televentas = os.path.join(exp_base, f"GESTIÓN {self.year}", "DOTACION", "TERADATA")
+        self.dir_vacaciones = os.path.join(exp_base, f"GESTIÓN {self.year}", "VACACIONES")
+
+        self.base_dotacion = os.getenv("DOTACION_DIR") or os.path.join(self.base_onedrive, f"Dotación {self.year}")
 
         self.dir_consolidado = os.path.join(self.base_dotacion, f"Dotación {self.year}{self.month:02d}")
         self.dir_select = os.path.join(self.dir_consolidado, "Equipo Select")
