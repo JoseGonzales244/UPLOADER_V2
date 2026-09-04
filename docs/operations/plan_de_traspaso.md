@@ -182,3 +182,18 @@ Abre en tu navegador: **`http://localhost:8000`**
 | **Día a Día (Continuo)** | **`⚡ PBI Base Consumo`** | Insumos en `Televentas\` | Ejecución de Fases 1 a 5 de Base Consumo. |
 | **Día ~25 (Cierre de Mes)** | **`📊 PBI Evaluaciones Calidad`** ➜ *Modo Cierre* | Evaluaciones del mes en Teradata | Cierre contable, KRI resumen y snapshot. |
 | **Día ~25 (Fin de Mes)** | **`👥 Dotación & Licencias`** ➜ *Licencias SA* | `LICENCIAS_SA_{YYYY}.xlsx` + `Consolidado Ausentismo` | Nueva hoja mensual en el libro anual de licencias Verint SA. |
+
+---
+
+## 🔮 8. Roadmap & Iniciativas Pendientes (Handover Estratégico)
+
+A continuación se detallan los proyectos en cartera y mejoras planificadas que el nuevo operador o líder técnico debe considerar en su hoja de ruta:
+
+| # | Iniciativa | Estado | Descripción & Dependencias Operativas |
+| :---: | :--- | :---: | :--- |
+| **1** | **Redistribución de Reclamos en GIRU** | ⏳ Backlog | Automatización del algoritmo de balanceo y asignación equitativa de reclamos operativos dentro de la plataforma GIRU para reducir tiempos de atención y colas de espera. |
+| **2** | **2 Evaluaciones en SELECT** | 🔒 Bloqueado por Capacity | Elevar la cuota mensual de auditoría en la hoja `SELECT` de 1 a 2 evaluaciones por asesor. **Dependencia:** Requiere la liberación del capacity del equipo de analistas cuando se estabilice la automatización de tarjetas (**SofIA**) y se optimice el flujo de **Retenciones**. |
+| **3** | **Cursos Modulares para Asesores TLV** | ⏳ Backlog | Desarrollo y despliegue de módulos formativos auto-administrados para ejecutivos de Televentas, facilitando su autogestión en tipificaciones, estándares de calidad y resolución de objeciones. |
+| **4** | **Mejora de Power Apps Blacklist** | ⏳ Mejora UI | Implementación de categorías tipificadas predefinidas en el formulario de Power Apps de Blacklist para estandarizar causales y evitar discrepancias de texto libre. |
+| **5** | **Análisis de Objeciones No Venta** | 🚧 En desarrollo | Modelo de cruce analítico entre gestiones catalogadas como *No Venta* y bases reales de colocación posterior para identificar brechas de fuga comercial (`modules/piloto_no_venta/`). |
+| **6** | **Piloto TCAD (Reporte Semanal)** | 🔄 En transición | Transición del análisis experimental de Tarjetas Adicionales (`modules/Piloto TCAD/`) hacia una rutina automatizada de reportería periódica semanal para seguimiento operativo. |
