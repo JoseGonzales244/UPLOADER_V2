@@ -2,7 +2,13 @@
 Módulo utilitario para cargar la maestra de niveles NTD desde Excel hacia Teradata.
 Lee data/input/MAESTRA_NIVEL_NTD.xlsx y realiza inserciones en DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM.
 """
+import sys
 from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import pandas as pd
 from infrastructure.database.database import load_credentials, connect_teradata
 
@@ -12,16 +18,16 @@ def cargar_maestra_ntd(excel_path: Path = None):
         excel_path = project_root / "data" / "input" / "MAESTRA_NIVEL_NTD.xlsx"
 
     if not excel_path.exists():
-        print(f"❌ Error: Archivo no encontrado en {excel_path}")
+        print(f"[ERROR] Archivo no encontrado en {excel_path}")
         return False
 
-    print(f"📖 Leyendo {excel_path}...")
+    print(f"[INFO] Leyendo {excel_path}...")
     df = pd.read_excel(excel_path)
-    print(f"✓ Registros encontrados: {len(df)}")
+    print(f"[OK] Registros encontrados: {len(df)}")
 
     cols = [c.upper().strip() for c in df.columns]
     if not all(c in cols for c in ["PLANTILLA", "CASUISTICA", "NIVEL_NTD"]):
-        print(f"❌ Error: Las columnas deben ser PLANTILLA, CASUISTICA, NIVEL_NTD. Encontradas: {df.columns.tolist()}")
+        print(f"[ERROR] Las columnas deben ser PLANTILLA, CASUISTICA, NIVEL_NTD. Encontradas: {df.columns.tolist()}")
         return False
 
     df.columns = cols
@@ -30,7 +36,7 @@ def cargar_maestra_ntd(excel_path: Path = None):
     df["NIVEL_NTD"] = df["NIVEL_NTD"].astype(str).str.strip().str.upper()
 
     creds = load_credentials()
-    print(f"🔌 Conectando a Teradata ({creds['teradata_host']})...")
+    print(f"[INFO] Conectando a Teradata ({creds['teradata_host']})...")
 
     try:
         con = connect_teradata(
@@ -42,12 +48,12 @@ def cargar_maestra_ntd(excel_path: Path = None):
         con.autocommit = True
         cur = con.cursor()
 
-        print("🔍 Verificando existencia de la tabla DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM...")
+        print("[INFO] Verificando existencia de la tabla DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM...")
         cur.execute("SELECT COUNT(*) FROM DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM")
         filas_previas = cur.fetchone()[0]
         print(f"  Filas previas en la tabla: {filas_previas}")
 
-        print("🚀 Insertando 286 registros normalizados...")
+        print("[INFO] Insertando registros normalizados...")
         insert_sql = "INSERT INTO DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM (PLANTILLA_NORM, CASUISTICA_NORM, NIVEL_NTD) VALUES (?, ?, ?)"
         
         datos = df[["PLANTILLA_NORM", "CASUISTICA_NORM", "NIVEL_NTD"]].values.tolist()
@@ -55,11 +61,11 @@ def cargar_maestra_ntd(excel_path: Path = None):
 
         cur.execute("SELECT COUNT(*) FROM DLAB_GEC.M_EXP_MAESTRA_NIVEL_NTD_NORM")
         filas_finales = cur.fetchone()[0]
-        print(f"✅ Inserción exitosa. Total final en Teradata: {filas_finales} filas.")
+        print(f"[OK] Insercion exitosa. Total final en Teradata: {filas_finales} filas.")
         return True
 
     except Exception as e:
-        print(f"❌ Error durante la carga a Teradata: {e}")
+        print(f"[ERROR] Error durante la carga a Teradata: {e}")
         return False
 
 if __name__ == "__main__":
