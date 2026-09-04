@@ -9,7 +9,7 @@ from typing import Optional, Dict, Callable
 from infrastructure.system.logging_config import setup_logging
 from modules.dotacion.dotacion_config import DotacionConfig
 from modules.dotacion.phases import fase1_limpieza, fase2_sincronizacion, fase3_distribucion, fase4_televentas
-from modules.dotacion.utils.excel import clean_broken_defined_names, cleanup_phantom_rows, restore_pristine_xml_structures
+from modules.dotacion.utils.excel import clean_broken_defined_names
 
 logger = setup_logging("modules.dotacion.dotacion_orchestrator")
 
@@ -85,19 +85,15 @@ class DotacionOrchestrator:
         notify("⚖️ Ejecutando Fase 3: Distribución de grabaciones entre 4 analistas (Cálculo automático de vacaciones)...")
         fase3_distribucion.run(wb, cfg)
 
-        # 8. Limpieza de rangos corruptos (#REF!) y filas fantasma
-        notify("🧼 Purgando rangos corruptos y filas fantasma...")
+        # 8. Limpieza de rangos corruptos (#REF!)
+        notify("🧼 Purgando rangos corruptos (#REF!)...")
         clean_broken_defined_names(wb)
-        cleanup_phantom_rows(wb)
 
         # 9. Guardar libro final en disco
         notify("💾 Guardando libro consolidado en disco...")
         wb.save(cfg.OUTPUT_WORKBOOK)
 
-        # 10. Restaurar XML prístino
-        restore_pristine_xml_structures(cfg.INPUT_WORKBOOK, cfg.OUTPUT_WORKBOOK)
-
-        # 11. Validación nativa con Excel COM si está disponible
+        # 10. Validación y recálculo nativo con Excel COM si está disponible
         try:
             import win32com.client
             abs_out = os.path.abspath(cfg.OUTPUT_WORKBOOK)
@@ -108,7 +104,7 @@ class DotacionOrchestrator:
             wb_com.Save()
             wb_com.Close()
             excel_app.Quit()
-            notify("✅ Estructura Excel validada nativamente con éxito.")
+            notify("✅ Estructura Excel recalculada y validada nativamente con éxito.")
         except Exception as e_com:
             logger.debug(f"Excel COM no disponible o error menor: {e_com}")
 
