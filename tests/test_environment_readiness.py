@@ -156,11 +156,119 @@ class TestEnvironmentReadiness(unittest.TestCase):
                     self.fail(f"Dependencia esencial faltante: '{mod}'. Ejecuta 'pip install -r requirements.txt'.")
 
 
+def check_external_paths():
+    """Valida la accesibilidad de carpetas y archivos externos (OneDrive, SharePoint, Power BI)."""
+    from modules.dotacion.dotacion_config import DotacionConfig
+    from infrastructure.system.powerbi_connector import get_powerbi_dir
+    from modules.calidad.televentas.use_cases.grouped_orchestrator import ONEDRIVE_DIRS
+
+    cfg = DotacionConfig()
+    results = []
+
+    # 1. Insumos Excel locales
+    cd40k_path = PROJECT_ROOT / "data/input/base_consumo/CD40K_NEW.xlsx"
+    cd40k_alt = PROJECT_ROOT / "data/input/base_consumo/CD40K.xlsx"
+    cd40k_ok = cd40k_path.is_file() or cd40k_alt.is_file()
+    results.append({
+        "name": "Plantilla CD40K (Consumo)",
+        "path": str(cd40k_path if cd40k_path.is_file() else cd40k_alt),
+        "status": "[OK]" if cd40k_ok else "[FAIL]",
+        "detail": "Archivo presente" if cd40k_ok else "Falta CD40K_NEW.xlsx en data/input/base_consumo/ (ejecuta git pull)"
+    })
+
+    acc_path = PROJECT_ROOT / "data/input/proceso_calidad/ACCION_TOMADA.xlsx"
+    acc_ok = acc_path.is_file()
+    results.append({
+        "name": "Plantilla ACCION_TOMADA (Calidad)",
+        "path": str(acc_path),
+        "status": "[OK]" if acc_ok else "[FAIL]",
+        "detail": "Archivo presente" if acc_ok else "Falta ACCION_TOMADA.xlsx en data/input/proceso_calidad/ (ejecuta git pull)"
+    })
+
+    # 2. Base OneDrive
+    onedrive_exists = os.path.isdir(cfg.base_onedrive)
+    results.append({
+        "name": "Carpeta Base OneDrive / Interbank",
+        "path": cfg.base_onedrive,
+        "status": "[OK]" if onedrive_exists else "[WARN]",
+        "detail": "Detectada correctamente" if onedrive_exists else "No detectada. Configurar ONEDRIVE_DIR en .env si está en otra ruta"
+    })
+
+    # 3. 1. EXPERIENCIA DE COMPRA
+    exp_dir = os.path.dirname(cfg.dir_equipo_ventas)
+    exp_exists = os.path.isdir(exp_dir) or os.path.isdir(cfg.dir_equipo_ventas)
+    results.append({
+        "name": "1. EXPERIENCIA DE COMPRA",
+        "path": exp_dir,
+        "status": "[OK]" if exp_exists else "[WARN]",
+        "detail": "Acceso disponible" if exp_exists else "Solicitar acceso a Janesy Lopez y agregar acceso directo en OneDrive"
+    })
+
+    # 4. Equipo de Ventas (Año actual)
+    eq_exists = os.path.isdir(cfg.dir_equipo_ventas)
+    input_wb_exists = os.path.isfile(cfg.INPUT_WORKBOOK)
+    results.append({
+        "name": f"EQUIPO DE VENTAS {cfg.year}",
+        "path": cfg.dir_equipo_ventas,
+        "status": "[OK]" if eq_exists else "[WARN]",
+        "detail": f"Libro base ({cfg.input_base}): {'[OK]' if input_wb_exists else '[FALTA ARCHIVO]'}" if eq_exists else "Carpeta del año no encontrada"
+    })
+
+    # 5. Dotación & Licencias
+    lic_exists = os.path.isfile(cfg.LICENCIAS_FILE)
+    results.append({
+        "name": f"LICENCIAS_SA_{cfg.year}.xlsx",
+        "path": cfg.LICENCIAS_FILE,
+        "status": "[OK]" if lic_exists else "[WARN]",
+        "detail": "Archivo maestro presente" if lic_exists else f"Falta archivo {cfg.licencias_base} en GESTIÓN/DOTACION"
+    })
+
+    # 6. Vacaciones
+    vac_exists = os.path.isfile(cfg.VACACIONES_FILE)
+    results.append({
+        "name": f"Vacaciones y Horarios {cfg.year}",
+        "path": cfg.VACACIONES_FILE,
+        "status": "[OK]" if vac_exists else "[WARN]",
+        "detail": "Archivo presente" if vac_exists else f"Falta archivo {cfg.vacaciones_base} en GESTIÓN/VACACIONES"
+    })
+
+    # 7. Dotación {year}
+    dot_exists = os.path.isdir(cfg.base_dotacion)
+    results.append({
+        "name": f"Dotación {cfg.year}",
+        "path": cfg.base_dotacion,
+        "status": "[OK]" if dot_exists else "[WARN]",
+        "detail": "Acceso disponible" if dot_exists else "Solicitar acceso a Jacqueline y agregar acceso directo en OneDrive"
+    })
+
+    # 8. POWER BI
+    pbi_dir = get_powerbi_dir()
+    pbi_exists = pbi_dir.exists()
+    results.append({
+        "name": "Directorio POWER BI",
+        "path": str(pbi_dir),
+        "status": "[OK]" if pbi_exists else "[WARN]",
+        "detail": "Directorio conector encontrado" if pbi_exists else "Crear carpeta 'Televentas/POWER BI' en OneDrive o definir POWER_BI_DIR en .env"
+    })
+
+    # 9. Televentas (P021)
+    televentas_found = any(os.path.isdir(d) for d in ONEDRIVE_DIRS)
+    active_tv = next((d for d in ONEDRIVE_DIRS if os.path.isdir(d)), ONEDRIVE_DIRS[0] if ONEDRIVE_DIRS else "N/A")
+    results.append({
+        "name": "Directorio Televentas (P021)",
+        "path": active_tv,
+        "status": "[OK]" if televentas_found else "[WARN]",
+        "detail": "Directorio encontrado" if televentas_found else "Crear carpeta 'Televentas' en OneDrive para insumos P021"
+    })
+
+    return results
+
+
 def print_diagnostic_report():
     """Imprime un reporte visual rápido de preparación si se ejecuta como script."""
-    print("=" * 70)
-    print("DIAGNOSTICO DE PREPARACION DE ENTORNO (READINESS REPORT)")
-    print("=" * 70)
+    print("=" * 75)
+    print("DIAGNOSTICO DE PREPARACION DE ENTORNO Y ACCESOS (READINESS REPORT)")
+    print("=" * 75)
 
     # 1. .env
     env_file = PROJECT_ROOT / ".env"
@@ -178,7 +286,7 @@ def print_diagnostic_report():
             missing = [v for v in vars_list if not os.getenv(v)]
             print(f"      Faltantes: {', '.join(missing)}")
 
-    # 3. Carpetas de datos
+    # 3. Carpetas de datos locales
     print("\n[3] Carpetas de Almacenamiento Local (data/):")
     for rel_dir in TestEnvironmentReadiness.REQUIRED_DIRS:
         folder = PROJECT_ROOT / rel_dir
@@ -186,7 +294,7 @@ def print_diagnostic_report():
         print(f"    - {rel_dir.ljust(35)}: {status}")
 
     # 4. Drivers
-    print("\n[4] Drivers y Conectores:")
+    print("\n[4] Drivers y Conectores de BD:")
     try:
         import teradatasql
         print("    - TeradataSQL Driver                : [OK] INSTALADO")
@@ -203,14 +311,28 @@ def print_diagnostic_report():
     except ImportError:
         print("    - pyodbc                            : [FAIL] NO INSTALADO")
 
-    print("\n" + "=" * 70)
+    # 5. Rutas Externas y Carpetas de Insumos (OneDrive / SharePoint)
+    print("\n[5] Rutas Externas y Archivos de Entrada (OneDrive / Insumos):")
+    try:
+        ext_results = check_external_paths()
+        for item in ext_results:
+            tag = item["status"]
+            name = item["name"].ljust(35)
+            detail = item["detail"]
+            print(f"    - {name}: {tag} {detail}")
+            if tag != "[OK]":
+                print(f"      Ruta evaluada: {item['path']}")
+    except Exception as ex:
+        print(f"    [WARN] No se pudo verificar rutas externas: {ex}")
+
+    print("\n" + "=" * 75)
     print("Para correr validacion unitaria formal:")
     print("    .\\.venv\\Scripts\\python -m unittest tests/test_environment_readiness.py")
-    print("=" * 70)
+    print("=" * 75)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--report":
+    if len(sys.argv) > 1 and sys.argv[1] in ("--report", "-r", "--paths"):
         print_diagnostic_report()
     else:
         unittest.main()
