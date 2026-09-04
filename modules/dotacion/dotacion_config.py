@@ -11,7 +11,7 @@ DAILY_TARGETS = {
     "CAROLINA": 8,
     "CARMEN": 8,
     "JANE": 5,
-    "KARIN": 8
+    "KARIN": 8.96  # +12% sobre Carolina y Carmen (8 * 1.12)
 }
 
 MONTH_NAMES_UPPER = {
