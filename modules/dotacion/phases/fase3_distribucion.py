@@ -159,8 +159,8 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
     print(f"  Adjusted workload targets: {adjusted_targets}")
     
     # 5. Distribute workloads to advisors
-    # Prioritizar SELECT primero para que Karin absorba preferentemente su cuota en SELECT
-    active_rows.sort(key=lambda x: (0 if x[0] == "SELECT" else 1, -x[2], x[0]))
+    # Sort active_rows by number of evals (descending) then sheet_name to balance large tasks first (BN_B, PP, etc.)
+    active_rows.sort(key=lambda x: (x[2], x[0]), reverse=True)
     
     distribution_log = [] # list of (analyst, sheet, row, count, only_eec2)
     
@@ -175,9 +175,9 @@ def run(wb, cfg: Optional[DotacionConfig] = None):
                 continue
             # Score: how far they are from their target proportional workload
             score = (assigned[a] + evals) / tgt
-            # Preferencia para KARIN en la hoja SELECT mientras no exceda su target
+            # Preferencia moderada para KARIN en SELECT para absorber su cuota extra sin quitarle BN_B ni otros productos
             if s_name == "SELECT" and a == "KARIN" and (assigned[a] + evals) <= tgt:
-                score -= 0.35
+                score -= 0.08
             if score < best_score:
                 best_score = score
                 best_analyst = a
