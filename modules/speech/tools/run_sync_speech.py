@@ -30,8 +30,12 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Límite de registros para prueba rápida (ej: 5, 10)")
     parser.add_argument("--min-date", type=str, default="2026-08-01", help="Fecha mínima para búsqueda histórica de TIPO_LEAD en Insight (YYYY-MM-DD)")
     parser.add_argument("--skip-sql", action="store_true", help="Detiene el pipeline tras descargar los .txt y omite la carga a SQL Server.")
+    parser.add_argument("--skip-download", action="store_true", help="Omite la descarga de Verint y usa exclusivamente las transcripciones ya descargadas.")
+    parser.add_argument("--transcripts-dir", type=str, default=None, help="Directorio específico donde se encuentran las transcripciones .txt descargadas.")
 
     args = parser.parse_args()
+
+    custom_output_dir = Path(args.transcripts_dir) if args.transcripts_dir else None
 
     logger.info("==================================================================")
     logger.info("🚀 INICIANDO PIPELINE DE SINCRONIZACIÓN DE TRANSCRIPCIONES (SOFIA)")
@@ -39,14 +43,19 @@ def main():
     logger.info(f"   Límite: {args.limit or 'Sin límite (todos los casos)'}")
     logger.info(f"   Fecha Mínima Insight: {args.min_date}")
     logger.info(f"   Omitir carga SQL: {args.skip_sql}")
+    logger.info(f"   Omitir descarga Verint: {args.skip_download}")
+    if custom_output_dir:
+        logger.info(f"   Carpeta de Transcripciones: {custom_output_dir}")
     logger.info("==================================================================")
 
     try:
         res = sync_transcripts_pipeline(
             plantilla=args.plantilla,
             limit=args.limit,
+            output_dir=custom_output_dir,
             min_insight_date=args.min_date,
-            skip_sql=args.skip_sql
+            skip_sql=args.skip_sql,
+            skip_download=args.skip_download
         )
         logger.info("\n📊 Resumen de Ejecución:")
         logger.info(f"   • Interacciones extraídas de Teradata: {res.get('total_extraidos', 0)}")

@@ -30,7 +30,8 @@ def extract_interactions_from_teradata(
 def extract_transcripts_from_verint(
     call_items: List[Dict[str, Any]],
     output_dir: Path,
-    headless: bool = True
+    headless: bool = True,
+    skip_download: bool = False
 ) -> Dict[str, str]:
     """
     Descarga los diálogos utilizando el cliente HTTP API REST directo de Verint (rápido y sin navegador).
@@ -38,19 +39,56 @@ def extract_transcripts_from_verint(
     output_dir.mkdir(parents=True, exist_ok=True)
     transcripts_map = {}
 
+    search_dirs = [
+        output_dir,
+        PROJECT_ROOT / "data" / "transcripciones",
+        PROJECT_ROOT / "data" / "transcripciones_pa",
+        PROJECT_ROOT / "transcripciones",
+        Path("./data/transcripciones"),
+        Path("./data/transcripciones_pa"),
+        Path("./transcripciones"),
+        Path(".")
+    ]
+
     # Filtrar llamadas que ya tengan archivo .txt descargado
     pending_items = []
     for item in call_items:
-        cid = item.get("ID_LLAMADA") or item.get("CONID")
-        txt_path = output_dir / f"TRANSCRIPT_{cid}.txt"
-        if txt_path.exists() and txt_path.stat().st_size > 0:
-            with open(txt_path, "r", encoding="utf-8", errors="ignore") as f:
-                transcripts_map[cid] = f.read()
+        cid = str(item.get("ID_LLAMADA") or item.get("CONID") or "").strip()
+        if not cid:
+            continue
+
+        found_text = None
+        for sdir in search_dirs:
+            if not sdir.exists():
+                continue
+            # 1. TRANSCRIPT_{cid}.txt
+            p1 = sdir / f"TRANSCRIPT_{cid}.txt"
+            if p1.exists() and p1.stat().st_size > 0:
+                found_text = p1.read_text(encoding="utf-8", errors="ignore")
+                break
+            # 2. {cid}.txt
+            p2 = sdir / f"{cid}.txt"
+            if p2.exists() and p2.stat().st_size > 0:
+                found_text = p2.read_text(encoding="utf-8", errors="ignore")
+                break
+            # 3. TRANSCRIPT_DNI_*_{cid}.txt o *{cid}*.txt
+            matches = list(sdir.glob(f"*{cid}*.txt"))
+            valid_m = [m for m in matches if m.stat().st_size > 0]
+            if valid_m:
+                found_text = valid_m[0].read_text(encoding="utf-8", errors="ignore")
+                break
+
+        if found_text is not None:
+            transcripts_map[cid] = found_text
         else:
             pending_items.append(item)
 
     if not pending_items:
-        logger.info(f"✓ Todas las {len(call_items)} transcripciones ya existen localmente en {output_dir}.")
+        logger.info(f"✓ Todas las {len(call_items)} transcripciones ya existen localmente.")
+        return transcripts_map
+
+    if skip_download:
+        logger.warning(f"⚠️ Flag '--skip-download' activo: Omitiendo descarga de {len(pending_items)} audios en Verint.")
         return transcripts_map
 
     logger.info(f"Iniciando descarga en Verint API de {len(pending_items)} transcripciones pendientes...")
@@ -87,6 +125,7 @@ def sync_transcripts_pipeline(
     output_dir: Optional[Path] = None,
     min_insight_date: str = "2026-07-01",
     skip_sql: bool = False,
+    skip_download: bool = False,
     teradata_repo: Optional[ITeradataRepository] = None,
     speech_repo: Optional[ISpeechDbRepository] = None
 ) -> Dict[str, Any]:
@@ -121,7 +160,7 @@ def sync_transcripts_pipeline(
         lead_map = {}
 
     # 3. Descarga de Transcripciones Verint
-    transcripts_map = extract_transcripts_from_verint(interactions, output_dir=out_dir)
+    transcripts_map = extract_transcripts_from_verint(interactions, output_dir=out_dir, skip_download=skip_download)
 
     if skip_sql:
         logger.info("⏭️ Flag '--skip-sql' activo: Omitiendo carga en SQL Server.")
