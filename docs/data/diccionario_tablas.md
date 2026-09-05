@@ -30,7 +30,7 @@ Catálogo exhaustivo y verificado de todas las tablas físicas, temporales y vis
 | `DLAB_GEC.M_EXP_CALIDAD_DETALLE_PURE_CLOUD` | Multiset Table | Evaluaciones manuales de llamadas extraídas de Insight/PureCloud | Semanal / Mensual |
 | `DLAB_GEC.M_EXP_CALIDAD_PURECLOUD_PRE` | Multiset Table | Tabla intermedia de normalización de notas y no conformidades | Semanal / Mensual |
 | `DLAB_GEC.M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS` | Multiset Table | Transcripciones e interacciones de Verint Speech Analytics | Mensual |
-| `DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE` | Multiset Table | Staging de observaciones críticas No Te Dejes (NTD) | Mensual |
+| `DLAB_GEC.M_EXP_NTD_OBSERVACIONES_PRE` | Multiset Table | Staging de observaciones críticas Not To Do (NTD) | Mensual |
 | `DLAB_GEC.M_EXP_CALIDAD_HISTORICO_ERRORES` | Multiset Table | Registro histórico de desvíos y tipificaciones erróneas | Mensual |
 | `DLAB_GEC.M_EXP_NTD_REPORTING_HISTORICO` | Multiset Table | Consolidado histórico oficial para reportes de Calidad | Mensual |
 | `DLAB_GEC.V_EXP_CALIDAD_NOTA_FINAL` | View | Vista con notas finales consolidadas por asesor y supervisor | On-Demand (PBI) |

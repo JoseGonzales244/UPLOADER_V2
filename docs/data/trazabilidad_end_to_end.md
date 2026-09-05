@@ -8,7 +8,7 @@ Este documento detalla la **trazabilidad completa origen-a-fin (código, archivo
 
 1. [Transcripciones Verint y Speech Analytics](#1-transcripciones-verint-y-speech-analytics)
 2. [Base Consumo (Pipeline 5 Fases)](#2-base-consumo-pipeline-5-fases)
-3. [Evaluaciones Calidad No Te Dejes (NTD)](#3-evaluaciones-calidad-no-te-dejes-ntd)
+3. [Evaluaciones Calidad Not To Do (NTD)](#3-evaluaciones-calidad-not-to-do-ntd)
 4. [Cierre Mensual y Snapshots KRI](#4-cierre-mensual-y-snapshots-kri)
 5. [Convenios ETL y Setup](#5-convenios-etl-y-setup)
 6. [Dotación Mensual y Licencias Verint](#6-dotación-mensual-y-licencias-verint)
@@ -77,7 +77,7 @@ flowchart LR
 
 ---
 
-## 3. Evaluaciones Calidad No Te Dejes (NTD)
+## 3. Evaluaciones Calidad Not To Do (NTD)
 
 Orquestación mensual del cálculo de notas de calidad de ventas, no conformidades críticas y normalización de evaluaciones de asesores de televentas.
 

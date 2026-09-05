@@ -52,7 +52,7 @@ flowchart TD
         NF --> VNF["VIEW: DLAB_GEC.V_EXP_CALIDAD_NOTA_FINAL"]
     end
 
-    subgraph S_NTD ["3. Proceso No Te Dejes - NTD (Fase 5)"]
+    subgraph S_NTD ["3. Proceso Not To Do - NTD (Fase 5)"]
         T1 --> SQL6["06_carga_ntd.sql\nCruce con Observaciones"]
         T3 --> SQL6
         SQL6 --> NTD_TAB[("DLAB_GEC.M_EXP_NOT_TO_DO\n(Histórico acumulado)")]
