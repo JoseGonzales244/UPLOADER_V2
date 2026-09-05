@@ -61,6 +61,8 @@ flowchart TD
         F2["<b>Fase 2: SharePoint CD40K</b><br/>• In: CD40K_NEW.xlsx (Power Query)<br/>• Proc: phase2_cd40k.py (Excel COM + P016)<br/>• Out: T_SP_CD40K"]
         
         F3["<b>Fase 3: Desembolsos BPE Market</b><br/>• In: SQL Server S83VP2\\BDT (BN_DESEMBOLSOS)<br/>• Proc: phase3_desembolsos.py (PyODBC)<br/>• Out: T_VENTAS_BPE_MARKET (Mes Activo)"]
+
+        F1 ~~~ F2 ~~~ F3
     end
 
     subgraph FASE4_CONSUMO ["Fase 4: Pipeline SQL Consumo (Cruce Central)"]
@@ -98,6 +100,8 @@ flowchart TD
         C2["<b>Fase 2: Speech Analytics</b><br/>• In: Verint WFO REST API (Export_Calidad)<br/>• Proc: phase2_ingest_verint.py (P001)<br/>• Out: M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS"]
         
         C3["<b>Fase 3: Acción Tomada</b><br/>• In: SharePoint Calidad UX (ACCION_TOMADA.xlsx)<br/>• Proc: phase3_ingest_accion_tomada.py (P004)<br/>• Out: M_EXP_NTD_OBSERVACIONES_PRE"]
+
+        C1 ~~~ C2 ~~~ C3
     end
 
     subgraph FASE4_CALIDAD ["Fase 4: Pipeline SQL Calidad (Cruce con Ventas y Consolidación)"]
