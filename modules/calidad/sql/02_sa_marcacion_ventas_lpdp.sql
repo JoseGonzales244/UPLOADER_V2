@@ -20,6 +20,19 @@ CREATE VOLATILE TABLE VT_SA_CLEANED AS (
 
 
 -- -------------------------------------------------------------
+-- PASO 1.1: SUB_EQUIPO DEL ASESOR POR PERIODO
+-- -------------------------------------------------------------
+CREATE VOLATILE TABLE VT_EXEC_SUB AS (
+    SELECT
+        REG_EJECUTIVO,
+        TRIM(SUB_EQUIPO) AS SUB_EQUIPO
+    FROM DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED
+    WHERE PERIODO = '{PERIODO}'
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY REG_EJECUTIVO ORDER BY REG_EJECUTIVO ASC) = 1
+) WITH DATA PRIMARY INDEX (REG_EJECUTIVO) ON COMMIT PRESERVE ROWS;
+
+
+-- -------------------------------------------------------------
 -- PASO 2: DEDUPLICACIÓN DE CAMPAÑAS (Tablas Volátiles)
 -- -------------------------------------------------------------
 
@@ -310,9 +323,9 @@ CREATE VOLATILE TABLE VT_SA_MARKED AS (
             WHEN cd_d.CODDOC IS NOT NULL THEN 'CD01'
             WHEN chip.NUM_DOCUMENTO IS NOT NULL THEN 'CHIP01'
             WHEN ec.CODDOC IS NOT NULL THEN 'EC01'
-            WHEN bnc.NUM_DOCUMENTO IS NOT NULL THEN 'BNC01'
             WHEN bn.CODDOC IS NOT NULL AND bn.PeriodType = 2 THEN 'BNB02'
             WHEN bn.CODDOC IS NOT NULL AND bn.PeriodType = 1 THEN 'BNB01'
+            WHEN bnc.NUM_DOCUMENTO IS NOT NULL THEN 'BNC01'
             WHEN con.CODDOC IS NOT NULL AND con.PeriodType = 2 THEN 'CON02'
             WHEN con.CODDOC IS NOT NULL AND con.PeriodType = 1 THEN 'CON01'
             WHEN pp.CODDOC IS NOT NULL AND pp.PeriodType = 2 THEN 'PP02'
@@ -334,9 +347,9 @@ CREATE VOLATILE TABLE VT_SA_MARKED AS (
             WHEN cd_d.CODDOC IS NOT NULL THEN 1
             WHEN chip.NUM_DOCUMENTO IS NOT NULL THEN 1
             WHEN ec.CODDOC IS NOT NULL THEN 1
-            WHEN bnc.NUM_DOCUMENTO IS NOT NULL THEN 1
             WHEN bn.CODDOC IS NOT NULL AND bn.PeriodType = 2 THEN 2
             WHEN bn.CODDOC IS NOT NULL AND bn.PeriodType = 1 THEN 1
+            WHEN bnc.NUM_DOCUMENTO IS NOT NULL THEN 1
             WHEN con.CODDOC IS NOT NULL AND con.PeriodType = 2 THEN 2
             WHEN con.CODDOC IS NOT NULL AND con.PeriodType = 1 THEN 1
             WHEN pp.CODDOC IS NOT NULL AND pp.PeriodType = 2 THEN 2
@@ -367,12 +380,15 @@ CREATE VOLATILE TABLE VT_SA_MARKED AS (
 
     FROM VT_SA_CLEANED s
     
-    -- Cruce de campañas
+    -- Sub-equipo del asesor según dotación oficial
+    LEFT JOIN VT_EXEC_SUB sub ON s.REG_EV = sub.REG_EJECUTIVO
+    
+    -- Cruce de campañas (Si el asesor es BNB, no debe cruzar como BNC)
     LEFT JOIN VT_TC_DEDUP tc ON s.DNI = tc.CODDOC AND s.REG_EV = tc.CODPROMOT AND s.DNI IS NOT NULL
     LEFT JOIN VT_PP_DEDUP pp ON s.DNI = pp.CODDOC AND s.REG_EV = pp.CODPROMOT AND s.DNI IS NOT NULL
     LEFT JOIN VT_CON_DEDUP con ON s.DNI = con.CODDOC AND s.REG_EV = con.CODPROMOT AND s.DNI IS NOT NULL
     LEFT JOIN VT_BN_DEDUP bn ON s.DNI = bn.CODDOC AND s.REG_EV = bn.REGISTRO AND s.DNI IS NOT NULL
-    LEFT JOIN VT_BNC_DEDUP bnc ON s.DNI = bnc.NUM_DOCUMENTO AND s.REG_EV = bnc.REGISTRO AND s.DNI IS NOT NULL
+    LEFT JOIN VT_BNC_DEDUP bnc ON s.DNI = bnc.NUM_DOCUMENTO AND s.REG_EV = bnc.REGISTRO AND s.DNI IS NOT NULL AND COALESCE(sub.SUB_EQUIPO, 'BNC') <> 'BNB'
     LEFT JOIN VT_EC_DEDUP ec ON s.DNI = ec.CODDOC AND s.REG_EV = ec.CODPROMOT AND s.DNI IS NOT NULL
     LEFT JOIN VT_CHIP_DEDUP chip ON s.DNI = chip.NUM_DOCUMENTO AND s.REG_EV = chip.REG_EJECUTIVO AND s.DNI IS NOT NULL
     LEFT JOIN VT_CD_DEDUP cd_d ON s.DNI = cd_d.CODDOC AND s.REG_EV = cd_d.CODPROMOT AND s.DNI IS NOT NULL
