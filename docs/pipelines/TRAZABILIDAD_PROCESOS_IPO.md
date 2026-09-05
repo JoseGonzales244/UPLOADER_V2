@@ -51,7 +51,7 @@ flowchart TD
 ### 2. Dominio: Base Consumo (Ventas Comerciales y Consentimiento)
 
 * **Frecuencia:** Diaria / Mensual (Ejecución matutina).
-* **Propósito:** Ingestar tráfico telefónico, líneas CD40K, desembolsos comerciales del mes y generar las tablas maestras de ventas y consentimientos auditables.
+* **Propósito:** Ingestar tráfico telefónico, líneas CD40K, desembolsos comerciales del mes y generar las tablas maestras de ventas, consentimientos y ventas Select.
 
 ```mermaid
 flowchart TD
@@ -65,12 +65,12 @@ flowchart TD
         F1 ~~~ F2 ~~~ F3
     end
 
-    subgraph FASE4_CONSUMO ["Fase 4: Pipeline SQL Consumo (Cruce Central)"]
-        F4["<b>Scripts SQL en Teradata (sql_pipeline / sql_executor.py):</b><br/>• VENTAS_DN.sql (Cruza DW Views + Dotación Padrón)<br/>• CD40K.sql (Cruza M_EXP_VENTAS_CD con T_SP_CD40K > 40K)<br/>• SOURCE_TVL.sql & CA_CONSENTIMIENTO_DIARIO.sql<br/>• KRI_VENTAS_SIN_AUDIO.sql & TLF_NO_AUTORIZADO.sql"]
+    subgraph PROCESAMIENTO_SQL ["Procesamiento SQL Teradata (Fases 4 y 5 Paralelizables)"]
+        F4["<b>Fase 4: Pipeline SQL Consumo General</b><br/>• DW Teradata + Staging F1, F2, F3 + Dotación Padrón<br/>• Ejecuta: VENTAS_DN.sql, CD40K.sql, SOURCE_TVL, KRIs<br/>• Conexión: Usuario Teradata Principal<br/>• Out: M_EXP_VENTAS_* (TC, PP, CD...), M_EXP_CD40K, KRIs"]
         
-        OUT_F4[("<b>Tablas Maestras y de Control DLAB_GEC:</b><br/>• M_EXP_VENTAS_* (TC, PP, CD, EC, CON, UPG, IL, PA, SEG)<br/>• M_EXP_CD40K<br/>• T_EXP_KRI_VENTAS_SINAUDIO<br/>• T_EXP_KRI_TELF_NO_AUTORIZADO")]
-        
-        F4 --> OUT_F4
+        F5["<b>Fase 5: Transformación Select (Paralela e Independiente)</b><br/>• In: e_dw_views.V_AGG_VENTAS_CONSOLIDADAS & V_CARTERA_CLIENTE_HIST<br/>• Proc: phase5_selection.py ➔ CONSUMO_SELECT_TC_CD_SEG.sql<br/>• Conexión: TERADATA_USER_SELECT (Credencial LDAP secundaria dedicada)<br/>• Out: DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG"]
+
+        F4 ~~~ F5
     end
 
     F1 --> F4
@@ -84,6 +84,7 @@ flowchart TD
 | **Fase 2: SharePoint CD40K y Riesgos** | **SharePoint Janesy Lopez:**<br/>• Archivo: `CD40K_NEW.xlsx`<br/>*(Conexiones Power Query a bases de riesgo crediticio).* | `modules/consumo/use_cases/phases/phase2_cd40k.py`<br/>Abre Excel en background vía COM API, ejecuta `RefreshAll`, parsea hojas con Polars y sube a Teradata con plantilla `P016-CD40K`. | **Tabla Staging Teradata (`DLAB_GEC`):**<br/>• `T_SP_CD40K` |
 | **Fase 3: Desembolsos SQL Server BPE Market** | **SQL Server Market (`S83VP2\BDT`):**<br/>• Base de Datos: `BDT`<br/>• Tabla física: `BN_DESEMBOLSOS_GENERAL` | `modules/consumo/use_cases/phases/phase3_desembolsos.py`<br/>Conecta vía PyODBC, extrae desembolsos del período activo y carga a Teradata con reemplazo completo (`clear_table=True`). | **Tabla Activa Teradata (`DLAB_GEC`):**<br/>• `T_VENTAS_BPE_MARKET`<br/>> [!WARNING]<br/>> Esta tabla se sobreescribe en esta fase con las ventas del mes activo. |
 | **Fase 4: Pipeline SQL Consumo (Ventas y Consentimiento)** | **1. Vistas Data Warehouse Teradata:**<br/>• `E_DW_VIEWS.V_FCT_RT_TC_HISTORICO`<br/>• `E_DW_VIEWS_DLAB.CGR_PRESTAMOS`<br/>• `E_DW_VIEWS_DLAB.CGR_EXTRACASH`<br/>• `E_DW_VIEWS_DLAB.V_CD_DESEMB_HISTORICO`<br/>• `E_DW_VIEWS.V_FCT_CNV_VENTAS`<br/>• `E_DW_VIEWS_DLAB.CGR_UPGRADE_HST`<br/>• `E_DW_VIEWS_DLAB.CGR_INC_LINEA_HST`<br/>• `E_DW_VIEWS_DLAB.V_CGR_PAGO_AUTOMATICO`<br/>• `E_DW_VIEWS_DLAB.V_DLAB_CGR_SEGUROS_VENTAS`<br/>**2. Staging Fases 1, 2 y 3:**<br/>• `T_SP_CD40K`<br/>• `T_VENTAS_BPE_MARKET`<br/>**3. Dotación:**<br/>• `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS` | `modules/consumo/use_cases/phases/phase4_sql_pipeline.py`<br/>Ejecución secuencial de scripts SQL:<br/>1. `VENTAS_DN.sql`: Cruza DW con dotación para extraer ventas comerciales oficiales.<br/>2. `CD40K.sql`: Cruza `M_EXP_VENTAS_CD` con `T_SP_CD40K` para líneas > 40K.<br/>3. `SOURCE_TVL.sql`: Cruce de consentimientos.<br/>4. `CA_CONSENTIMIENTO_DIARIO.sql`: Consentimientos diarios.<br/>5. `KRI_VENTAS_SIN_AUDIO.sql`: Detección de ventas sin grabación asociada.<br/>6. `TLF_NO_AUTORIZADO.sql`: Marcaciones a teléfonos no autorizados. | **Tablas Maestras de Ventas del Mes (`DLAB_GEC`):**<br/>• `M_EXP_VENTAS_TC`<br/>• `M_EXP_VENTAS_PP`<br/>• `M_EXP_VENTAS_CD`<br/>• `M_EXP_VENTAS_EC`<br/>• `M_EXP_VENTAS_CON`<br/>• `M_EXP_VENTAS_UPG`<br/>• `M_EXP_VENTAS_IL`<br/>• `M_EXP_VENTAS_PA`<br/>• `M_EXP_VENTAS_SEG`<br/>• `M_EXP_CD40K`<br/>**Tablas de Control KRI:**<br/>• `T_EXP_KRI_VENTAS_SINAUDIO`<br/>• `T_EXP_KRI_TELF_NO_AUTORIZADO` |
+| **Fase 5: Transformación Consumo Select** | **Vistas DW Teradata Corporativas:**<br/>• `e_dw_views.V_AGG_VENTAS_CONSOLIDADAS`<br/>• `E_DW_VIEWS.V_CARTERA_CLIENTE_HIST` | `modules/consumo/use_cases/phases/phase5_selection.py`<br/>Ejecuta `CONSUMO_SELECT_TC_CD_SEG.sql` usando la conexión secundaria (`TERADATA_USER_SELECT` vía LDAP). Vía `DELETE FROM ... ALL; INSERT INTO ...`. | **Tabla de Ventas Select (`DLAB_GEC`):**<br/>• `M_EXP_CONSUMO_SELECT_TC_CD_SEG`<br/>*(Ventas de TC, Compra de Deuda y Seguros del equipo Interbank Select).* |
 
 ---
 
@@ -191,6 +192,7 @@ flowchart TD
 | `T_SP_CD40K` | Consumo (Fase 2: `phase2_cd40k.py`) | Consumo (Fase 4: `CD40K.sql`) | **Temporal Activa** *(Líneas > 40K del mes)* |
 | `T_VENTAS_BPE_MARKET` | Consumo (Fase 3: `phase3_desembolsos.py`) | Consumo (Fase 4), Calidad (Fase 4: `02_sa`) | **Temporal Activa** *(Desembolsos BNB del mes)* |
 | `M_EXP_VENTAS_*` (TC, PP, CD, EC, CON...) | Consumo (Fase 4: `VENTAS_DN.sql`) | Calidad (Fase 4: `02_sa_marcacion_ventas_lpdp.sql`) | **Temporal Activa** *(Ventas comerciales del mes activo)* |
+| `M_EXP_CONSUMO_SELECT_TC_CD_SEG` | Consumo (Fase 5: `phase5_selection.py`) | Reportería Comercial / Calidad Select | **Mensual Activa** *(Ventas de TC, CD y Seguros Select)* |
 | `T_EXP_KRI_VENTAS_SINAUDIO` | Consumo (Fase 4: `KRI_VENTAS_SIN_AUDIO.sql`) | Cierre Mensual (`02_kri_resumen_total.sql`) | **Temporal Activa** *(Ventas sin audio del mes)* |
 | `T_EXP_KRI_TELF_NO_AUTORIZADO` | Consumo (Fase 4: `TLF_NO_AUTORIZADO.sql`) | Cierre Mensual (`02_kri_resumen_total.sql`) | **Temporal Activa** *(Teléfonos no autorizados del mes)* |
 | `M_EXP_CALIDAD_PURECLOUD_PRE` | Calidad (Fase 1: `phase1_ingest_insight.py`) | Calidad (Fase 4: `01_evaluacion_manual_pc.sql`) | **Temporal Activa** *(Evaluaciones manuales del mes)* |
