@@ -54,7 +54,7 @@ flowchart TD
 * **Propósito:** Ingestar tráfico telefónico, líneas CD40K, desembolsos comerciales del mes y generar las tablas maestras de ventas, consentimientos y ventas Select.
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph PARALELO_CONSUMO ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
         direction TB
         F1["<b>Fase 1: Ingesta Insight API</b><br/>• In: 7 Consultas PureCloud REST<br/>• Proc: phase1_insight_ingest.py (P009-P015)<br/>• Out: M_EXP_TRAFICO_GENESIS / Atributos"]
@@ -96,7 +96,7 @@ flowchart TD
 * **Propósito:** Consolidar evaluaciones manuales (Pure Cloud) y automáticas (Speech Analytics Verint), cruzar con las ventas de Base Consumo, aplicar curvas de calibración y alimentar el proceso Not To Do (NTD).
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph INGESTAS_CALIDAD ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
         direction TB
         C1["<b>Fase 1: Evaluaciones Pure Cloud</b><br/>• In: Insight Cloud REST (EVALUATIONS)<br/>• Proc: phase1_ingest_insight.py (P008)<br/>• Out: M_EXP_CALIDAD_PURECLOUD_PRE"]
@@ -142,7 +142,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph CIERRE_PARALELO ["Cierre Mensual: 3 Vías Independientes (100% Paralelizables)"]
-        direction LR
+        direction TB
         CR1["<b>Vía 1: Auditoría y Cierre Calidad</b><br/>• Script: 01_auditoria_y_cierre.sql<br/>• In: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Out: DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL"]
 
         CR2["<b>Vía 2: Cierre KRI Normativo</b><br/>• Script: 02_kri_resumen_total.sql<br/>• In: T_EXP_KRI_VENTAS_SINAUDIO + TLF_NO_AUTORIZADO<br/>• Out: DLAB_GEC.M_KRI_RESUMEN_TOTAL"]
