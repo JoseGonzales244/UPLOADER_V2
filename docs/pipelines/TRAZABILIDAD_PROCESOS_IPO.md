@@ -7,18 +7,10 @@
 
 ## ⚠️ Regla de Oro Operativa: Interdependencia de Períodos Mensuales
 
-El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente acoplados por diseño:
-
-```
-[1. Dotación (Mes M)] ➔ [2. Base Consumo (Mes M)] ➔ [3. Calidad NTD (Mes M)] ➔ [4. Cierre Mensual (Mes M)]
- Planilla Activa          Fase 3: T_VENTAS_BPE_MARKET     02_sa cruza llamadas         Snapshots Gerenciales
-                          Fase 4: M_EXP_VENTAS_*          con ventas del Mes M         Inmutables
-```
-
 > [!CAUTION]
 > **NUNCA ejecutar Base Consumo de un mes nuevo (ej. Septiembre) si aún no se ha cerrado la Fase 4 de Calidad del mes previo (ej. Agosto).**  
 > Tanto la tabla de desembolsos `DLAB_GEC.T_VENTAS_BPE_MARKET` (cargada en la **Fase 3 de Consumo**) como las tablas maestras `DLAB_GEC.M_EXP_VENTAS_*` (TC, PP, CD, EC, CON - calculadas en la **Fase 4 de Consumo: `VENTAS_DN.sql`**) solo almacenan el mes activo.  
-> Si se sobreescriben con el mes nuevo, el script `02_sa_marcacion_ventas_lpdp.sql` de Calidad no encontrará las ventas del mes previo y **anulará las notas de Speech Analytics (SA) de los asesores**.
+> Si se sobreescriben con el mes nuevo antes de cerrar Calidad, el script `02_sa_marcacion_ventas_lpdp.sql` de Calidad no encontrará las ventas del mes previo y **anulará las notas de Speech Analytics (SA) de los asesores**.
 
 ---
 
@@ -30,6 +22,33 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 
 * **Frecuencia:** Mensual (Días 25 al 30 de cada mes).
 * **Propósito:** Generar el padrón oficial de personal activo, gestionar altas, bajas, antigüedad, vacaciones y repartir las cuotas de evaluación entre los 4 analistas de calidad.
+
+```mermaid
+flowchart LR
+    subgraph D1_F1 ["Fase 1: Limpieza"]
+        I1["EQUIPO DE VENTAS anterior"] --> P1["fase1_limpieza.py"] --> O1["EQUIPO DE VENTAS preliminar"]
+    end
+
+    subgraph D1_F2 ["Fase 2: Sincronización"]
+        I2["Planilla RRHH Ausentismo"] --> P2["fase2_sincronizacion.py"] --> O2["Padrón con Novedades"]
+    end
+
+    subgraph D1_F3 ["Fase 3: Cuotas"]
+        I3["Vacaciones y Horarios"] --> P3["fase3_distribucion.py"] --> O3["Cuotas por Analista"]
+    end
+
+    subgraph D1_F4 ["Fase 4: Carga Teradata"]
+        I4["Padrón Validado"] --> P4["fase4_televentas.py"] --> O4["M_EXP_TELEVENTAS_EJECUTIVOS\nM_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"]
+    end
+
+    subgraph D1_LIC ["Licencias"]
+        I5["LICENCIAS_SA.xlsx"] --> P5["licencias_orchestrator.py"] --> O5["LICENCIAS_SA actualizada"]
+    end
+
+    O1 --> D1_F2
+    O2 --> D1_F3
+    O3 --> D1_F4
+```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
 | :--- | :--- | :--- | :--- |
@@ -46,6 +65,33 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 * **Frecuencia:** Diaria / Mensual (Ejecución matutina).
 * **Propósito:** Ingestar tráfico telefónico, líneas CD40K, desembolsos comerciales del mes y generar las tablas maestras de ventas y consentimientos auditables.
 
+```mermaid
+flowchart TD
+    subgraph FASE_1 ["Fase 1: Ingesta Insight Cloud API"]
+        direction LR
+        I_F1["PureCloud API\n(7 Consultas REST)"] --> P_F1["phase1_insight_ingest.py\n(Plantillas P009 a P015)"] --> O_F1[("Tablas Staging Teradata\nM_EXP_TRAFICO_GENESIS\nM_EXP_BT_CONVERSATIONS_ATTRIBUTES\nM_EXP_DERIVA_BT_TIEMPOS\nM_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE\nM_DERIVA_BT_EV_TRANSFERENCIA\nM_EXP_IVR_VENTAS_2022")]
+    end
+
+    subgraph FASE_2 ["Fase 2: SharePoint CD40K"]
+        direction LR
+        I_F2["SharePoint CD40K_NEW.xlsx\n(Power Query Riesgos)"] --> P_F2["phase2_cd40k.py\n(Excel COM Refresh + P016)"] --> O_F2[("T_SP_CD40K")]
+    end
+
+    subgraph FASE_3 ["Fase 3: Desembolsos SQL Server BPE Market"]
+        direction LR
+        I_F3["SQL Server S83VP2\\BDT\nBN_DESEMBOLSOS_GENERAL"] --> P_F3["phase3_desembolsos.py\n(PyODBC + clear_table)"] --> O_F3[("T_VENTAS_BPE_MARKET\n(Desembolsos BNB del Mes)")]
+    end
+
+    subgraph FASE_4 ["Fase 4: Pipeline SQL Consumo (Ventas & Consentimiento)"]
+        direction LR
+        I_F4["DW Views Teradata\n+ Staging Fases 1, 2, 3\n+ M_EXP_TELEVENTAS_EJECUTIVOS"] --> P_F4["sql_executor.py\n• VENTAS_DN.sql\n• CD40K.sql\n• SOURCE_TVL.sql\n• CA_CONSENTIMIENTO_DIARIO.sql\n• KRI_VENTAS_SIN_AUDIO.sql\n• TLF_NO_AUTORIZADO.sql"] --> O_F4[("Tablas Maestras del Mes\nM_EXP_VENTAS_* (TC, PP, CD, EC, CON, ...)\nM_EXP_CD40K\nT_EXP_KRI_VENTAS_SINAUDIO\nT_EXP_KRI_TELF_NO_AUTORIZADO")]
+    end
+
+    O_F1 -.-> I_F4
+    O_F2 -.-> I_F4
+    O_F3 -.-> I_F4
+```
+
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
 | :--- | :--- | :--- | :--- |
 | **Fase 1: Ingesta Insight Cloud API** | **PureCloud API (Insight Cloud):**<br/>Consultas REST de tráfico y eventos telefónicos:<br/>1. `TRAFICO_GENESYS`<br/>2. `CONV_ATTRIBUTES`<br/>3. `DERIVA_BT`<br/>4. `CLOUD_MARCA_TRANSF`<br/>5. `BT_TRANSFERENCIA`<br/>6. `IVR_VENTAS` | `modules/consumo/use_cases/phases/phase1_insight_ingest.py`<br/>Descarga payloads crudos, formatea tipado con Polars y sube a Teradata usando plantillas de staging `P009` a `P015`. | **Tablas Staging Teradata (`DLAB_GEC`):**<br/>• `M_EXP_TRAFICO_GENESIS`<br/>• `M_EXP_BT_CONVERSATIONS_ATTRIBUTES`<br/>• `M_EXP_DERIVA_BT_TIEMPOS`<br/>• `M_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE`<br/>• `M_DERIVA_BT_EV_TRANSFERENCIA`<br/>• `M_EXP_IVR_VENTAS_2022` |
@@ -59,6 +105,39 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 
 * **Frecuencia:** Semanal / Cierre Mensual.
 * **Propósito:** Consolidar evaluaciones manuales (Pure Cloud) y automáticas (Speech Analytics Verint), cruzar con las ventas de Base Consumo, aplicar curvas de calibración y alimentar el reporte No Te Dejes (NTD).
+
+```mermaid
+flowchart TD
+    subgraph CAL_F1 ["Fase 1: Ingesta Pure Cloud"]
+        direction LR
+        I_C1["Insight Cloud\n(Query EVALUATIONS)"] --> P_C1["phase1_ingest_insight.py\n(Plantilla P008)"] --> O_C1[("M_EXP_CALIDAD_PURECLOUD_PRE")]
+    end
+
+    subgraph CAL_F2 ["Fase 2: Ingesta Speech Analytics"]
+        direction LR
+        I_C2["Verint WFO REST API\n(Export_Calidad_*.xlsx)"] --> P_C2["phase2_ingest_verint.py\n(Plantilla P001)"] --> O_C2[("M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS")]
+    end
+
+    subgraph CAL_F3 ["Fase 3: Ingesta Acción Tomada"]
+        direction LR
+        I_C3["SharePoint Calidad UX\n(ACCION_TOMADA.xlsx)"] --> P_C3["phase3_ingest_accion_tomada.py\n(Plantilla P004)"] --> O_C3[("M_EXP_NTD_OBSERVACIONES_PRE")]
+    end
+
+    subgraph CAL_F4 ["Fase 4: Pipeline SQL Calidad (Cruce con Ventas y Consolidación)"]
+        direction LR
+        I_C4["Staging Fases 1 & 2\n+ Consumo (T_VENTAS_BPE_MARKET, M_EXP_VENTAS_*)\n+ Dotación (M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED)\n+ M_EXP_MAESTRA_PESOS_SA"] --> P_C4["SQL 01 a 05\n• 01_evaluacion_manual_pc.sql\n• 02_sa_marcacion_ventas_lpdp.sql\n• 03_sa_calculo_pesos_unpivot.sql\n• 04_sa_ajustes_curva.sql\n• 04_b_sa_parche_nota_cero.sql\n• 05_consolidacion_nota_final.sql"] --> O_C4[("M_EXP_CALIDAD_DETALLE_PURE_CLOUD\nM_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS\nM_EXP_CALIDAD_NOTA_FINAL\nV_EXP_CALIDAD_NOTA_FINAL")]
+    end
+
+    subgraph CAL_F5 ["Fase 5: Reporte No Te Dejes (NTD)"]
+        direction LR
+        I_C5["M_EXP_NTD_OBSERVACIONES_PRE (Fase 3)\n+ M_EXP_CALIDAD_DETALLE_PURE_CLOUD (Fase 4)"] --> P_C5["phase5_ntd.py\n(06_carga_ntd.sql)"] --> O_C5[("M_EXP_NOT_TO_DO\nM_EXP_NTD_OBSERVACIONES_NEW")]
+    end
+
+    O_C1 -.-> I_C4
+    O_C2 -.-> I_C4
+    O_C3 -.-> I_C5
+    O_C4 -.-> I_C5
+```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
 | :--- | :--- | :--- | :--- |
@@ -76,6 +155,24 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 * **Propósito:** Congelar las notas oficiales definitivas por jerarquía para el pago de comisiones y consolidar métricas KRI para Cumplimiento Normativo y Riesgo Operativo.
 * **Orquestador Backend:** `modules/cierre/use_cases/cierre_orchestrator.py`
 
+```mermaid
+flowchart TD
+    subgraph CIERRE_01 ["Paso 1: Auditoría y Cierre Oficial"]
+        direction LR
+        I_CR1["M_EXP_CALIDAD_NOTA_FINAL (Calidad F4)\n+ M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"] --> P_CR1["01_auditoria_y_cierre.sql\n(DELETE + INSERT + UPDATE jerárquico)"] --> O_CR1[("DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL\n(Inmutable / Pago Comisiones / PBI Oficial)")]
+    end
+
+    subgraph CIERRE_02 ["Paso 2: Resumen KRI Normativo"]
+        direction LR
+        I_CR2["T_EXP_KRI_VENTAS_SINAUDIO\n+ T_EXP_KRI_TELF_NO_AUTORIZADO (Consumo F4)"] --> P_CR2["02_kri_resumen_total.sql\n(Agrupación por quincena Q1/Q2)"] --> O_CR2[("DLAB_GEC.M_KRI_RESUMEN_TOTAL\n(Entregable Oficial Riesgo Operativo)")]
+    end
+
+    subgraph CIERRE_03 ["Paso 3: Consolidado Plano Analítico"]
+        direction LR
+        I_CR3["M_EXP_CALIDAD_NOTA_FINAL\n+ M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"] --> P_CR3["03_consolidado_notas_cierre.sql\n(Desnormalización completa)"] --> O_CR3[("DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE\n(Reportería Analítica y Auditoría)")]
+    end
+```
+
 | Paso / Script SQL | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
 | :--- | :--- | :--- | :--- |
 | **Paso 1: Auditoría y Cierre Oficial**<br/>`01_auditoria_y_cierre.sql` | **1. Calidad (Fase 4):**<br/>• `DLAB_GEC.M_EXP_CALIDAD_NOTA_FINAL`<br/>**2. Dotación Histórica:**<br/>• `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED` | 1. `DELETE FROM M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL WHERE PERIODO = '{PERIODO}'` (idempotencia).<br/>2. `INSERT` de notas finales del período cerrado.<br/>3. `UPDATE` masivo de dimensiones organizacionales (Asesor, Supervisor, Jefe, Equipo, Subgerencia) desde `GROUPED`. | **Snapshot Gerencial Oficial:**<br/>• `DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL`<br/>*(Fuente inmutable para cálculo de comisiones y Power BI "CALIDAD de servicios").* |
@@ -88,6 +185,19 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 
 * **Frecuencia:** Mensual / A demanda.
 * **Propósito:** Auditar de forma automatizada interacciones de audio (grabaciones) y chats de WhatsApp con modelos de lenguaje (`gemini-3.1-flash-lite`) para corroborar consentimientos explícitos, cumplimiento de pautas comerciales y políticas LPDP.
+
+```mermaid
+flowchart TD
+    subgraph AUD_VOZ ["Subproceso A: Cumplimiento PA / TC (Llamadas de Voz)"]
+        direction LR
+        I_AV["Solicitud Cumplimiento TC.xlsx\n+ Genesys API & Verint WFO REST"] --> P_AV["download_transcripts_from_verint.py\n+ gemini-3.1-flash-lite"] --> O_AV["Solicitud Cumplimiento TC_Auditada.xlsx\n(Dictamen: ACEPTA/NO_ACEPTA + Minuto/Segundo + Cita)"]
+    end
+
+    subgraph AUD_WSP ["Subproceso B: Auditoría de Chats WhatsApp"]
+        direction LR
+        I_AW["Verint WFO Interaction Center\n(Chats .docx exportados en data/input/auditorias_wsp/)\n+ Ejecutivos_Gestion_Wsp.xlsx\n+ Plantillas TLV WhatsApp.xlsx"] --> P_AW["wsp_docx_extractor.py (Filtrado Asesor)\n+ run_transcript_audit.py (gemini-3.1-flash-lite)"] --> O_AW["Reporte Excel Auditoría WhatsApp\n• Resumen_Evaluaciones\n• Detalle_Hallazgos"]
+    end
+```
 
 | Subproceso | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Dictámenes Finales (**Outputs**) |
 | :--- | :--- | :--- | :--- |
