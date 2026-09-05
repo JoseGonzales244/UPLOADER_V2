@@ -21,7 +21,7 @@ flowchart LR
 
 > [!CAUTION]
 > **NUNCA ejecutar Base Consumo de un mes nuevo (ej. Septiembre) si aún no se ha cerrado la Fase 4 de Calidad del mes previo (ej. Agosto).**  
-> Las tablas de ventas en Teradata (`M_EXP_VENTAS_TC`, `M_EXP_VENTAS_PP`, `T_VENTAS_BPE_MARKET`, etc.) solo almacenan el mes activo; si se sobreescriben con el mes nuevo, el script `02_sa_marcacion_ventas_lpdp.sql` no encontrará las ventas del mes previo y **anulará las notas de Speech Analytics de los asesores**.
+> Tanto la tabla de desembolsos `DLAB_GEC.T_VENTAS_BPE_MARKET` (cargada en la **Fase 3 de Consumo**) como las tablas de colocaciones `DLAB_GEC.M_EXP_VENTAS_*` (TC, PP, CD, EC, CON - calculadas en la **Fase 4 de Consumo**) solo almacenan el mes activo. Si se corre la Fase 3 o Fase 4 de Consumo con el mes nuevo, se pisan los datos y el script `02_sa_marcacion_ventas_lpdp.sql` no encontrará las ventas del mes previo, **anulando las notas de Speech Analytics de los asesores (tanto de BNB como de los demás productos)**.
 
 ---
 
