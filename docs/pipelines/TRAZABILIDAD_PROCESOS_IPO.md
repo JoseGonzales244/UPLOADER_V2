@@ -137,17 +137,20 @@ flowchart LR
 * **Orquestador Backend:** `modules/cierre/use_cases/cierre_orchestrator.py`
 
 ```mermaid
-flowchart TD
+flowchart LR
+    ORQ["<b>Orquestador de Cierre</b><br/>• modules/cierre/cierre_orchestrator.py<br/>• Despliegue Fan-Out Concurrente"]
+
     subgraph CIERRE_PARALELO ["Cierre Mensual: 3 Vías Independientes (100% Paralelizables)"]
-        direction TB
         CR1["<b>Vía 1: Auditoría y Cierre Calidad</b><br/>• Script: 01_auditoria_y_cierre.sql<br/>• In: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Out: DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL"]
 
         CR2["<b>Vía 2: Cierre KRI Normativo</b><br/>• Script: 02_kri_resumen_total.sql<br/>• In: T_EXP_KRI_VENTAS_SINAUDIO + TLF_NO_AUTORIZADO<br/>• Out: DLAB_GEC.M_KRI_RESUMEN_TOTAL"]
 
         CR3["<b>Vía 3: Consolidado Plano Analítico</b><br/>• Script: 03_consolidado_notas_cierre.sql<br/>• In: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Out: DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE"]
-
-        CR1 ~~~ CR2 ~~~ CR3
     end
+
+    ORQ --> CR1
+    ORQ --> CR2
+    ORQ --> CR3
 ```
 
 | Paso / Script SQL | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
