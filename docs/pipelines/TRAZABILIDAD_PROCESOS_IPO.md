@@ -54,9 +54,9 @@ flowchart TD
 * **Propósito:** Ingestar tráfico telefónico, líneas CD40K, desembolsos comerciales del mes y generar las tablas maestras de ventas, consentimientos y ventas Select.
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph PARALELO_CONSUMO ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
-        direction TB
+        direction LR
         F1["<b>Fase 1: Ingesta Insight API</b><br/>• In: 7 Consultas PureCloud REST<br/>• Proc: phase1_insight_ingest.py (P009-P015)<br/>• Out: M_EXP_TRAFICO_GENESIS / Atributos"]
         
         F2["<b>Fase 2: SharePoint CD40K</b><br/>• In: CD40K_NEW.xlsx (Power Query)<br/>• Proc: phase2_cd40k.py (Excel COM + P016)<br/>• Out: T_SP_CD40K"]
@@ -67,7 +67,7 @@ flowchart LR
     end
 
     subgraph PROCESAMIENTO_SQL ["Procesamiento SQL Teradata (Fases 4 y 5 Paralelizables)"]
-        direction TB
+        direction LR
         F4["<b>Fase 4: Pipeline SQL Consumo General</b><br/>• DW Teradata + Staging F1, F2, F3 + Dotación Padrón<br/>• Ejecuta: VENTAS_DN.sql, CD40K.sql, SOURCE_TVL, KRIs<br/>• Conexión: Usuario Teradata Principal<br/>• Out: M_EXP_VENTAS_* (TC, PP, CD...), M_EXP_CD40K, KRIs"]
         
         F5["<b>Fase 5: Transformación Select (Paralela e Independiente)</b><br/>• In: e_dw_views.V_AGG_VENTAS_CONSOLIDADAS & V_CARTERA_CLIENTE_HIST<br/>• Proc: phase5_selection.py ➔ CONSUMO_SELECT_TC_CD_SEG.sql<br/>• Conexión: TERADATA_USER_SELECT (Credencial LDAP secundaria)<br/>• Out: DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG"]
@@ -78,6 +78,8 @@ flowchart LR
     F1 --> F4
     F2 --> F4
     F3 --> F4
+    F1 -.-> F5
+    F3 -.-> F5
 ```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -96,9 +98,9 @@ flowchart LR
 * **Propósito:** Consolidar evaluaciones manuales (Pure Cloud) y automáticas (Speech Analytics Verint), cruzar con las ventas de Base Consumo, aplicar curvas de calibración y alimentar el proceso Not To Do (NTD).
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph INGESTAS_CALIDAD ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
-        direction TB
+        direction LR
         C1["<b>Fase 1: Evaluaciones Pure Cloud</b><br/>• In: Insight Cloud REST (EVALUATIONS)<br/>• Proc: phase1_ingest_insight.py (P008)<br/>• Out: M_EXP_CALIDAD_PURECLOUD_PRE"]
         
         C2["<b>Fase 2: Speech Analytics</b><br/>• In: Verint WFO REST API (Export_Calidad)<br/>• Proc: phase2_ingest_verint.py (P001)<br/>• Out: M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS"]
@@ -109,7 +111,7 @@ flowchart LR
     end
 
     subgraph PROCESAMIENTO_CALIDAD ["Cálculo de Notas y Proceso NTD (Fases 4 y 5 Paralelizables)"]
-        direction TB
+        direction LR
         C4["<b>Fase 4: Pipeline SQL Calidad (Notas 100%)</b><br/>• In: Staging F1 & F2 + Ventas Consumo + Dotación<br/>• Proc: Scripts SQL 01 a 05 (curvas, unpivot, consolidación)<br/>• Out: M_EXP_CALIDAD_NOTA_FINAL y Vista V_EXP_CALIDAD_NOTA_FINAL"]
         
         C5["<b>Fase 5: Proceso Not To Do - NTD (Independiente)</b><br/>• In: Staging F1 (PC) + Staging F3 (Acción Tomada) + Maestras<br/>• Proc: 06_carga_ntd.sql (phase5_ntd.py)<br/>• Out: DLAB_GEC.M_EXP_NOT_TO_DO & M_EXP_NTD_OBSERVACIONES_NEW"]
