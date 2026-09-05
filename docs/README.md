@@ -17,6 +17,7 @@ graph TD
     OPE --> M3[GESTION_OPERATIVA.md]
 
     PIP --> P1[DETALLE_TECNICO_TODOS_LOS_PROCESOS.md]
+    PIP --> P2[TRAZABILIDAD_PROCESOS_IPO.md]
 
     DAT --> D1[trazabilidad_end_to_end.md]
     DAT --> D2[diccionario_tablas.md]
@@ -51,6 +52,7 @@ graph TD
   9. Genesys Cloud (API REST v2)
   10. Pilotos (No Venta y TCAD)
   11. Convenios Comerciales
+- 🧭 **[Matriz de Trazabilidad End-to-End (IPO: Inputs ➔ Process ➔ Outputs)](pipelines/TRAZABILIDAD_PROCESOS_IPO.md):** Mapa exhaustivo de orígenes de insumos (SharePoint, OneDrives personales, APIs), scripts/tablas intermedias y entregables finales por dominio, con la regla de interdependencia mensual.
 
 ---
 
