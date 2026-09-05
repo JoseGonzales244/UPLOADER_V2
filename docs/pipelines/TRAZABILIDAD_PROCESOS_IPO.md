@@ -24,30 +24,18 @@
 * **Propósito:** Generar el padrón oficial de personal activo, gestionar altas, bajas, antigüedad, vacaciones y repartir las cuotas de evaluación entre los 4 analistas de calidad.
 
 ```mermaid
-flowchart LR
-    subgraph D1_F1 ["Fase 1: Limpieza"]
-        I1["EQUIPO DE VENTAS anterior"] --> P1["fase1_limpieza.py"] --> O1["EQUIPO DE VENTAS preliminar"]
-    end
+flowchart TD
+    F1["<b>Fase 1: Limpieza de Plantilla</b><br/>• Input: EQUIPO DE VENTAS anterior (OneDrive Janesy)<br/>• Process: fase1_limpieza.py (limpieza AVANCE DIARIO y fórmulas)<br/>• Output: EQUIPO DE VENTAS preliminar.xlsx"]
+    
+    F2["<b>Fase 2: Sincronización Roster RRHH</b><br/>• Input: Consolidado Planilla ausentismo RRHH + Ausencias Select<br/>• Process: fase2_sincronizacion.py (marcado Altas/Bajas y cálculo R0-R3)<br/>• Output: Padrón preliminar con novedades"]
+    
+    F3["<b>Fase 3: Distribución de Cuotas</b><br/>• Input: Gestión de Vacaciones y Horarios (OneDrive Janesy)<br/>• Process: fase3_distribucion.py (descuento vacaciones y cuotas 4 analistas)<br/>• Output: Cuotas asignadas por analista y producto"]
+    
+    F4["<b>Fase 4: Televentas y Carga Teradata</b><br/>• Input: Padrón consolidado de Fases 1 a 3<br/>• Process: fase4_televentas.py + Cargador Web P021<br/>• Output: DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS y GROUPED"]
 
-    subgraph D1_F2 ["Fase 2: Sincronización"]
-        I2["Planilla RRHH Ausentismo"] --> P2["fase2_sincronizacion.py"] --> O2["Padrón con Novedades"]
-    end
+    LIC["<b>Submódulo Paralelo: Licencias Verint SA</b><br/>• Input: LICENCIAS_SA.xlsx (OneDrive Janesy)<br/>• Process: licencias_orchestrator.py (sincroniza activos y filtra BackOffice)<br/>• Output: LICENCIAS_SA.xlsx actualizado en OneDrive"]
 
-    subgraph D1_F3 ["Fase 3: Cuotas"]
-        I3["Vacaciones y Horarios"] --> P3["fase3_distribucion.py"] --> O3["Cuotas por Analista"]
-    end
-
-    subgraph D1_F4 ["Fase 4: Carga Teradata"]
-        I4["Padrón Validado"] --> P4["fase4_televentas.py"] --> O4["M_EXP_TELEVENTAS_EJECUTIVOS\nM_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"]
-    end
-
-    subgraph D1_LIC ["Licencias"]
-        I5["LICENCIAS_SA.xlsx"] --> P5["licencias_orchestrator.py"] --> O5["LICENCIAS_SA actualizada"]
-    end
-
-    O1 --> D1_F2
-    O2 --> D1_F3
-    O3 --> D1_F4
+    F1 --> F2 --> F3 --> F4
 ```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -67,29 +55,25 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph FASE_1 ["Fase 1: Ingesta Insight Cloud API"]
-        direction LR
-        I_F1["PureCloud API\n(7 Consultas REST)"] --> P_F1["phase1_insight_ingest.py\n(Plantillas P009 a P015)"] --> O_F1[("Tablas Staging Teradata\nM_EXP_TRAFICO_GENESIS\nM_EXP_BT_CONVERSATIONS_ATTRIBUTES\nM_EXP_DERIVA_BT_TIEMPOS\nM_EXP_CO_CLOUD_MARCA_TRASNFERENCIA_PRE\nM_DERIVA_BT_EV_TRANSFERENCIA\nM_EXP_IVR_VENTAS_2022")]
+    subgraph PARALELO_CONSUMO ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
+        F1["<b>Fase 1: Ingesta Insight API</b><br/>• In: 7 Consultas PureCloud REST<br/>• Proc: phase1_insight_ingest.py (P009-P015)<br/>• Out: M_EXP_TRAFICO_GENESIS / Atributos"]
+        
+        F2["<b>Fase 2: SharePoint CD40K</b><br/>• In: CD40K_NEW.xlsx (Power Query)<br/>• Proc: phase2_cd40k.py (Excel COM + P016)<br/>• Out: T_SP_CD40K"]
+        
+        F3["<b>Fase 3: Desembolsos BPE Market</b><br/>• In: SQL Server S83VP2\\BDT (BN_DESEMBOLSOS)<br/>• Proc: phase3_desembolsos.py (PyODBC)<br/>• Out: T_VENTAS_BPE_MARKET (Mes Activo)"]
     end
 
-    subgraph FASE_2 ["Fase 2: SharePoint CD40K"]
-        direction LR
-        I_F2["SharePoint CD40K_NEW.xlsx\n(Power Query Riesgos)"] --> P_F2["phase2_cd40k.py\n(Excel COM Refresh + P016)"] --> O_F2[("T_SP_CD40K")]
+    subgraph FASE4_CONSUMO ["Fase 4: Pipeline SQL Consumo (Cruce Central)"]
+        F4["<b>Scripts SQL en Teradata (sql_pipeline / sql_executor.py):</b><br/>• VENTAS_DN.sql (Cruza DW Views + Dotación Padrón)<br/>• CD40K.sql (Cruza M_EXP_VENTAS_CD con T_SP_CD40K > 40K)<br/>• SOURCE_TVL.sql & CA_CONSENTIMIENTO_DIARIO.sql<br/>• KRI_VENTAS_SIN_AUDIO.sql & TLF_NO_AUTORIZADO.sql"]
+        
+        OUT_F4[("<b>Tablas Maestras y de Control DLAB_GEC:</b><br/>• M_EXP_VENTAS_* (TC, PP, CD, EC, CON, UPG, IL, PA, SEG)<br/>• M_EXP_CD40K<br/>• T_EXP_KRI_VENTAS_SINAUDIO<br/>• T_EXP_KRI_TELF_NO_AUTORIZADO")]
+        
+        F4 --> OUT_F4
     end
 
-    subgraph FASE_3 ["Fase 3: Desembolsos SQL Server BPE Market"]
-        direction LR
-        I_F3["SQL Server S83VP2\\BDT\nBN_DESEMBOLSOS_GENERAL"] --> P_F3["phase3_desembolsos.py\n(PyODBC + clear_table)"] --> O_F3[("T_VENTAS_BPE_MARKET\n(Desembolsos BNB del Mes)")]
-    end
-
-    subgraph FASE_4 ["Fase 4: Pipeline SQL Consumo (Ventas & Consentimiento)"]
-        direction LR
-        I_F4["DW Views Teradata\n+ Staging Fases 1, 2, 3\n+ M_EXP_TELEVENTAS_EJECUTIVOS"] --> P_F4["sql_executor.py\n• VENTAS_DN.sql\n• CD40K.sql\n• SOURCE_TVL.sql\n• CA_CONSENTIMIENTO_DIARIO.sql\n• KRI_VENTAS_SIN_AUDIO.sql\n• TLF_NO_AUTORIZADO.sql"] --> O_F4[("Tablas Maestras del Mes\nM_EXP_VENTAS_* (TC, PP, CD, EC, CON, ...)\nM_EXP_CD40K\nT_EXP_KRI_VENTAS_SINAUDIO\nT_EXP_KRI_TELF_NO_AUTORIZADO")]
-    end
-
-    O_F1 -.-> I_F4
-    O_F2 -.-> I_F4
-    O_F3 -.-> I_F4
+    F1 --> F4
+    F2 --> F4
+    F3 --> F4
 ```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -108,35 +92,32 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph CAL_F1 ["Fase 1: Ingesta Pure Cloud"]
-        direction LR
-        I_C1["Insight Cloud\n(Query EVALUATIONS)"] --> P_C1["phase1_ingest_insight.py\n(Plantilla P008)"] --> O_C1[("M_EXP_CALIDAD_PURECLOUD_PRE")]
+    subgraph INGESTAS_CALIDAD ["Fases 1, 2 y 3: Ingestas Previas (En Paralelo)"]
+        C1["<b>Fase 1: Evaluaciones Pure Cloud</b><br/>• In: Insight Cloud REST (EVALUATIONS)<br/>• Proc: phase1_ingest_insight.py (P008)<br/>• Out: M_EXP_CALIDAD_PURECLOUD_PRE"]
+        
+        C2["<b>Fase 2: Speech Analytics</b><br/>• In: Verint WFO REST API (Export_Calidad)<br/>• Proc: phase2_ingest_verint.py (P001)<br/>• Out: M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS"]
+        
+        C3["<b>Fase 3: Acción Tomada</b><br/>• In: SharePoint Calidad UX (ACCION_TOMADA.xlsx)<br/>• Proc: phase3_ingest_accion_tomada.py (P004)<br/>• Out: M_EXP_NTD_OBSERVACIONES_PRE"]
     end
 
-    subgraph CAL_F2 ["Fase 2: Ingesta Speech Analytics"]
-        direction LR
-        I_C2["Verint WFO REST API\n(Export_Calidad_*.xlsx)"] --> P_C2["phase2_ingest_verint.py\n(Plantilla P001)"] --> O_C2[("M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS")]
+    subgraph FASE4_CALIDAD ["Fase 4: Pipeline SQL Calidad (Cruce con Ventas y Consolidación)"]
+        DEP_CAL["<b>Dependencias Críticas de Entrada:</b><br/>• T_VENTAS_BPE_MARKET (Consumo F3) & M_EXP_VENTAS_* (Consumo F4)<br/>• M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED (Dotación Periodo Cerrado)<br/>• M_EXP_MAESTRA_PESOS_SA (Pesos Oficiales SA)"]
+        
+        SQL_CAL["<b>Scripts SQL en Teradata (01 al 05):</b><br/>• 01_evaluacion_manual_pc.sql (Nota Manual 40%)<br/>• 02_sa_marcacion_ventas_lpdp.sql (Cruza Verint con Ventas Consumo)<br/>• 03_sa_calculo_pesos_unpivot.sql (AVG de métricas SA)<br/>• 04_sa_ajustes_curva.sql & 04_b_sa_parche_nota_cero.sql (Tope 0.6)<br/>• 05_consolidacion_nota_final.sql (PC 40% + SA 60% = 100%)"]
+        
+        OUT_CAL[("<b>Tablas Productivas DLAB_GEC:</b><br/>• M_EXP_CALIDAD_DETALLE_PURE_CLOUD<br/>• M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS<br/>• M_EXP_CALIDAD_NOTA_FINAL<br/>• Vista: V_EXP_CALIDAD_NOTA_FINAL")]
+        
+        DEP_CAL --> SQL_CAL --> OUT_CAL
     end
 
-    subgraph CAL_F3 ["Fase 3: Ingesta Acción Tomada"]
-        direction LR
-        I_C3["SharePoint Calidad UX\n(ACCION_TOMADA.xlsx)"] --> P_C3["phase3_ingest_accion_tomada.py\n(Plantilla P004)"] --> O_C3[("M_EXP_NTD_OBSERVACIONES_PRE")]
+    subgraph FASE5_NTD ["Fase 5: Reporte No Te Dejes (NTD)"]
+        C5["<b>phase5_ntd.py ➔ 06_carga_ntd.sql</b><br/>Cruza Observaciones (Fase 3) + Detalle PC (Fase 4)<br/>➔ DLAB_GEC.M_EXP_NOT_TO_DO & M_EXP_NTD_OBSERVACIONES_NEW"]
     end
 
-    subgraph CAL_F4 ["Fase 4: Pipeline SQL Calidad (Cruce con Ventas y Consolidación)"]
-        direction LR
-        I_C4["Staging Fases 1 & 2\n+ Consumo (T_VENTAS_BPE_MARKET, M_EXP_VENTAS_*)\n+ Dotación (M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED)\n+ M_EXP_MAESTRA_PESOS_SA"] --> P_C4["SQL 01 a 05\n• 01_evaluacion_manual_pc.sql\n• 02_sa_marcacion_ventas_lpdp.sql\n• 03_sa_calculo_pesos_unpivot.sql\n• 04_sa_ajustes_curva.sql\n• 04_b_sa_parche_nota_cero.sql\n• 05_consolidacion_nota_final.sql"] --> O_C4[("M_EXP_CALIDAD_DETALLE_PURE_CLOUD\nM_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS\nM_EXP_CALIDAD_NOTA_FINAL\nV_EXP_CALIDAD_NOTA_FINAL")]
-    end
-
-    subgraph CAL_F5 ["Fase 5: Reporte No Te Dejes (NTD)"]
-        direction LR
-        I_C5["M_EXP_NTD_OBSERVACIONES_PRE (Fase 3)\n+ M_EXP_CALIDAD_DETALLE_PURE_CLOUD (Fase 4)"] --> P_C5["phase5_ntd.py\n(06_carga_ntd.sql)"] --> O_C5[("M_EXP_NOT_TO_DO\nM_EXP_NTD_OBSERVACIONES_NEW")]
-    end
-
-    O_C1 -.-> I_C4
-    O_C2 -.-> I_C4
-    O_C3 -.-> I_C5
-    O_C4 -.-> I_C5
+    C1 --> SQL_CAL
+    C2 --> SQL_CAL
+    C3 --> C5
+    OUT_CAL -.-> C5
 ```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -157,20 +138,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph CIERRE_01 ["Paso 1: Auditoría y Cierre Oficial"]
-        direction LR
-        I_CR1["M_EXP_CALIDAD_NOTA_FINAL (Calidad F4)\n+ M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"] --> P_CR1["01_auditoria_y_cierre.sql\n(DELETE + INSERT + UPDATE jerárquico)"] --> O_CR1[("DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL\n(Inmutable / Pago Comisiones / PBI Oficial)")]
-    end
+    CR1["<b>Paso 1: Auditoría y Cierre Oficial (01_auditoria_y_cierre.sql)</b><br/>• Input: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Process: DELETE previo + INSERT notas + UPDATE jerárquico<br/>• Output: DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL (PBI Oficial / Comisiones)"]
 
-    subgraph CIERRE_02 ["Paso 2: Resumen KRI Normativo"]
-        direction LR
-        I_CR2["T_EXP_KRI_VENTAS_SINAUDIO\n+ T_EXP_KRI_TELF_NO_AUTORIZADO (Consumo F4)"] --> P_CR2["02_kri_resumen_total.sql\n(Agrupación por quincena Q1/Q2)"] --> O_CR2[("DLAB_GEC.M_KRI_RESUMEN_TOTAL\n(Entregable Oficial Riesgo Operativo)")]
-    end
+    CR2["<b>Paso 2: Resumen KRI Normativo (02_kri_resumen_total.sql)</b><br/>• Input: T_EXP_KRI_VENTAS_SINAUDIO + T_EXP_KRI_TELF_NO_AUTORIZADO<br/>• Process: Agrupación por quincena Q1/Q2 del período cerrado<br/>• Output: DLAB_GEC.M_KRI_RESUMEN_TOTAL (Riesgo Operativo / Cumplimiento)"]
 
-    subgraph CIERRE_03 ["Paso 3: Consolidado Plano Analítico"]
-        direction LR
-        I_CR3["M_EXP_CALIDAD_NOTA_FINAL\n+ M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED"] --> P_CR3["03_consolidado_notas_cierre.sql\n(Desnormalización completa)"] --> O_CR3[("DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE\n(Reportería Analítica y Auditoría)")]
-    end
+    CR3["<b>Paso 3: Consolidado Plano Analítico (03_consolidado_notas_cierre.sql)</b><br/>• Input: Calidad Nota Final + Dotación GROUPED<br/>• Process: Desnormalización completa con Subgerencia y Negocio<br/>• Output: DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE"]
 ```
 
 | Paso / Script SQL | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -190,12 +162,12 @@ flowchart TD
 flowchart TD
     subgraph AUD_VOZ ["Subproceso A: Cumplimiento PA / TC (Llamadas de Voz)"]
         direction LR
-        I_AV["Solicitud Cumplimiento TC.xlsx\n+ Genesys API & Verint WFO REST"] --> P_AV["download_transcripts_from_verint.py\n+ gemini-3.1-flash-lite"] --> O_AV["Solicitud Cumplimiento TC_Auditada.xlsx\n(Dictamen: ACEPTA/NO_ACEPTA + Minuto/Segundo + Cita)"]
+        I_AV["Solicitud Cumplimiento TC.xlsx<br/>+ Genesys API & Verint WFO REST"] --> P_AV["download_transcripts_from_verint.py<br/>+ gemini-3.1-flash-lite"] --> O_AV["Solicitud Cumplimiento TC_Auditada.xlsx<br/>(Dictamen: ACEPTA/NO_ACEPTA + Min/Seg + Cita)"]
     end
 
-    subgraph AUD_WSP ["Subproceso B: Auditoría de Chats WhatsApp"]
+    subgraph AUD_WSP ["Subproceso B: Auditoría de Chats WhatsApp Televentas"]
         direction LR
-        I_AW["Verint WFO Interaction Center\n(Chats .docx exportados en data/input/auditorias_wsp/)\n+ Ejecutivos_Gestion_Wsp.xlsx\n+ Plantillas TLV WhatsApp.xlsx"] --> P_AW["wsp_docx_extractor.py (Filtrado Asesor)\n+ run_transcript_audit.py (gemini-3.1-flash-lite)"] --> O_AW["Reporte Excel Auditoría WhatsApp\n• Resumen_Evaluaciones\n• Detalle_Hallazgos"]
+        I_AW["Verint WFO Interaction Center<br/>(Chats .docx en data/input/auditorias_wsp/)<br/>+ Ejecutivos_Gestion_Wsp.xlsx<br/>+ Plantillas TLV WhatsApp.xlsx"] --> P_AW["wsp_docx_extractor.py (Filtrado Asesor)<br/>+ run_transcript_audit.py (Gemini LLM)"] --> O_AW["Reporte Excel Auditoría WhatsApp<br/>• Resumen_Evaluaciones<br/>• Detalle_Hallazgos"]
     end
 ```
 
