@@ -56,6 +56,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph PARALELO_CONSUMO ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
+        direction LR
         F1["<b>Fase 1: Ingesta Insight API</b><br/>• In: 7 Consultas PureCloud REST<br/>• Proc: phase1_insight_ingest.py (P009-P015)<br/>• Out: M_EXP_TRAFICO_GENESIS / Atributos"]
         
         F2["<b>Fase 2: SharePoint CD40K</b><br/>• In: CD40K_NEW.xlsx (Power Query)<br/>• Proc: phase2_cd40k.py (Excel COM + P016)<br/>• Out: T_SP_CD40K"]
@@ -66,9 +67,10 @@ flowchart TD
     end
 
     subgraph PROCESAMIENTO_SQL ["Procesamiento SQL Teradata (Fases 4 y 5 Paralelizables)"]
+        direction LR
         F4["<b>Fase 4: Pipeline SQL Consumo General</b><br/>• DW Teradata + Staging F1, F2, F3 + Dotación Padrón<br/>• Ejecuta: VENTAS_DN.sql, CD40K.sql, SOURCE_TVL, KRIs<br/>• Conexión: Usuario Teradata Principal<br/>• Out: M_EXP_VENTAS_* (TC, PP, CD...), M_EXP_CD40K, KRIs"]
         
-        F5["<b>Fase 5: Transformación Select (Paralela e Independiente)</b><br/>• In: e_dw_views.V_AGG_VENTAS_CONSOLIDADAS & V_CARTERA_CLIENTE_HIST<br/>• Proc: phase5_selection.py ➔ CONSUMO_SELECT_TC_CD_SEG.sql<br/>• Conexión: TERADATA_USER_SELECT (Credencial LDAP secundaria dedicada)<br/>• Out: DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG"]
+        F5["<b>Fase 5: Transformación Select (Paralela e Independiente)</b><br/>• In: e_dw_views.V_AGG_VENTAS_CONSOLIDADAS & V_CARTERA_CLIENTE_HIST<br/>• Proc: phase5_selection.py ➔ CONSUMO_SELECT_TC_CD_SEG.sql<br/>• Conexión: TERADATA_USER_SELECT (Credencial LDAP secundaria)<br/>• Out: DLAB_GEC.M_EXP_CONSUMO_SELECT_TC_CD_SEG"]
 
         F4 ~~~ F5
     end
@@ -95,7 +97,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph INGESTAS_CALIDAD ["Fases 1, 2 y 3: Ingestas Previas (En Paralelo)"]
+    subgraph INGESTAS_CALIDAD ["Fases 1, 2 y 3: Ingestas Previas Independientes (En Paralelo)"]
+        direction LR
         C1["<b>Fase 1: Evaluaciones Pure Cloud</b><br/>• In: Insight Cloud REST (EVALUATIONS)<br/>• Proc: phase1_ingest_insight.py (P008)<br/>• Out: M_EXP_CALIDAD_PURECLOUD_PRE"]
         
         C2["<b>Fase 2: Speech Analytics</b><br/>• In: Verint WFO REST API (Export_Calidad)<br/>• Proc: phase2_ingest_verint.py (P001)<br/>• Out: M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS"]
@@ -105,24 +108,19 @@ flowchart TD
         C1 ~~~ C2 ~~~ C3
     end
 
-    subgraph FASE4_CALIDAD ["Fase 4: Pipeline SQL Calidad (Cruce con Ventas y Consolidación)"]
-        DEP_CAL["<b>Dependencias Críticas de Entrada:</b><br/>• T_VENTAS_BPE_MARKET (Consumo F3) & M_EXP_VENTAS_* (Consumo F4)<br/>• M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED (Dotación Periodo Cerrado)<br/>• M_EXP_MAESTRA_PESOS_SA (Pesos Oficiales SA)"]
+    subgraph PROCESAMIENTO_CALIDAD ["Cálculo de Notas y Reporte NTD (Fases 4 y 5 Paralelizables)"]
+        direction LR
+        C4["<b>Fase 4: Pipeline SQL Calidad (Notas 100%)</b><br/>• In: Staging F1 & F2 + Ventas Consumo + Dotación<br/>• Proc: Scripts SQL 01 a 05 (curvas, unpivot, consolidación)<br/>• Out: M_EXP_CALIDAD_NOTA_FINAL y Vista V_EXP_CALIDAD_NOTA_FINAL"]
         
-        SQL_CAL["<b>Scripts SQL en Teradata (01 al 05):</b><br/>• 01_evaluacion_manual_pc.sql (Nota Manual 40%)<br/>• 02_sa_marcacion_ventas_lpdp.sql (Cruza Verint con Ventas Consumo)<br/>• 03_sa_calculo_pesos_unpivot.sql (AVG de métricas SA)<br/>• 04_sa_ajustes_curva.sql & 04_b_sa_parche_nota_cero.sql (Tope 0.6)<br/>• 05_consolidacion_nota_final.sql (PC 40% + SA 60% = 100%)"]
-        
-        OUT_CAL[("<b>Tablas Productivas DLAB_GEC:</b><br/>• M_EXP_CALIDAD_DETALLE_PURE_CLOUD<br/>• M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS<br/>• M_EXP_CALIDAD_NOTA_FINAL<br/>• Vista: V_EXP_CALIDAD_NOTA_FINAL")]
-        
-        DEP_CAL --> SQL_CAL --> OUT_CAL
+        C5["<b>Fase 5: Reporte No Te Dejes NTD (Independiente)</b><br/>• In: Staging F1 (PC) + Staging F3 (Acción Tomada) + Maestras<br/>• Proc: 06_carga_ntd.sql (phase5_ntd.py)<br/>• Out: DLAB_GEC.M_EXP_NOT_TO_DO & M_EXP_NTD_OBSERVACIONES_NEW"]
+
+        C4 ~~~ C5
     end
 
-    subgraph FASE5_NTD ["Fase 5: Reporte No Te Dejes (NTD)"]
-        C5["<b>phase5_ntd.py ➔ 06_carga_ntd.sql</b><br/>Cruza Observaciones (Fase 3) + Detalle PC (Fase 4)<br/>➔ DLAB_GEC.M_EXP_NOT_TO_DO & M_EXP_NTD_OBSERVACIONES_NEW"]
-    end
-
-    C1 --> SQL_CAL
-    C2 --> SQL_CAL
+    C1 --> C4
+    C2 --> C4
+    C1 --> C5
     C3 --> C5
-    OUT_CAL -.-> C5
 ```
 
 | Fase Operativa | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -131,7 +129,7 @@ flowchart TD
 | **Fase 2: Ingesta Speech Analytics (Verint WFO)** | **Verint WFO REST API:**<br/>• Endpoint: `export_televentas_period`<br/>• Archivo: `Export_Calidad_{YYYYMM}.xlsx`<br/>*(Transcripciones y métricas fonéticas analizadas por sofIA).* | `modules/calidad/use_cases/phases/phase2_ingest_verint.py`<br/>Descarga métricas SA del período, limpia estructuras con Polars y sube a Teradata con plantilla `P001-SPEECH_ANALYTICS`. | **Tabla Staging Teradata (`DLAB_GEC`):**<br/>• `M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS` |
 | **Fase 3: Ingesta Acción Tomada (SharePoint UX)** | **SharePoint Calidad UX / Vanessa:**<br/>• Archivo: `ACCION_TOMADA.xlsx`<br/>*(Observaciones operativas, reclamos y feedback).* | `modules/calidad/use_cases/phases/phase3_ingest_accion_tomada.py`<br/>Deduplica registros por severidad de error (`CRITICA` > `ALTA` > `MEDIA`), tipifica causas y sube con plantilla `P004-ACCION_TOMADA`. | **Tabla Staging Teradata (`DLAB_GEC`):**<br/>• `M_EXP_NTD_OBSERVACIONES_PRE` |
 | **Fase 4: Pipeline SQL Calidad (Cruce y Consolidación)** | **1. Staging Calidad (Fases 1 y 2):**<br/>• `M_EXP_CALIDAD_PURECLOUD_PRE`<br/>• `M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS`<br/>**2. Tablas de Ventas Consumo (Fases 3 y 4):**<br/>• `T_VENTAS_BPE_MARKET`<br/>• `M_EXP_VENTAS_*` (TC, PP, CD, EC, CON)<br/>**3. Dotación:**<br/>• `M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED`<br/>*(Filtrado por `WHERE PERIODO = '{PERIODO}'`)*<br/>**4. Maestras:**<br/>• `M_EXP_MAESTRA_PESOS_SA`<br/>• `M_EXP_CALIDAD_HOMOLOGA_*` | `modules/calidad/use_cases/phases/phase4_sql_pipeline.py`<br/>Ejecución secuencial de scripts SQL:<br/>1. `01_evaluacion_manual_pc.sql`: Deduplica y calcula nota de evaluaciones manuales (40% de la nota final).<br/>2. `02_sa_marcacion_ventas_lpdp.sql`: **Cruza llamadas Verint con ventas del mes** asignando `NEVALUACION` 1 o 2 (prioriza BNB sobre BNC para asesores con `SUB_EQUIPO = 'BNB'`).<br/>3. `03_sa_calculo_pesos_unpivot.sql`: Unpivot de 13 ítems de Speech y cálculo de promedios `AVG()`.<br/>4. `04_sa_ajustes_curva.sql`: Multiplica por pesos, aplica curvas por sala y tope máximo de 0.6.<br/>5. `04_b_sa_parche_nota_cero.sql`: Asigna promedio de sala a asesores sin llamadas SA evaluadas.<br/>6. `05_consolidacion_nota_final.sql`: Consolida PC (40%) + SA (60%) = Nota Final 100% (o 100% PC para Select). | **Tablas Productivas Teradata (`DLAB_GEC`):**<br/>• `M_EXP_CALIDAD_DETALLE_PURE_CLOUD`<br/>• `M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS`<br/>• `M_EXP_CALIDAD_NOTA_FINAL`<br/>**Vista Analítica Directa:**<br/>• `V_EXP_CALIDAD_NOTA_FINAL`<br/>*(Alimenta el tablero de control de Calidad).* |
-| **Fase 5: Reporte No Te Dejes (NTD)** | **1. Observaciones Staging (Fase 3):**<br/>• `M_EXP_NTD_OBSERVACIONES_PRE`<br/>**2. Detalle Evaluaciones (Fase 4):**<br/>• `M_EXP_CALIDAD_DETALLE_PURE_CLOUD` | `modules/calidad/use_cases/phases/phase5_ntd.py`<br/>Ejecuta `06_carga_ntd.sql` para contrastar observaciones contra evaluaciones manuales y clasificar no conformidades normativas. | **Tablas Históricas NTD (`DLAB_GEC`):**<br/>• `M_EXP_NOT_TO_DO`<br/>• `M_EXP_NTD_OBSERVACIONES_NEW` |
+| **Fase 5: Reporte No Te Dejes (NTD)** | **1. Observaciones Staging (Fase 3):**<br/>• `M_EXP_NTD_OBSERVACIONES_PRE`<br/>**2. Evaluaciones Manuales Staging (Fase 1):**<br/>• `M_EXP_CALIDAD_PURECLOUD_PRE`<br/>**3. Maestras:**<br/>• `M_EXP_MAESTRA_NIVEL_NTD_NORM` | `modules/calidad/use_cases/phases/phase5_ntd.py`<br/>Ejecuta `06_carga_ntd.sql` para clasificar casuísticas de fraude y no conformidades normativas. **100% independiente de Fase 4**. | **Tablas Históricas NTD (`DLAB_GEC`):**<br/>• `M_EXP_NOT_TO_DO`<br/>• `M_EXP_NTD_OBSERVACIONES_NEW` |
 
 ---
 
@@ -143,11 +141,16 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    CR1["<b>Paso 1: Auditoría y Cierre Oficial (01_auditoria_y_cierre.sql)</b><br/>• Input: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Process: DELETE previo + INSERT notas + UPDATE jerárquico<br/>• Output: DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL (PBI Oficial / Comisiones)"]
+    subgraph CIERRE_PARALELO ["Cierre Mensual: 3 Vías Independientes (100% Paralelizables)"]
+        direction LR
+        CR1["<b>Vía 1: Auditoría y Cierre Calidad</b><br/>• Script: 01_auditoria_y_cierre.sql<br/>• In: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Out: DLAB_GEC.M_EXP_CALIDAD_NOTAS_TOTAL_GERENCIAL"]
 
-    CR2["<b>Paso 2: Resumen KRI Normativo (02_kri_resumen_total.sql)</b><br/>• Input: T_EXP_KRI_VENTAS_SINAUDIO + T_EXP_KRI_TELF_NO_AUTORIZADO<br/>• Process: Agrupación por quincena Q1/Q2 del período cerrado<br/>• Output: DLAB_GEC.M_KRI_RESUMEN_TOTAL (Riesgo Operativo / Cumplimiento)"]
+        CR2["<b>Vía 2: Cierre KRI Normativo</b><br/>• Script: 02_kri_resumen_total.sql<br/>• In: T_EXP_KRI_VENTAS_SINAUDIO + TLF_NO_AUTORIZADO<br/>• Out: DLAB_GEC.M_KRI_RESUMEN_TOTAL"]
 
-    CR3["<b>Paso 3: Consolidado Plano Analítico (03_consolidado_notas_cierre.sql)</b><br/>• Input: Calidad Nota Final + Dotación GROUPED<br/>• Process: Desnormalización completa con Subgerencia y Negocio<br/>• Output: DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE"]
+        CR3["<b>Vía 3: Consolidado Plano Analítico</b><br/>• Script: 03_consolidado_notas_cierre.sql<br/>• In: M_EXP_CALIDAD_NOTA_FINAL + Dotación GROUPED<br/>• Out: DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE"]
+
+        CR1 ~~~ CR2 ~~~ CR3
+    end
 ```
 
 | Paso / Script SQL | Origen Específico (**Inputs**) | Proceso y Transformación (**Process**) | Entregables y Tablas Finales (**Outputs**) |
@@ -195,10 +198,10 @@ flowchart TD
 | `M_EXP_CONSUMO_SELECT_TC_CD_SEG` | Consumo (Fase 5: `phase5_selection.py`) | Reportería Comercial / Calidad Select | **Mensual Activa** *(Ventas de TC, CD y Seguros Select)* |
 | `T_EXP_KRI_VENTAS_SINAUDIO` | Consumo (Fase 4: `KRI_VENTAS_SIN_AUDIO.sql`) | Cierre Mensual (`02_kri_resumen_total.sql`) | **Temporal Activa** *(Ventas sin audio del mes)* |
 | `T_EXP_KRI_TELF_NO_AUTORIZADO` | Consumo (Fase 4: `TLF_NO_AUTORIZADO.sql`) | Cierre Mensual (`02_kri_resumen_total.sql`) | **Temporal Activa** *(Teléfonos no autorizados del mes)* |
-| `M_EXP_CALIDAD_PURECLOUD_PRE` | Calidad (Fase 1: `phase1_ingest_insight.py`) | Calidad (Fase 4: `01_evaluacion_manual_pc.sql`) | **Temporal Activa** *(Evaluaciones manuales del mes)* |
+| `M_EXP_CALIDAD_PURECLOUD_PRE` | Calidad (Fase 1: `phase1_ingest_insight.py`) | Calidad (Fase 4: 01, Fase 5: 06) | **Temporal Activa** *(Evaluaciones manuales del mes)* |
 | `M_EXP_CALIDAD_DATA_SPEECH_ANALYTICS` | Calidad (Fase 2: `phase2_ingest_verint.py`) | Calidad (Fase 4: `02_sa_marcacion_ventas_lpdp.sql`) | **Temporal Activa** *(Transcripciones Verint del mes)* |
 | `M_EXP_NTD_OBSERVACIONES_PRE` | Calidad (Fase 3: `phase3_ingest_accion_tomada.py`) | Calidad (Fase 5: `phase5_ntd.py`) | **Temporal Activa** *(Observaciones de auditoría operativa)* |
-| `M_EXP_CALIDAD_DETALLE_PURE_CLOUD` | Calidad (Fase 4: `01_evaluacion_manual_pc.sql`) | Calidad (Fase 4: `05_consolidacion`), NTD (Fase 5) | **Histórica Particionada** (`WHERE PERIODO = '{PERIODO}'`) |
+| `M_EXP_CALIDAD_DETALLE_PURE_CLOUD` | Calidad (Fase 4: `01_evaluacion_manual_pc.sql`) | Calidad (Fase 4: `05_consolidacion`) | **Histórica Particionada** (`WHERE PERIODO = '{PERIODO}'`) |
 | `M_EXP_CALIDAD_DETALLE_SPEECH_ANALYTICS` | Calidad (Fase 4: `04_sa_ajustes_curva.sql`) | Calidad (Fase 4: `05_consolidacion`) | **Histórica Particionada** (`WHERE PERIODO = '{PERIODO}'`) |
 | `M_EXP_CALIDAD_NOTA_FINAL` | Calidad (Fase 4: `05_consolidacion_nota_final.sql`) | Cierre Mensual (`01_auditoria`, `03_consolidado`), PBI | **Histórica Particionada** (`WHERE PERIODO = '{PERIODO}'`) |
 | `M_EXP_NOT_TO_DO` | Calidad (Fase 5: `06_carga_ntd.sql`) | Reporte No Te Dejes (Power BI / Excel) | **Histórica Particionada** (`WHERE PERIODO = '{PERIODO}'`) |
