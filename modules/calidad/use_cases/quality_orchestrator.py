@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -120,16 +121,48 @@ def run_quality_process_flow(
         quality_sequence=config.get("quality_execution_sequence", [])
     )
 
+    # --- BLOQUE 1: INGESTAS PREVIAS EN PARALELO (Fases 1, 2 y 3) ---
+    ingest_phases = []
     if run_phase1:
-        phase1_ingest_insight.run_phase1(ctx)
+        ingest_phases.append((phase1_ingest_insight.run_phase1, "Fase 1 (Insight)"))
     if run_phase2:
-        phase2_ingest_verint.run_phase2(ctx)
+        ingest_phases.append((phase2_ingest_verint.run_phase2, "Fase 2 (Verint SA)"))
     if run_phase3:
-        phase3_ingest_accion_tomada.run_phase3(ctx)
+        ingest_phases.append((phase3_ingest_accion_tomada.run_phase3, "Fase 3 (Acción Tomada)"))
+
+    if len(ingest_phases) > 1:
+        log(f"⚡ Ejecutando {len(ingest_phases)} fases de ingesta de Calidad en paralelo (Fan-Out)...", "info")
+        with ThreadPoolExecutor(max_workers=len(ingest_phases)) as executor:
+            futures = {executor.submit(fn, ctx): name for fn, name in ingest_phases}
+            for fut in as_completed(futures):
+                pname = futures[fut]
+                fut.result()
+                log(f"✅ {pname} finalizada exitosamente en paralelo.", "success")
+    elif len(ingest_phases) == 1:
+        fn, name = ingest_phases[0]
+        fn(ctx)
+
+    # --- BLOQUE 2: PROCESAMIENTO FINAL CONCURRENTE (Fases 4 y 5) ---
+    sql_phases = []
     if run_phase4:
-        phase4_sql_scripts.run_phase4(ctx, start_from_script=start_from_script)
+        sql_phases.append((phase4_sql_scripts.run_phase4, (ctx,), {"start_from_script": start_from_script}, "Fase 4 (SQL Calidad)"))
     if run_phase5:
-        phase5_ntd.run_phase5(ctx)
+        sql_phases.append((phase5_ntd.run_phase5, (ctx,), {}, "Fase 5 (NTD)"))
+
+    if len(sql_phases) > 1:
+        log("⚡ Ejecutando Fase 4 (SQL Calidad) y Fase 5 (NTD) concurrentemente...", "info")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(fn, *args, **kwargs): name
+                for fn, args, kwargs, name in sql_phases
+            }
+            for fut in as_completed(futures):
+                pname = futures[fut]
+                fut.result()
+                log(f"✅ {pname} finalizada exitosamente.", "success")
+    elif len(sql_phases) == 1:
+        fn, args, kwargs, _ = sql_phases[0]
+        fn(*args, **kwargs)
 
     # Notificación de escritorio global
     try:

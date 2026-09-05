@@ -10,9 +10,10 @@ import sys
 import json
 import datetime
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from infrastructure.database.database import load_credentials, connect_teradata
 from infrastructure.system.logging_config import setup_logging
@@ -105,16 +106,62 @@ def run_orchestration_flow(
     )
 
     try:
+        # --- BLOQUE 1: INGESTAS PREVIAS EN PARALELO (Fases 1, 2 y 3) ---
+        ingest_phases = []
         if run_phase1:
-            phase1_insight_ingest.run_phase1(ctx)
+            ingest_phases.append((phase1_insight_ingest.run_phase1, "Fase 1 (Insight)"))
         if run_phase2:
-            phase2_cd40k.run_phase2(ctx)
+            ingest_phases.append((phase2_cd40k.run_phase2, "Fase 2 (CD40K)"))
         if run_phase3:
-            phase3_desembolsos.run_phase3(ctx)
+            ingest_phases.append((phase3_desembolsos.run_phase3, "Fase 3 (Desembolsos)"))
+
+        if len(ingest_phases) > 1:
+            log(f"⚡ Ejecutando {len(ingest_phases)} fases de ingesta en paralelo (Fan-Out)...", "info")
+
+            def _execute_parallel_ingest(phase_fn, phase_name):
+                worker_con = connect_teradata(td_user, td_password, host=host, logmech=logmech)
+                worker_con.autocommit = True
+                worker_ctx = replace(ctx, td_con=worker_con)
+                try:
+                    logger.info(f"Iniciando {phase_name} en worker paralelo...")
+                    return phase_fn(worker_ctx)
+                finally:
+                    try:
+                        worker_con.close()
+                    except Exception:
+                        pass
+
+            with ThreadPoolExecutor(max_workers=len(ingest_phases)) as executor:
+                futures = {executor.submit(_execute_parallel_ingest, fn, name): name for fn, name in ingest_phases}
+                for fut in as_completed(futures):
+                    pname = futures[fut]
+                    fut.result()
+                    logger.info(f"✅ {pname} finalizada exitosamente en paralelo.")
+        elif len(ingest_phases) == 1:
+            fn, name = ingest_phases[0]
+            fn(ctx)
+
+        # --- BLOQUE 2: PROCESAMIENTO SQL CONCURRENTE (Fases 4 y 5) ---
+        sql_phases = []
         if run_phase4:
-            phase4_sql_scripts.run_phase4(ctx, start_from_script=start_from_script)
+            sql_phases.append((phase4_sql_scripts.run_phase4, (ctx,), {"start_from_script": start_from_script}, "Fase 4 (SQL Consumo)"))
         if run_phase5:
-            phase5_selection.run_phase5(ctx)
+            sql_phases.append((phase5_selection.run_phase5, (ctx,), {}, "Fase 5 (Consumo Select)"))
+
+        if len(sql_phases) > 1:
+            log("⚡ Ejecutando Fase 4 (SQL Consumo) y Fase 5 (Select) concurrentemente...", "info")
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = {
+                    executor.submit(fn, *args, **kwargs): name
+                    for fn, args, kwargs, name in sql_phases
+                }
+                for fut in as_completed(futures):
+                    pname = futures[fut]
+                    fut.result()
+                    logger.info(f"✅ {pname} finalizada exitosamente.")
+        elif len(sql_phases) == 1:
+            fn, args, kwargs, _ = sql_phases[0]
+            fn(*args, **kwargs)
 
         msg_ok = "🎉 ¡Proceso de Consumo completado exitosamente!"
         logger.info(f"=== PROCESO DE CONSUMO COMPLETADO EXITOSAMENTE PARA EL PERÍODO {period_str} ===")

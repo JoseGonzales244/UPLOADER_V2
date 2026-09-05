@@ -8,6 +8,7 @@ import os
 import re
 import datetime
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import teradatasql
 
 from infrastructure.database.database import load_credentials, connect_teradata
@@ -65,58 +66,75 @@ def run_cierre_process_flow(
         progress_callback("🔌 Conectando a Teradata...", "info")
         
     try:
-        con = connect_teradata(user, password, host=host, logmech=logmech)
-        con.autocommit = True
-        cursor = con.cursor()
+        test_con = connect_teradata(user, password, host=host, logmech=logmech)
+        test_con.close()
     except Exception as err:
         logger.error(f"Error al conectar con Teradata: {err}")
         raise RuntimeError(f"Error de conexión con Teradata: {err}")
-        
-    try:
-        total_scripts = len(cierre_scripts)
-        for s_idx, script_rel_path in enumerate(cierre_scripts, 1):
-            script_path = os.path.join(os.getcwd(), script_rel_path)
-            if not os.path.exists(script_path):
-                raise FileNotFoundError(f"Script de cierre no encontrado en: {script_rel_path}")
-                
-            script_name = os.path.basename(script_path)
-            friendly_name = get_friendly_script_name(script_path)
-            
-            if progress_callback:
-                progress_callback(f"⚡ [{s_idx}/{total_scripts}] Procesando script de cierre: **{friendly_name}** ({script_name})...", "info", progress=float(s_idx)/total_scripts)
-                
-            with open(script_path, "r", encoding="utf-8") as f:
-                raw_sql = f.read()
-                
-            prepared_sql = inject_variables(raw_sql, params)
-            statements = parse_statements(prepared_sql)
-            
-            logger.info(f"Ejecutando {len(statements)} sentencias en {script_name}")
-            
+
+    def _execute_cierre_script(script_rel_path: str):
+        script_path = os.path.join(os.getcwd(), script_rel_path)
+        if not os.path.exists(script_path):
+            raise FileNotFoundError(f"Script de cierre no encontrado en: {script_rel_path}")
+
+        script_name = os.path.basename(script_path)
+        friendly_name = get_friendly_script_name(script_path)
+
+        if progress_callback:
+            progress_callback(f"⚡ Procesando script de cierre: **{friendly_name}** ({script_name})...", "info")
+
+        with open(script_path, "r", encoding="utf-8") as f:
+            raw_sql = f.read()
+
+        prepared_sql = inject_variables(raw_sql, params)
+        statements = parse_statements(prepared_sql)
+
+        logger.info(f"Ejecutando {len(statements)} sentencias en {script_name}")
+
+        worker_con = connect_teradata(user, password, host=host, logmech=logmech)
+        worker_con.autocommit = True
+        worker_cursor = worker_con.cursor()
+        try:
             for stmt_idx, stmt in enumerate(statements, 1):
                 preview = stmt.split("\n")[0][:90]
-                logger.info(f"   [{stmt_idx}/{len(statements)}] Exec: {preview}")
-                if progress_callback:
-                    pct = int((stmt_idx / len(statements)) * 100)
-                    progress_callback(f"⚙️ {friendly_name} — Procesando paso {stmt_idx} de {len(statements)} ({pct}%)", "info", progress=float(stmt_idx) / len(statements))
+                logger.info(f"   [{stmt_idx}/{len(statements)}] Exec ({script_name}): {preview}")
                 try:
-                    cursor.execute(stmt)
+                    worker_cursor.execute(stmt)
                 except Exception as stmt_err:
                     from infrastructure.database.sql_executor import SQLScriptExecutionError
                     raise SQLScriptExecutionError(script_name, stmt_idx, stmt, stmt_err)
-                    
+            worker_con.commit()
             if progress_callback:
                 progress_callback(f"✅ Script de cierre completado: **{friendly_name}**", "success")
-                
-        if progress_callback:
-            progress_callback("💾 Guardando transacciones finales del cierre (Commit)...", "info")
-        con.commit()
-        
+            return friendly_name
+        except Exception as e:
+            try:
+                worker_con.rollback()
+            except Exception:
+                pass
+            raise e
+        finally:
+            try:
+                worker_con.close()
+            except Exception:
+                pass
+
+    try:
+        if len(cierre_scripts) > 1:
+            if progress_callback:
+                progress_callback(f"⚡ Ejecutando {len(cierre_scripts)} vías de cierre mensual en paralelo (Fan-Out)...", "info")
+            with ThreadPoolExecutor(max_workers=len(cierre_scripts)) as executor:
+                futures = {executor.submit(_execute_cierre_script, s): s for s in cierre_scripts}
+                for fut in as_completed(futures):
+                    fut.result()
+        else:
+            _execute_cierre_script(cierre_scripts[0])
+
         msg_success = f"🎉 ¡Cierre Mensual para el período {periodo_cerrado} completado con éxito!"
         logger.info(msg_success)
         if progress_callback:
             progress_callback(msg_success, "success", progress=1.0, phase=6)
-            
+
         try:
             from infrastructure.system.notifier import notify_desktop
             notify_desktop(
@@ -135,13 +153,4 @@ def run_cierre_process_flow(
         }
     except Exception as e:
         logger.error(f"Fallo en Cierre Mensual: {e}")
-        try:
-            con.rollback()
-        except Exception:
-            pass
         raise e
-    finally:
-        try:
-            con.close()
-        except Exception:
-            pass
