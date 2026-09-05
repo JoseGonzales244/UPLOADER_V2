@@ -58,16 +58,6 @@ flowchart TD
         SQL6 --> NTD_TAB[("DLAB_GEC.M_EXP_NOT_TO_DO\n(Histórico acumulado)")]
         SQL6 --> NTD_NEW[("DLAB_GEC.M_EXP_NTD_OBSERVACIONES_NEW")]
     end
-
-    style T1 fill:#e1f5fe,stroke:#0288d1
-    style T2 fill:#e1f5fe,stroke:#0288d1
-    style T3 fill:#e1f5fe,stroke:#0288d1
-    style D1 fill:#dff0d8,stroke:#4caf50
-    style D2 fill:#dff0d8,stroke:#4caf50
-    style NF fill:#fff9c4,stroke:#fbc02d
-    style VNF fill:#fff9c4,stroke:#fbc02d
-    style NTD_TAB fill:#fce4ec,stroke:#e91e63
-    style NTD_NEW fill:#fce4ec,stroke:#e91e63
 ```
 
 **Archivos SQL:**
@@ -192,10 +182,6 @@ flowchart TD
     KV[("DLAB_GEC.T_EXP_KRI_VENTAS_SINAUDIO")] --> S2["02_kri_resumen_total.sql"]
     KT[("DLAB_GEC.T_EXP_KRI_TELF_NO_AUTORIZADO")] --> S2
     S2 --> G2[("DLAB_GEC.M_KRI_RESUMEN_TOTAL")]
-
-    style G1 fill:#d9edf7
-    style G2 fill:#d9edf7
-    style G3 fill:#d9edf7
 ```
 
 **Scripts:**

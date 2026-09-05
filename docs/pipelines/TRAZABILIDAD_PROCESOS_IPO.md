@@ -11,14 +11,9 @@ El pipeline de **Calidad** y el pipeline de **Base Consumo** están fuertemente 
 
 ```mermaid
 flowchart LR
-    A["1. Dotación (Mes M)\nGenera Planilla Activa"] --> B["2. Base Consumo (Mes M)\nFase 3: T_VENTAS_BPE_MARKET\nFase 4: M_EXP_VENTAS_*"]
-    B --> C["3. Calidad NTD (Mes M)\n02_sa cruza llamadas con ventas del Mes M"]
-    C --> D["4. Cierre Mensual (Mes M)\nSnapshots Gerenciales"]
-
-    style A fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px
-    style B fill:#fff3e0,stroke:#ff9800,stroke-width:2px
-    style C fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
-    style D fill:#ede7f6,stroke:#673ab7,stroke-width:2px
+    A["1. Dotación (Mes M)<br/>Genera Planilla Activa"] --> B["2. Base Consumo (Mes M)<br/>Fase 3: T_VENTAS_BPE_MARKET<br/>Fase 4: M_EXP_VENTAS_*"]
+    B --> C["3. Calidad NTD (Mes M)<br/>02_sa cruza llamadas con ventas del Mes M"]
+    C --> D["4. Cierre Mensual (Mes M)<br/>Snapshots Gerenciales"]
 ```
 
 > [!CAUTION]
