@@ -45,18 +45,26 @@ def _inject_period_to_query(query_name, query_sql, period_str):
     q_upper = query_name.upper()
 
     if q_upper == "EVALUATIONS":
-        query_sql = re.sub(
-            r"(YEAR\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{4}\s*\)",
-            r"\g<1>" + year_curr + ")",
-            query_sql,
-            flags=re.IGNORECASE
-        )
-        query_sql = re.sub(
-            r"(MONTH\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{1,2}\s*\)",
-            r"\g<1>" + month_curr + ")",
-            query_sql,
-            flags=re.IGNORECASE
-        )
+        year_pattern = r"(YEAR\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{4}\s*\)"
+        month_pattern = r"(MONTH\s*\(\s*DATEADD\s*\(\s*HOUR\s*,\s*-5\s*,\s*assignedDate\s*\)\s*\)\s*IN\s*\()\s*\d{1,2}\s*\)"
+
+        if not re.search(year_pattern, query_sql, flags=re.IGNORECASE):
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                f"[EVALUATIONS] Regex de AÑO no encontró match. "
+                f"SQL (primeros 500 chars): {query_sql[:500]!r}"
+            )
+        else:
+            query_sql = re.sub(year_pattern, r"\g<1>" + year_curr + ")", query_sql, flags=re.IGNORECASE)
+
+        if not re.search(month_pattern, query_sql, flags=re.IGNORECASE):
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                f"[EVALUATIONS] Regex de MES no encontró match. "
+                f"SQL (primeros 500 chars): {query_sql[:500]!r}"
+            )
+        else:
+            query_sql = re.sub(month_pattern, r"\g<1>" + month_curr + ")", query_sql, flags=re.IGNORECASE)
 
     elif q_upper == "CONV_ATTRIBUTES":
         query_sql = re.sub(
@@ -151,20 +159,46 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
     queries = resp.json().get("data", [])
     
     NOMBRE_QUERY = query_name
+    query_obj = None
     query_sql = None
-    area_id_used = "GCI_PRD_Insight_TLVentas" 
-    
+    area_id_used = "GCI_PRD_Insight_TLVentas"
+
     for q in queries:
         if q.get("queryCustomName") == NOMBRE_QUERY:
+            query_obj = q
             query_sql = q.get("queryData")
             area_id_used = q.get("areaId", "GCI_PRD_Insight_TLVentas")
             break
-            
+
     if not query_sql:
         raise Exception(f"No se encontró la consulta con nombre '{NOMBRE_QUERY}'")
-        
+
     if period_str:
         query_sql = _inject_period_to_query(query_name, query_sql, period_str)
+        # Persistir el periodo inyectado en Insight (saveQuery) para que el query
+        # guardado en Insight siempre refleje el mes correcto.
+        save_payload = {
+            "queryId": query_obj.get("queryId"),
+            "queryCustomName": NOMBRE_QUERY,
+            "queryData": query_sql,
+            "areaId": area_id_used,
+            "CreationDate": query_obj.get("CreationDate"),
+            "UserCreationDate": query_obj.get("UserCreationDate"),
+        }
+        save_resp = _request_with_retry(
+            session, "POST",
+            "https://s425vp01/Insight/api/Insight/saveQuery",
+            json=save_payload,
+            verify=False
+        )
+        if not save_resp.ok:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                f"[{query_name}] saveQuery retornó {save_resp.status_code}. "
+                "El período puede no haberse guardado en Insight."
+            )
+        elif progress_callback:
+            progress_callback(f"✅ Período {period_str} guardado en Insight para query '{NOMBRE_QUERY}'.")
 
     url = "https://s425vp01/Insight/api/Insight/executeQuery"
     payload = {
