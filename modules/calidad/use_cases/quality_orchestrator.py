@@ -6,6 +6,7 @@ y delega en los Casos de Uso atómicos (phases/) en orden.
 La firma de run_quality_process_flow es 100% compatible hacia atrás con backend/main.py.
 """
 import os
+import time
 import json
 import logging
 from dataclasses import dataclass, field
@@ -142,27 +143,20 @@ def run_quality_process_flow(
         fn, name = ingest_phases[0]
         fn(ctx)
 
-    # --- BLOQUE 2: PROCESAMIENTO FINAL CONCURRENTE (Fases 4 y 5) ---
-    sql_phases = []
-    if run_phase4:
-        sql_phases.append((phase4_sql_scripts.run_phase4, (ctx,), {"start_from_script": start_from_script}, "Fase 4 (SQL Calidad)"))
-    if run_phase5:
-        sql_phases.append((phase5_ntd.run_phase5, (ctx,), {}, "Fase 5 (NTD)"))
+    # Cooldown preventivo para que el Gateway de Teradata libere sockets tras ingestas
+    if ingest_phases and (run_phase4 or run_phase5):
+        time.sleep(2)
 
-    if len(sql_phases) > 1:
-        log("⚡ Ejecutando Fase 4 (SQL Calidad) y Fase 5 (NTD) concurrentemente...", "info")
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {
-                executor.submit(fn, *args, **kwargs): name
-                for fn, args, kwargs, name in sql_phases
-            }
-            for fut in as_completed(futures):
-                pname = futures[fut]
-                fut.result()
-                log(f"✅ {pname} finalizada exitosamente.", "success")
-    elif len(sql_phases) == 1:
-        fn, args, kwargs, _ = sql_phases[0]
-        fn(*args, **kwargs)
+    # --- BLOQUE 2: PROCESAMIENTO FINAL SECUENCIAL (Fases 4 y 5) ---
+    if run_phase4:
+        log("🚀 Iniciando Fase 4 (SQL Calidad)...", "info")
+        phase4_sql_scripts.run_phase4(ctx, start_from_script=start_from_script)
+        log("✅ Fase 4 (SQL Calidad) finalizada exitosamente.", "success")
+
+    if run_phase5:
+        log("🚀 Iniciando Fase 5 (NTD)...", "info")
+        phase5_ntd.run_phase5(ctx)
+        log("✅ Fase 5 (NTD) finalizada exitosamente.", "success")
 
     # Notificación de escritorio global
     try:

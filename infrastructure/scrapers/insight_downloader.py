@@ -116,9 +116,9 @@ def _inject_period_to_query(query_name, query_sql, period_str):
 
     return query_sql
 
-def download_insight_data(query_name="EVALUATIONS", username=None, password=None, progress_callback=None, output_dir=None, period_str=None):
+def login_insight(username=None, password=None, session=None, progress_callback=None):
     """
-    Downloads Insight evaluations data and saves it.
+    Inicia sesión en Insight y retorna el requests.Session autenticado.
     """
     if not username or not password:
         load_dotenv()
@@ -128,10 +128,12 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
     if not username or not password:
         raise ValueError("Faltan credenciales de Insight. Configura USERNAME_INSIGHT y PASSWORD_INSIGHT.")
         
+    if session is None:
+        session = requests.Session()
+
     if progress_callback:
         progress_callback("Iniciando sesión en Insight...")
-        
-    session = requests.Session()
+
     login_resp = _request_with_retry(
         session, "POST",
         "https://s425vp01/Insight",
@@ -142,9 +144,30 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         verify=False,
         progress_callback=progress_callback
     )
-    
+
     if not login_resp.ok:
         raise RuntimeError(f"Fallo en login de Insight. Código de respuesta: {login_resp.status_code}")
+
+    session._insight_logged_in = True
+    return session
+
+def download_insight_data(query_name="EVALUATIONS", username=None, password=None, progress_callback=None, output_dir=None, period_str=None, session=None):
+    """
+    Downloads Insight evaluations data and saves it.
+    Permite reutilizar una sesión existente mediante el parámetro session.
+    """
+    if not username or not password:
+        load_dotenv()
+        username = username or os.getenv("USERNAME_INSIGHT")
+        password = password or os.getenv("PASSWORD_INSIGHT")
+        
+    if not username or not password:
+        raise ValueError("Faltan credenciales de Insight. Configura USERNAME_INSIGHT y PASSWORD_INSIGHT.")
+
+    if session is None:
+        session = login_insight(username, password, progress_callback=progress_callback)
+    elif not getattr(session, "_insight_logged_in", False):
+        session = login_insight(username, password, session=session, progress_callback=progress_callback)
         
     queries_url = "https://s425vp01/Insight/api/Insight/getQueries?areaId=GCI_PRD_Insight_TLVentas,GCI_PRD_Insight_ACOE"
     resp = _request_with_retry(
@@ -152,6 +175,17 @@ def download_insight_data(query_name="EVALUATIONS", username=None, password=None
         queries_url,
         verify=False
     )
+
+    # Fallback automático: si la sesión expiró o redirigió a login, renovar sesión
+    if resp.status_code in (401, 403) or (resp.status_code == 200 and "registro" in resp.text.lower() and "login" in resp.url.lower()):
+        if progress_callback:
+            progress_callback("⚠️ Sesión de Insight expirada. Renovando credenciales...")
+        session = login_insight(username, password, session=session, progress_callback=progress_callback)
+        resp = _request_with_retry(
+            session, "GET",
+            queries_url,
+            verify=False
+        )
     
     if resp.status_code != 200:
         raise RuntimeError(f"Error al obtener consultas: {resp.status_code}")

@@ -1,66 +1,36 @@
-# 📚 Hub de Documentación Técnica - APP_CALIDAD
+# 📚 Hub de Documentación — APP_CALIDAD
 
-Bienvenido a la base de conocimiento y documentación técnica de la **Plataforma Calidad Televentas**.
+Base de conocimiento oficial y unificada de la **Plataforma Calidad Televentas**.  
+Estructurada bajo el principio de **3 únicas fuentes de la verdad** para eliminar redundancias y ambigüedades.
 
 ---
 
-## 🧭 Mapa de Navegación por Dominio
+## 🧭 Mapa de Documentación
 
 ```mermaid
 graph TD
-    Root[docs/] --> OPE[1. Operaciones & Usuario<br>docs/operations/]
-    Root --> PIP[2. Pipelines Técnicos<br>docs/pipelines/]
-    Root --> DAT[3. Gobierno & Datos<br>docs/data/]
+    Root[docs/] --> OPE["1. Operaciones & Relevo<br>docs/operations/"]
+    Root --> PIP["2. Referencia Técnica<br>docs/pipelines/"]
 
-    OPE --> M1[manual_usuario.md]
-    OPE --> M2[plan_de_traspaso.md]
-    OPE --> M3[GESTION_OPERATIVA.md]
+    OPE --> M1["📘 MANUAL_OPERATIVO_RELEVO.md<br>(Día a día, reglas de oro, procesos UI y CLI)"]
+    OPE --> M2["🚀 ONBOARDING_Y_ACCESOS.md<br>(Día 1: Instalación, accesos, ODBC CNX_TERA_USER)"]
 
-    PIP --> P1[DETALLE_TECNICO_TODOS_LOS_PROCESOS.md]
-    PIP --> P2[TRAZABILIDAD_PROCESOS_IPO.md]
-
-    DAT --> D1[trazabilidad_end_to_end.md]
-    DAT --> D2[diccionario_tablas.md]
-    DAT --> D3[matriz_linaje.md]
+    PIP --> P1["🏛️ REFERENCIA_TECNICA_MAESTRA.md<br>(Arquitectura, 5 fases Calidad/Consumo, SQL y tablas)"]
 ```
 
 ---
 
-## 📂 1. Dominio: Operaciones y Usuario (`docs/operations/`)
+## 📂 1. Documentación de Operaciones (`docs/operations/`)
 
-> **Audiencia:** Operadores, Analistas de Calidad, Supervisores, Nuevos Reemplazos.
+* 📘 **[MANUAL_OPERATIVO_RELEVO.md](operations/MANUAL_OPERATIVO_RELEVO.md):**  
+  **La guía indispensable para el relevo y la continuidad.** Contiene los 8 secretos y reglas de oro del negocio, el calendario operativo mensual (qué se corre diario, semanal y a fin de mes), el paso a paso de los procesos en la UI (1-click) y el catálogo detallado de procesos por consola/semi-automáticos (Auditorías WhatsApp/PA-TC con Gemini, Piloto TCAD, No Venta, Transcripciones y Homologaciones).
 
-- 📖 **[Manual de Usuario](operations/manual_usuario.md):** Guía visual paso a paso para la carga a Teradata, descarga de audios y orquestación web.
-- 🤝 **[Plan de Traspaso & Onboarding](operations/plan_de_traspaso.md):** Guía completa de instalación en laptop nueva, matriz de accesos y setup de OneDrive.
-- 📅 **[Gestión Operativa](operations/GESTION_OPERATIVA.md):** Matriz operativa mensual con cronograma de tareas, frecuencias y dependencias.
-
----
-
-## ⚡ 2. Dominio: Pipelines y Lógica Técnica (`docs/pipelines/`)
-
-> **Audiencia:** Ingenieros de Datos, Desarrolladores.
-
-- ⚙️ **[Detalle Técnico de Todos los Procesos](pipelines/DETALLE_TECNICO_TODOS_LOS_PROCESOS.md):** Fuente única de la verdad técnica con diagramas Mermaid end-to-end (tablas exactas Teradata `DLAB_GEC`), scripts SQL y reglas de negocio para los 11 pipelines:
-  1. Calidad NTD (Fases 1 a 5)
-  2. Consumo Base (Fases 1 a 5)
-  3. Dotación Mensual (Fases 1 a 4 + Licencias SA)
-  4. Cierre Mensual & Idempotencia
-  5. Auditoría PA-TC con Gemini
-  6. Auditoría WhatsApp con Gemini
-  7. Transcripciones Verint (API REST)
-  8. Pipeline Speech (Teradata → SQL Server `DB_SPEECH`)
-  9. Genesys Cloud (API REST v2)
-  10. Pilotos (No Venta y TCAD)
-  11. Convenios Comerciales
-- 🧭 **[Matriz de Trazabilidad End-to-End (IPO: Inputs ➔ Process ➔ Outputs)](pipelines/TRAZABILIDAD_PROCESOS_IPO.md):** Mapa exhaustivo de orígenes de insumos (SharePoint, OneDrives personales, APIs), scripts/tablas intermedias y entregables finales por dominio, con la regla de interdependencia mensual.
+* 🚀 **[ONBOARDING_Y_ACCESOS.md](operations/ONBOARDING_Y_ACCESOS.md):**  
+  **Manual para el Día 1 en la empresa.** Matriz completa de accesos y aprobadores (Mondalgo, Jurado, Ortega), configuración obligatoria del DSN de sistema ODBC 64-bit `CNX_TERA_USER` para Power BI, estructura de carpetas OneDrive y pasos de instalación del entorno virtual (`.venv`) y Playwright.
 
 ---
 
-## 🗄️ 3. Dominio: Catálogo y Linaje de Datos (`docs/data/`)
+## 🏛️ 2. Referencia Técnica Maestra (`docs/pipelines/`)
 
-> **Audiencia:** BI, Gobierno de Datos, Desarrolladores, Auditores.
-
-- 🗺️ **[Trazabilidad Técnica End-to-End](data/trazabilidad_end_to_end.md):** Mapa exhaustivo de archivos de código, scripts SQL, triggers y destinos de los 8 módulos.
-- 📋 **[Diccionario de Tablas](data/diccionario_tablas.md):** Catálogo de tablas en `DLAB_GEC` y esquemas de tipos.
-- 🔄 **[Matriz de Linaje de Datos](data/matriz_linaje.md):** Trazabilidad conceptual desde orígenes hasta PowerBI.
-
+* 🏛️ **[REFERENCIA_TECNICA_MAESTRA.md](pipelines/REFERENCIA_TECNICA_MAESTRA.md):**  
+  **Fuente única de la verdad de código y bases de datos.** Detalla la arquitectura global (FastAPI + React 18 + Teradata + SQL Server), el flujo técnico detallado de los pipelines de Calidad (Fases 1 a 5), Base Consumo (Fases 1 a 5), Dotación y Cierre Mensual, junto con el diccionario maestro de tablas temporales, históricas y vistas de `DLAB_GEC`.

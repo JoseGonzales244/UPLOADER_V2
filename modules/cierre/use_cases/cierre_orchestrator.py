@@ -96,13 +96,26 @@ def run_cierre_process_flow(
         worker_cursor = worker_con.cursor()
         try:
             for stmt_idx, stmt in enumerate(statements, 1):
+                line_no = getattr(stmt, "line_number", None)
+                desc = getattr(stmt, "description", "")
+                line_tag = f" (Línea ~{line_no})" if line_no else ""
+                desc_tag = f" [{desc}]" if desc else ""
                 preview = stmt.split("\n")[0][:90]
-                logger.info(f"   [{stmt_idx}/{len(statements)}] Exec ({script_name}): {preview}")
+                logger.info(f"   [{stmt_idx}/{len(statements)}]{line_tag} Exec ({script_name}){desc_tag}: {preview}")
                 try:
                     worker_cursor.execute(stmt)
                 except Exception as stmt_err:
-                    from infrastructure.database.sql_executor import SQLScriptExecutionError
-                    raise SQLScriptExecutionError(script_name, stmt_idx, stmt, stmt_err)
+                    from infrastructure.database.sql_executor import SQLScriptExecutionError, dump_failed_query
+                    dump_path = dump_failed_query(
+                        script_name, stmt_idx, stmt, stmt_err,
+                        line_number=line_no, total_statements=len(statements), description=desc
+                    )
+                    if dump_path and progress_callback:
+                        progress_callback(f"💾 Query fallido de cierre exportado en: `{os.path.basename(dump_path)}`", "warning")
+                    raise SQLScriptExecutionError(
+                        script_name, stmt_idx, stmt, stmt_err,
+                        line_number=line_no, total_statements=len(statements), description=desc
+                    )
             worker_con.commit()
             if progress_callback:
                 progress_callback(f"✅ Script de cierre completado: **{friendly_name}**", "success")

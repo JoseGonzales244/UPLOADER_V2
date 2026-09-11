@@ -12,7 +12,7 @@ import datetime
 import logging
 import polars as pl
 
-from infrastructure.scrapers.insight_downloader import download_insight_data
+from infrastructure.scrapers.insight_downloader import download_insight_data, login_insight
 from infrastructure.parsers.cleaners import clean_dataframe
 from infrastructure.database.database import load_to_teradata
 from ui.components import load_templates
@@ -35,33 +35,63 @@ def run_phase1(ctx) -> bool:
 
     downloaded_files: dict = {}
 
-    # --- Descarga ---
-    for insumo_key, conf in insumos_config.items():
-        q_name = conf["query_name"]
-        n_ejecutivo = conf["nombre_ejecutivo"]
-        today_str = datetime.datetime.now().strftime("%Y%m%d")
-        expected_path = os.path.join(input_dir, f"Reporte_Insight_{q_name}_{today_str}.txt")
+    # --- Descarga con Sesión Unificada ---
+    shared_session = None
+    today_str = datetime.datetime.now().strftime("%Y%m%d")
 
-        if os.path.exists(expected_path) and os.path.getsize(expected_path) > 0:
-            log(f"ℹ️ Archivo local encontrado para {n_ejecutivo}. Se usará la copia guardada de hoy.", "info")
-            downloaded_files[insumo_key] = expected_path
-            continue
-
-        log(f"📡 Descargando insumo: {n_ejecutivo}...", "info")
-        try:
-            local_path = download_insight_data(
-                query_name=q_name,
-                username=ctx.insight_user,
-                password=ctx.insight_password,
-                progress_callback=ctx.progress_callback,
-                output_dir=input_dir,
-                period_str=ctx.period_str
+    try:
+        # Pre-autenticar sesión única solo si hay insumos pendientes de descarga
+        missing_downloads = [
+            conf for conf in insumos_config.values()
+            if not (
+                os.path.exists(os.path.join(input_dir, f"Reporte_Insight_{conf['query_name']}_{today_str}.txt"))
+                and os.path.getsize(os.path.join(input_dir, f"Reporte_Insight_{conf['query_name']}_{today_str}.txt")) > 0
             )
-            downloaded_files[insumo_key] = local_path
-            log(f"✅ Descarga lista: {n_ejecutivo}", "success")
-        except Exception as err:
-            log(f"⚠️ No se pudo descargar el insumo '{n_ejecutivo}'. Se continuará con datos disponibles.", "warning")
-            logger.warning(f"Failed to download Insight insumo '{q_name}': {err}")
+        ]
+
+        if missing_downloads:
+            try:
+                shared_session = login_insight(
+                    username=ctx.insight_user,
+                    password=ctx.insight_password,
+                    progress_callback=ctx.progress_callback
+                )
+            except Exception as login_err:
+                logger.warning(f"No se pudo pre-iniciar sesión unificada en Insight ({login_err}). Se usará fallback individual.")
+
+        for insumo_key, conf in insumos_config.items():
+            q_name = conf["query_name"]
+            n_ejecutivo = conf["nombre_ejecutivo"]
+            expected_path = os.path.join(input_dir, f"Reporte_Insight_{q_name}_{today_str}.txt")
+
+            if os.path.exists(expected_path) and os.path.getsize(expected_path) > 0:
+                log(f"ℹ️ Archivo local encontrado para {n_ejecutivo}. Se usará la copia guardada de hoy.", "info")
+                downloaded_files[insumo_key] = expected_path
+                continue
+
+            log(f"📡 Descargando insumo: {n_ejecutivo}...", "info")
+            try:
+                local_path = download_insight_data(
+                    query_name=q_name,
+                    username=ctx.insight_user,
+                    password=ctx.insight_password,
+                    progress_callback=ctx.progress_callback,
+                    output_dir=input_dir,
+                    period_str=ctx.period_str,
+                    session=shared_session
+                )
+                downloaded_files[insumo_key] = local_path
+                log(f"✅ Descarga lista: {n_ejecutivo}", "success")
+            except Exception as err:
+                log(f"⚠️ No se pudo descargar el insumo '{n_ejecutivo}'. Se continuará con datos disponibles.", "warning")
+                logger.warning(f"Failed to download Insight insumo '{q_name}': {err}")
+
+    finally:
+        if shared_session:
+            try:
+                shared_session.close()
+            except Exception:
+                pass
 
     # --- Ingesta a Teradata ---
     for insumo_key, conf in insumos_config.items():

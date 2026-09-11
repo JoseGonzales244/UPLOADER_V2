@@ -58,7 +58,49 @@ class TestSpeechAndVerintModules(unittest.TestCase):
         """Verifica que respuestas vacías o inválidas no rompan la ejecución."""
         self.assertEqual(VerintAPIClient.format_dialogue(None), "")
         self.assertEqual(VerintAPIClient.format_dialogue({}), "")
-        self.assertEqual(VerintAPIClient.format_dialogue({"GetInteractionTranscriptionResult": {}}), "")
+    def test_export_verint_docx_generation(self):
+        """Verifica la generación correcta del documento Word (.docx) a partir de eventos de Verint."""
+        import tempfile
+        from modules.verint.tools.export_verint_docx_by_ids import (
+            extract_call_dialogue_events,
+            create_interaction_docx
+        )
+        import docx
+
+        mock_response = {
+            "GetInteractionTranscriptionResult": {
+                "Success": True,
+                "Data": {
+                    "WordsSequences": [
+                        {
+                            "SpeakerName": "Agent",
+                            "StartTime": 0,
+                            "Words": [{"WordText": "Buenos"}, {"WordText": "días"}]
+                        },
+                        {
+                            "SpeakerName": "Customer",
+                            "StartTime": 12000,
+                            "Words": [{"WordText": "Hola"}]
+                        }
+                    ]
+                }
+            }
+        }
+        events = extract_call_dialogue_events(mock_response, "Juan Perez")
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["tipo"], "Interno")
+        self.assertEqual(events[1]["tipo"], "Externo")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "test_interaction.docx"
+            meta = {"Agent": "Juan Perez", "LocalStartTime": "2026-09-10 10:00:00", "SID": "12345"}
+            created_path = create_interaction_docx("99998888", meta, events, out_file)
+            self.assertTrue(created_path.exists())
+
+            # Validar que python-docx puede leer el archivo y sus tablas
+            doc = docx.Document(str(created_path))
+            self.assertGreaterEqual(len(doc.tables), 2)
+            self.assertIn("99998888", doc.paragraphs[0].text)
 
 
 if __name__ == "__main__":

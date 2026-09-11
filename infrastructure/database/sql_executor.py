@@ -1,14 +1,80 @@
 import os
 import re
 import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class ParsedStatement(str):
+    """
+    Subclase de str que preserva el contenido SQL ejecutable y almacena metadatos
+    de trazabilidad en el archivo fuente (número de línea y comentario explicativo).
+    """
+    line_number: int
+    description: str
+
+    def __new__(cls, content: str, line_number: int = 1, description: str = ""):
+        instance = super().__new__(cls, content)
+        instance.line_number = line_number
+        instance.description = description
+        return instance
+
+
+def dump_failed_query(script_name, statement_index, sql_content, error, line_number=None, total_statements=None, description=None) -> str:
+    """
+    Exporta la sentencia SQL fallida con parámetros inyectados a logs/failed_query_debug.sql
+    para que el usuario pueda abrirla y ejecutarla directamente en DBeaver o Teradata Studio.
+    """
+    try:
+        logs_dir = os.path.join(os.getcwd(), "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        debug_file = os.path.join(logs_dir, "failed_query_debug.sql")
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        total_str = f"/{total_statements}" if total_statements else ""
+        line_str = f" (Línea ~{line_number})" if line_number else ""
+        desc_str = f"\n-- Descripción: {description}" if description else ""
+
+        content = [
+            "-- =====================================================================",
+            "-- DIAGNÓSTICO DE ERROR EN EJECUCIÓN SQL (APP_CALIDAD)",
+            f"-- Archivo: {script_name}",
+            f"-- Posición: Sentencia {statement_index}{total_str}{line_str}{desc_str}",
+            f"-- Fecha y Hora: {now_str}",
+            f"-- Detalle del Error: {error}",
+            "-- =====================================================================",
+            "",
+            sql_content.strip(),
+            ";",
+            ""
+        ]
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(content))
+        return debug_file
+    except Exception as dump_err:
+        logger.warning(f"No se pudo exportar query fallido a debug: {dump_err}")
+        return ""
+
 
 class SQLScriptExecutionError(Exception):
-    def __init__(self, script_name, statement_index, sql_content, original_error):
+    def __init__(self, script_name, statement_index, sql_content, original_error, line_number=None, total_statements=None, description=None):
         self.script_name = script_name
         self.statement_index = statement_index
         self.sql_content = sql_content
         self.original_error = original_error
-        super().__init__(f"Error en script '{script_name}' (sentencia {statement_index}): {original_error}")
+        self.line_number = line_number
+        self.total_statements = total_statements
+        self.description = description
+
+        loc_parts = [f"sentencia {statement_index}"]
+        if total_statements:
+            loc_parts[0] += f"/{total_statements}"
+        if line_number:
+            loc_parts.append(f"línea ~{line_number}")
+        loc_str = ", ".join(loc_parts)
+
+        desc_str = f" [{description}]" if description else ""
+        super().__init__(f"Error en script '{script_name}' ({loc_str}){desc_str}: {original_error}")
 
 
 def get_period_params(period_str: str) -> dict:
@@ -62,21 +128,63 @@ def inject_variables(sql_text: str, context: dict) -> str:
 
 def parse_statements(sql_text: str) -> list:
     """
-    Limpia comentarios (bloque /* */ y línea simple --) y separa sentencias por punto y coma,
-    respetando las cadenas de texto literales.
+    Parsea sentencias SQL separadas por punto y coma, respetando bloques entre comillas
+    y comentarios. Retorna una lista de ParsedStatement (subclase de str) enriquecida con:
+      - line_number: Número de línea física en el archivo SQL donde inicia la sentencia.
+      - description: Comentario descriptivo previo si existe (ej. '-- 1. Limpieza inicial...').
     """
-    # Eliminar comentarios de bloque
-    sql_cleaned = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
+    lines = sql_text.split('\n')
+    statements = []
 
-    # Eliminar comentarios de línea simple respetando comillas
-    lines = []
-    for line in sql_cleaned.split('\n'):
-        in_quote = False
-        quote_char = None
-        comment_idx = -1
+    current_chars = []
+    current_start_line = None
+    pending_description = ""
+    last_seen_comment = ""
+
+    in_block_comment = False
+    in_quote = False
+    quote_char = None
+
+    for line_idx, line in enumerate(lines, 1):
         i = 0
-        while i < len(line):
+        line_len = len(line)
+        stripped = line.strip()
+
+        # Captura de comentarios de línea completa cuando no estamos en una sentencia activa
+        if not in_block_comment and not in_quote and not current_chars:
+            if stripped.startswith('--'):
+                comment_body = stripped.lstrip('-').strip()
+                if comment_body and not set(comment_body).issubset({'=', '-', '*', '_', ' '}):
+                    last_seen_comment = comment_body
+                continue
+            elif stripped == '':
+                continue
+
+        while i < line_len:
             c = line[i]
+
+            # Comentario de bloque
+            if in_block_comment:
+                if c == '*' and i + 1 < line_len and line[i+1] == '/':
+                    in_block_comment = False
+                    i += 2
+                    continue
+                i += 1
+                continue
+
+            if not in_quote and c == '/' and i + 1 < line_len and line[i+1] == '*':
+                in_block_comment = True
+                i += 2
+                continue
+
+            # Comentario de línea simple '--'
+            if not in_quote and c == '-' and i + 1 < line_len and line[i+1] == '-':
+                inline_comment = line[i+2:].strip()
+                if not current_chars and inline_comment and not set(inline_comment).issubset({'=', '-', '*', '_', ' '}):
+                    last_seen_comment = inline_comment
+                break
+
+            # Comillas
             if c in ("'", '"') and (i == 0 or line[i-1] != '\\'):
                 if not in_quote:
                     in_quote = True
@@ -84,44 +192,50 @@ def parse_statements(sql_text: str) -> list:
                 elif c == quote_char:
                     in_quote = False
                     quote_char = None
-            elif c == '-' and i + 1 < len(line) and line[i+1] == '-' and not in_quote:
-                comment_idx = i
-                break
+
+            # Primer carácter real de la sentencia
+            if not in_quote and not c.isspace() and current_start_line is None:
+                current_start_line = line_idx
+                pending_description = last_seen_comment
+                last_seen_comment = ""
+
+            # Fin de sentencia
+            if c == ';' and not in_quote:
+                stmt_text = ''.join(current_chars).strip()
+                if stmt_text:
+                    stmt_obj = ParsedStatement(
+                        stmt_text,
+                        line_number=current_start_line or line_idx,
+                        description=pending_description
+                    )
+                    statements.append(stmt_obj)
+                current_chars = []
+                current_start_line = None
+                pending_description = ""
+                i += 1
+                continue
+
+            if current_start_line is not None or not c.isspace():
+                if current_start_line is None:
+                    current_start_line = line_idx
+                    pending_description = last_seen_comment
+                    last_seen_comment = ""
+                current_chars.append(c)
+
             i += 1
-        if comment_idx != -1:
-            line = line[:comment_idx]
-        lines.append(line)
 
-    cleaned_text = '\n'.join(lines)
+        if current_chars and current_chars[-1] != '\n':
+            current_chars.append('\n')
 
-    # Dividir por punto y coma respetando bloques entre comillas
-    statements = []
-    current = []
-    in_quote = False
-    quote_char = None
-    i = 0
-    while i < len(cleaned_text):
-        c = cleaned_text[i]
-        if c in ("'", '"') and (i == 0 or cleaned_text[i-1] != '\\'):
-            if not in_quote:
-                in_quote = True
-                quote_char = c
-            elif c == quote_char:
-                in_quote = False
-                quote_char = None
-            current.append(c)
-        elif c == ';' and not in_quote:
-            stmt = ''.join(current).strip()
-            if stmt:
-                statements.append(stmt)
-            current = []
-        else:
-            current.append(c)
-        i += 1
-
-    stmt = ''.join(current).strip()
-    if stmt:
-        statements.append(stmt)
+    # Remanente sin ';' final
+    stmt_text = ''.join(current_chars).strip()
+    if stmt_text:
+        stmt_obj = ParsedStatement(
+            stmt_text,
+            line_number=current_start_line or len(lines),
+            description=pending_description or last_seen_comment
+        )
+        statements.append(stmt_obj)
 
     return statements
 
@@ -207,11 +321,18 @@ def execute_sql_script(con, script_path, params, progress_callback=None, script_
             stmt_clean = stmt.strip()
             if not stmt_clean:
                 continue
+
+            line_no = getattr(stmt, "line_number", None)
+            desc = getattr(stmt, "description", "")
+            line_tag = f" (Línea ~{line_no})" if line_no else ""
+            desc_tag = f" [{desc}]" if desc else ""
+
             snippet = stmt_clean[:60].replace('\n', ' ') + "..." if len(stmt_clean) > 60 else stmt_clean
-            logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {snippet}")
+            logger.info(f"   [{idx}/{len(statements)}]{line_tag} Ejecutando{desc_tag}: {snippet}")
             if progress_callback:
                 pct = int((idx / len(statements)) * 100)
-                msg_str = f"⚙️ {prefix_num}{friendly_name} ({os.path.basename(script_path)}) — Paso {idx} de {len(statements)} ({pct}%)"
+                step_detail = f" — {desc}" if desc else f" — Línea ~{line_no}" if line_no else ""
+                msg_str = f"⚙️ {prefix_num}{friendly_name} ({os.path.basename(script_path)}) — Paso {idx}/{len(statements)} ({pct}%){step_detail}"
                 try:
                     progress_callback(msg_str, "info", progress=float(idx) / len(statements))
                 except TypeError:
@@ -237,7 +358,18 @@ def execute_sql_script(con, script_path, params, progress_callback=None, script_
                     if progress_callback:
                         progress_callback(f"⚠️ {friendly_name} — Limpieza de vista/tabla omitida (Paso {idx}/{len(statements)})", "warning")
                     continue
-                raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_clean, err)
+
+                debug_path = dump_failed_query(
+                    os.path.basename(script_path), idx, stmt_clean, err,
+                    line_number=line_no, total_statements=len(statements), description=desc
+                )
+                if debug_path and progress_callback:
+                    progress_callback(f"💾 Query fallido exportado para depuración en: `{os.path.basename(debug_path)}`", "warning")
+
+                raise SQLScriptExecutionError(
+                    os.path.basename(script_path), idx, stmt_clean, err,
+                    line_number=line_no, total_statements=len(statements), description=desc
+                )
 
     if progress_callback:
         progress_callback(f"✅ {prefix_num}Completado: **{friendly_name}**", "success")

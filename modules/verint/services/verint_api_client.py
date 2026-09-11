@@ -1038,6 +1038,7 @@ class VerintAPIClient:
                 res_data = res_t.json()
                 trans_res = res_data.get("GetInteractionTranscriptionResult") or {}
                 if trans_res.get("Success"):
+                    res_data["_contact_metadata"] = contact
                     return res_data
                 else:
                     err_msg = trans_res.get("ErrorDetails", {}).get("LocalizedMessageKey")

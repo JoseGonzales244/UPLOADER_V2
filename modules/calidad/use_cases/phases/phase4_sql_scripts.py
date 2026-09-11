@@ -16,6 +16,7 @@ from infrastructure.database.sql_executor import (
     get_friendly_script_name,
     inject_variables,
     parse_statements,
+    dump_failed_query,
     SQLScriptExecutionError
 )
 from infrastructure.system.powerbi_connector import write_powerbi_timestamp
@@ -167,16 +168,31 @@ def run_phase4(ctx, start_from_script: Optional[str] = None) -> bool:
                 stmt_str = stmt.strip()
                 if not stmt_str:
                     continue
+                line_no = getattr(stmt, "line_number", None)
+                desc = getattr(stmt, "description", "")
+                line_tag = f" (Línea ~{line_no})" if line_no else ""
+                desc_tag = f" [{desc}]" if desc else ""
                 preview = stmt_str.split("\n")[0][:100]
-                logger.info(f"   [{idx}/{len(statements)}] Ejecutando: {preview}")
+                logger.info(f"   [{idx}/{len(statements)}]{line_tag} Ejecutando{desc_tag}: {preview}")
                 try:
-                    log(f"⚙️ {friendly_name} — Paso {idx}/{len(statements)} ({int(idx/len(statements)*100)}%)", "info")
+                    pct = int((idx / len(statements)) * 100)
+                    step_detail = f" — {desc}" if desc else f" — Línea ~{line_no}" if line_no else ""
+                    log(f"⚙️ {friendly_name} — Paso {idx}/{len(statements)} ({pct}%){step_detail}", "info")
                 except Exception:
                     pass
                 try:
                     cursor.execute(stmt_str)
                 except Exception as stmt_err:
-                    raise SQLScriptExecutionError(os.path.basename(script_path), idx, stmt_str, stmt_err)
+                    dump_path = dump_failed_query(
+                        os.path.basename(script_path), idx, stmt_str, stmt_err,
+                        line_number=line_no, total_statements=len(statements), description=desc
+                    )
+                    if dump_path:
+                        log(f"💾 Query fallido exportado para depuración en: `{os.path.basename(dump_path)}`", "warning")
+                    raise SQLScriptExecutionError(
+                        os.path.basename(script_path), idx, stmt_str, stmt_err,
+                        line_number=line_no, total_statements=len(statements), description=desc
+                    )
 
             log(f"✅ Completado: **{friendly_name}**", "success")
 

@@ -152,38 +152,58 @@ def _harvest_via_playwright(
             else:
                 user_input.press("Enter")
 
-        # Esperar carga de interfaz Verint y navegar a /wfo/ui/ para asegurar generación de cookies de sesión
-        wait_timeout = 120000 if not headless else 12000
-        try:
-            page.wait_for_url("**/wfo/ui/**", timeout=wait_timeout)
-        except Exception:
+        if not headless:
+            logger.info("=" * 70)
+            logger.info("🌐 SESIÓN VERINT: Se ha abierto la ventana del navegador.")
+            logger.info("   Por favor inicia sesión / aprueba la notificación MFA en tu teléfono.")
+            logger.info("   El sistema detectará automáticamente cuando ingreses y guardará la sesión.")
+            logger.info("=" * 70)
+
+        # Polling activo: esperar a que el usuario complete login/MFA (hasta 180s en visible, 12s en headless)
+        max_wait = 180 if not headless else 12
+        start_wait = time.time()
+
+        while time.time() - start_wait < max_wait:
+            if token_container.get("impact360_token"):
+                break
+
+            current_cookies = context.cookies()
+            for c in current_cookies:
+                c_name = c.get("name", "").lower()
+                if c_name in {"impact360authtoken", "xsrftoken", "xsrf-token"} and c.get("value"):
+                    token_container["impact360_token"] = c.get("value")
+                    logger.info(f"🔑 Token detectado en cookies activas: {c.get('value')}")
+                    break
+            if token_container.get("impact360_token"):
+                break
+
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                current_url = page.url.lower()
+                if "/wfo/" in current_url and not any(k in current_url for k in ["signin", "login", "microsoft", "adfs"]):
+                    storage_token = page.evaluate("""() => {
+                        return sessionStorage.getItem('Impact360AuthToken') || 
+                               localStorage.getItem('Impact360AuthToken') || 
+                               sessionStorage.getItem('xsrfToken') || 
+                               localStorage.getItem('xsrfToken') || 
+                               (window.Impact360AuthToken ? window.Impact360AuthToken : '');
+                    }""")
+                    if storage_token:
+                        token_container["impact360_token"] = storage_token
+                        logger.info(f"🔑 Token detectado en almacenamiento web: {storage_token}")
+                        break
             except Exception:
-                page.wait_for_timeout(5000)
+                pass
 
-        # Forzar navegación a /wfo/ui/ para garantizar inicialización de Impact360AuthToken
-        try:
-            parsed_base = signin_url.split("/wfo/")[0]
-            page.goto(f"{parsed_base}/wfo/ui/", timeout=15000)
-            page.wait_for_timeout(3000)
-        except Exception as _e_ui:
-            logger.debug(f"Navegación de confirmación a /wfo/ui/: {_e_ui}")
+            page.wait_for_timeout(1500)
 
-        # Intentar extraer token desde sessionStorage / localStorage / window JS context
-        try:
-            storage_token = page.evaluate("""() => {
-                return sessionStorage.getItem('Impact360AuthToken') || 
-                       localStorage.getItem('Impact360AuthToken') || 
-                       sessionStorage.getItem('xsrfToken') || 
-                       localStorage.getItem('xsrfToken') || 
-                       (window.Impact360AuthToken ? window.Impact360AuthToken : '');
-            }""")
-            if storage_token:
-                token_container["impact360_token"] = storage_token
-                logger.info(f"🔑 Token capturado desde Browser Storage: {storage_token}")
-        except Exception as _e_st:
-            logger.debug(f"Evaluación de storage: {_e_st}")
+        # Si aún no tiene token pero ya está en /wfo/, navegación rápida de confirmación a /wfo/ui/
+        if not token_container.get("impact360_token"):
+            try:
+                parsed_base = signin_url.split("/wfo/")[0]
+                page.goto(f"{parsed_base}/wfo/ui/", timeout=15000)
+                page.wait_for_timeout(2000)
+            except Exception as _e_ui:
+                logger.debug(f"Navegación final a /wfo/ui/: {_e_ui}")
 
         cookies = context.cookies()
         context.close()
@@ -209,8 +229,10 @@ def get_verint_session(
 ) -> Tuple[Dict[str, str], Optional[str]]:
     """
     Retorna una tupla (cookies_dict, impact360_token) lista para usar en httpx/requests.
-    Con Auto-Healing: Si el modo desatendido falla (ej. cambio de clave o pantalla de login de Microsoft),
-    abre automáticamente el navegador visible para solicitar credenciales/completar SSO.
+    Cero fricción:
+    1. Si ya existe caché válido, lo usa de inmediato por HTTP directo (0 segundos, sin navegador).
+    2. Si es la primera vez en este equipo (sin caché), abre directamente la ventana visible y espera al usuario.
+    3. Si el caché expiró, intenta renovar en segundo plano; si falla, abre la ventana visible.
     """
     if not force_refresh:
         cache = _load_cache()
@@ -220,18 +242,22 @@ def get_verint_session(
             return cookies_dict, token
 
     signin_url = f"{base_url}/wfo/control/signin"
-    
-    # Intento 1: Desatendido (Headless)
-    cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=True)
-    
-    cookies_dict_temp = {c.get("name", ""): c.get("value", "") for c in cookies_list}
-    token = token or cookies_dict_temp.get("Impact360AuthToken") or cookies_dict_temp.get("impact360authtoken")
-    
-    # Si headless no pudo obtener el token de Verint, lanzar auto-recuperación interactiva en navegador visible (headless=False)
-    if not token:
-        logger.warning("⚠️ No se pudo extraer Impact360AuthToken en modo desatendido (autenticación SSO de Microsoft pendiente).")
-        logger.warning("🚀 Abriendo navegador visible para completar la sesión SSO...")
+    has_prior_cache = COOKIE_CACHE_PATH.exists()
+
+    # Si es primera vez absoluta en la máquina, ir directo a visible para no hacer esperar 12s en vano
+    if not has_prior_cache:
+        logger.info("🚀 Primera ejecución en este equipo: abriendo ventana para iniciar sesión en Verint...")
         cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=False)
+    else:
+        # Renovación de sesión previa: intentar primero en segundo plano
+        cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=True)
+        cookies_dict_temp = {c.get("name", ""): c.get("value", "") for c in cookies_list}
+        token = token or cookies_dict_temp.get("Impact360AuthToken") or cookies_dict_temp.get("impact360authtoken")
+        
+        # Si falló la renovación en segundo plano, abrir ventana visible
+        if not token:
+            logger.warning("⚠️ Sesión expirada. Abriendo ventana visible para autenticación...")
+            cookies_list, token = _harvest_via_playwright(username, password, signin_url, headless=False)
 
     if not cookies_list:
         raise RuntimeError("Playwright no pudo capturar cookies de sesión de Verint WFO.")
