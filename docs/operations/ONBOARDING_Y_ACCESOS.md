@@ -121,13 +121,30 @@ Solicita las credenciales vigentes y configura el archivo `.env` en la raíz del
 
 ---
 
-## 5. Validación con Pruebas Automatizadas
+## 5. Validación de Accesos y Pruebas del Entorno
 
-Antes de iniciar la plataforma, verifica la integridad del entorno ejecutando la suite de pruebas:
+Antes de iniciar la plataforma, verifica que tus credenciales, VPN y accesos a servidores se encuentren operativos:
+
+### 5.1 Diagnóstico Integral de Conexiones (Semáforo de Accesos)
+Ejecuta el script de diagnóstico global para validar de un solo golpe todas las conexiones requeridas (Teradata, Insight, Verint y SQL Server):
+```powershell
+.\.venv\Scripts\python test_all_connections.py
 ```
+* **Qué valida:** Conectividad a `IBKTD`, inicio de sesión HTTP en Insight (`s425vp01`), autenticación SSO/Cookies en Verint WFO y conexión a `DB_SPEECH` en SQL Server.
+
+### 5.2 Verificación de Acceso y Extracción en Verint por ID de Llamada
+Para comprobar si tu usuario tiene permisos efectivos en Speech Analytics y puede extraer diálogos:
+```powershell
+.\.venv\Scripts\python test_verint_single_id.py <ID_DE_LLAMADA>
+```
+* **Resultado esperado:** Descarga el diálogo de esa interacción y genera un documento Word de prueba en `data/input/auditorias_wsp/`.
+
+### 5.3 Suite Completa de Pruebas Unitarias
+Verifica la integridad de todos los módulos y pipelines del sistema:
+```powershell
 .\.venv\Scripts\python -m unittest discover -s tests
 ```
-* **Criterio de aceptación:** Las pruebas deben finalizar con estado `OK`.
+* **Criterio de aceptación:** Todas las pruebas (68 tests) deben finalizar con estado `OK`.
 
 ---
 
