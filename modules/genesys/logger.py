@@ -16,7 +16,12 @@ def get_logger(name: str = "GenesysBot") -> logging.Logger:
         datefmt="%H:%M:%S",
     )
 
-    # Handler a consola
+    # Handler a consola seguro contra errores de encoding en Windows (cp1252)
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)

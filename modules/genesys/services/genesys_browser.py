@@ -1,3 +1,5 @@
+import datetime
+import json
 import os
 import re
 import shutil
@@ -5,14 +7,20 @@ import subprocess
 import time
 import urllib.request
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 import requests
 import urllib3
-from playwright.sync_api import Frame, Page, sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from modules.genesys.config import CDP_URL, DOWNLOADS_DIR, GENESYS_URL, PROFILE_DIR, SELECTORS, TIMEOUT_DEFAULT, TIMEOUT_DETAILS_LOAD
+from modules.genesys.config import (
+    CDP_URL,
+    DOWNLOADS_DIR,
+    GENESYS_URL,
+    PROFILE_DIR,
+    TOKEN_CACHE_FILE,
+)
 from modules.genesys.logger import get_logger
 from modules.genesys.models import EstadoRegistro, SolicitudAudio
 from modules.genesys.storage.tracking_store import TrackingStore
@@ -21,13 +29,63 @@ logger = get_logger("GenesysBrowser")
 
 
 class GenesysBrowserAutomation:
+    """Automatización de descargas en Genesys Cloud.
+
+    Opera exclusivamente mediante la API REST v2 de Genesys Cloud.
+    Extrae o reutiliza el Bearer Token de la sesión de Chrome y descarta
+    por completo el scraping frágil por interfaz gráfica (UI).
+    """
+
     def __init__(self, cdp_url: str = CDP_URL, genesys_url: str = GENESYS_URL, tracking_store: TrackingStore = None):
         self.cdp_url = cdp_url
         self.genesys_url = genesys_url
         self.tracking_store = tracking_store or TrackingStore()
+        self._user_id_cache: Dict[str, str] = {}
+        self._wrapup_catalog: Dict[str, str] = {}
+
+    @staticmethod
+    def _verificar_token(token: str) -> bool:
+        """Verifica si un Bearer Token está vigente consultando el endpoint /api/v2/users/me."""
+        if not token or len(token) < 20:
+            return False
+        try:
+            resp = requests.get(
+                "https://api.mypurecloud.com/api/v2/users/me",
+                headers={"Authorization": f"Bearer {token}", "accept": "application/json"},
+                verify=False,
+                timeout=5,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    @staticmethod
+    def _guardar_token_cache(token: str) -> None:
+        try:
+            TOKEN_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(TOKEN_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"token": token, "timestamp": time.time()}, f, indent=2)
+            logger.info(f"✓ Bearer Token guardado en caché local ({TOKEN_CACHE_FILE.name}).")
+        except Exception as e:
+            logger.debug(f"Error guardando token en caché: {e}")
+
+    @staticmethod
+    def _cargar_token_cache() -> Optional[str]:
+        try:
+            if TOKEN_CACHE_FILE.exists():
+                with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                token = data.get("token")
+                ts = data.get("timestamp", 0)
+                # Validar expiración estimada de 12 horas
+                if token and (time.time() - ts) < 43200:
+                    return token
+        except Exception as e:
+            logger.debug(f"Error leyendo token de caché: {e}")
+        return None
 
     def _lanzar_chrome_cdp_automatico(self) -> bool:
-        """Verifica si Chrome CDP responde; si no, lanza Chrome del sistema con el perfil persistente (.chrome_genesys_profile)."""
+        """Verifica si Chrome CDP responde; si no, lanza Chrome del sistema con el perfil persistente."""
         try:
             req = urllib.request.urlopen(f"{self.cdp_url}/json/version", timeout=1)
             if req.status == 200:
@@ -40,7 +98,7 @@ class GenesysBrowserAutomation:
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
             os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
-            shutil.which("chrome") or ""
+            shutil.which("chrome") or "",
         ]
 
         chrome_cmd = next((p for p in chrome_paths if p and os.path.exists(p)), None)
@@ -57,7 +115,7 @@ class GenesysBrowserAutomation:
             f"--user-data-dir={PROFILE_DIR.resolve()}",
             "--no-first-run",
             "--no-default-browser-check",
-            self.genesys_url
+            self.genesys_url,
         ]
 
         logger.info(f"Auto-iniciando Chrome con perfil persistente ({PROFILE_DIR.name}) en puerto CDP {port}...")
@@ -100,266 +158,173 @@ class GenesysBrowserAutomation:
                     continue
         return None
 
-    def _localizar_iframe(self, page: Page, key_url: str, max_intentos: int = 10) -> Optional[Frame]:
-        for _ in range(max_intentos):
-            for f in page.frames:
-                if key_url in f.url:
-                    return f
-            page.wait_for_timeout(1000)
-        return None
-
-    def _cerrar_pestanas_admin_rezagadas(self, page: Page) -> None:
-        try:
-            for pg in list(page.context.pages):
-                if pg != page and "/admin" in pg.url:
-                    try:
-                        pg.close()
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    def _regresar_a_pestana_interacciones(self, page: Page) -> None:
-        """Busca todas las pestañas internas de Genesys y hace clic en la que corresponde a 'Interacciones' (excluyendo Domicilio)."""
-        try:
-            tab_candidates = page.locator('button.gux-tab-button, gux-tab-button, [role="tab"]')
-            total_tabs = tab_candidates.count()
-            logger.info(f"Buscando pestaña 'Interacciones' entre {total_tabs} pestaña(s) detectada(s)...")
-
-            target_tab = None
-            for i in range(total_tabs):
-                btn = tab_candidates.nth(i)
-                try:
-                    text = btn.inner_text().strip().lower()
-                    if "interaccion" in text and "domicilio" not in text:
-                        target_tab = btn
-                        break
-                except Exception:
-                    continue
-
-            if not target_tab or target_tab.count() == 0:
-                target_tab = page.locator('button.gux-tab-button:has-text("Interacciones"):not(:has-text("Domicilio"))').first
-
-            if target_tab and target_tab.count() > 0:
-                logger.info("Haciendo clic en la pestaña interna 'Interacciones'...")
-                target_tab.click(force=True)
-                page.wait_for_timeout(2000)
-                logger.info("✓ Retornado exitosamente a la vista principal de Interacciones.")
-            else:
-                logger.warning("No se localizó el botón específico de la pestaña 'Interacciones'.")
-        except Exception as e:
-            logger.error(f"Error regresando a la pestaña Interacciones: {e}")
-
-    def _asegurar_panel_filtros_abierto(self, analytics_frame: Frame) -> None:
-        try:
-            toggle_btn = analytics_frame.locator(SELECTORS["toggle_filters_btn"])
-            if not toggle_btn.is_visible():
-                return
-
-            for intento in range(3):
-                seccion = analytics_frame.locator(SELECTORS["interactions_section"]).first
-                if seccion.is_visible():
-                    return
-
-                logger.info(f"Panel de filtros cerrado (intento {intento+1}/3). Abriendo...")
-                toggle_btn.click()
-                analytics_frame.wait_for_timeout(1200)
-        except Exception as e:
-            logger.debug(f"Error asegurando panel de filtros: {e}")
-
-    @staticmethod
-    def construir_url_interacciones_fecha(origin: str, anio: Optional[int] = None, mes: Optional[int] = None) -> str:
-        """Construye la URL parametrizada con el rango de fechas directo para Genesys Cloud."""
-        now = datetime.datetime.now()
-        anio = anio or now.year
-        mes = mes or now.month
-        start_dt = f"{anio:04d}-{mes:02d}-01T05%3A00%3A00.000Z"
-        if mes == 12:
-            end_dt = f"{anio+1:04d}-01-01T05%3A00%3A00.000Z"
-        else:
-            end_dt = f"{anio:04d}-{mes+1:02d}-01T05%3A00%3A00.000Z"
-        
-        base_origin = origin.split("/directory")[0] if "/directory" in origin else origin
-        return f"{base_origin}/directory/#/analytics/interactions?start={start_dt}&end={end_dt}&hasMedia=false&mediaType=all"
-
-    def _asegurar_filtro_fecha(self, analytics_frame: Frame, mes_deseado: Optional[str] = None, anio_deseado: Optional[str] = None) -> None:
-        """Verifica el filtro de fecha actual. Si no coincide con el mes/año requerido, despliega el calendario gux-calendar y selecciona desde el 1° del mes hasta el 1° del mes siguiente."""
-        now = datetime.datetime.now()
-        anio_deseado = anio_deseado or str(now.year)
-        try:
-            btn_selector = SELECTORS.get("date_filter_btn", "button:has(.current-date-display-container)")
-            btn = analytics_frame.locator(btn_selector).first
-            
-            # Esperar a que el botón sea visible (hasta 20 segundos) mientras se hidrata la SPA
-            try:
-                btn.wait_for(state="visible", timeout=20000)
-            except Exception:
-                btn = analytics_frame.locator(SELECTORS.get("date_filter_btn_alt", 'button[aria-label*="cambiar fecha seleccionada"]')).first
-
-            if not btn.is_visible():
-                logger.warning("No se encontró el botón selector de fecha en el panel de filtros.")
-                return
-
-            texto_actual = btn.inner_text().lower()
-            if mes_deseado.lower() in texto_actual and anio_deseado in texto_actual:
-                logger.info(f"Filtro de fecha ya configurado para '{mes_deseado} de {anio_deseado}'. Se omite reaplicación.")
-                return
-
-            logger.info(f"Desplegando selector de fecha para ajustar a '{mes_deseado} de {anio_deseado}'...")
-            btn.click()
-            analytics_frame.wait_for_timeout(1500)
-
-            calendar = analytics_frame.locator(SELECTORS.get("calendar_component", "gux-calendar")).first
-            
-            # En gux-calendar mode="range" number-of-months="2":
-            # El primer día del mes target es el 1° en la primera tabla, el fin es el 1° del siguiente mes
-            dias_uno = analytics_frame.locator("td:has-text('1')")
-            if dias_uno.count() >= 2:
-                # Seleccionar fecha inicio (1° del primer mes mostrado)
-                dias_uno.nth(0).click(force=True)
-                analytics_frame.wait_for_timeout(500)
-                # Seleccionar fecha fin (1° del segundo mes mostrado)
-                dias_uno.nth(1).click(force=True)
-                analytics_frame.wait_for_timeout(500)
-
-            # Clic en Aplicar
-            apply_btn = analytics_frame.locator(SELECTORS.get("apply_date_btn", "gux-button:has-text('Aplicar')")).first
-            if apply_btn.is_visible():
-                apply_btn.click(force=True)
-                analytics_frame.wait_for_timeout(1500)
-                logger.info(f"✓ Filtro de fecha para '{mes_deseado} de {anio_deseado}' aplicado exitosamente.")
-            else:
-                logger.warning("No se localizó el botón 'Aplicar' en el modal de fecha.")
-        except Exception as e:
-            logger.error(f"Error al asegurar el filtro de fecha: {e}")
-
-
-    def _limpiar_filtros_si_hay(self, analytics_frame: Frame) -> None:
-        try:
-            borrar = analytics_frame.locator(SELECTORS["clear_filters_btn"])
-            if borrar.count() > 0 and borrar.is_visible():
-                logger.info("Limpiando filtros previos...")
-                borrar.click()
-                analytics_frame.wait_for_timeout(1500)
-
-                seccion_int = analytics_frame.locator(SELECTORS["interactions_section"])
-                if seccion_int.is_visible():
-                    seccion_int.click()
-                    analytics_frame.wait_for_timeout(500)
-        except Exception as e:
-            logger.debug(f"Error limpiando filtros: {e}")
-
-    def _rellenar_filtro_usuario(self, analytics_frame: Frame, reg_ev: str) -> None:
-        try:
-            seccion_int = analytics_frame.locator(SELECTORS["interactions_section"])
-            if seccion_int.is_visible():
-                usuario_visible = analytics_frame.locator(SELECTORS["user_filter_input"]).is_visible()
-                if not usuario_visible:
-                    seccion_int.click()
-                    analytics_frame.wait_for_timeout(800)
-        except Exception:
-            pass
-
-        usuario_input = analytics_frame.locator(SELECTORS["user_filter_input"])
-        usuario_input.wait_for(state="visible", timeout=TIMEOUT_DEFAULT)
-        usuario_input.click()
-        usuario_input.press("Control+A")
-        usuario_input.press("Backspace")
-        analytics_frame.wait_for_timeout(400)
-        usuario_input.press_sequentially(str(reg_ev), delay=80)
-        analytics_frame.wait_for_timeout(1000)
-        usuario_input.press("Enter")
-        analytics_frame.wait_for_timeout(1200)
-        usuario_input.press("Enter")
-        analytics_frame.wait_for_timeout(500)
-        logger.info(f"Filtro usuario '{reg_ev}' aplicado.")
-
-    def _rellenar_filtro_dnis(self, analytics_frame: Frame, telefonos: List[str]) -> None:
-        dnis_input = analytics_frame.locator(SELECTORS["dnis_filter_input"])
-        dnis_input.wait_for(state="visible", timeout=TIMEOUT_DEFAULT)
-        dnis_input.click()
-        dnis_input.press("Control+A")
-        dnis_input.press("Backspace")
-        analytics_frame.wait_for_timeout(400)
-
-        for tlf in telefonos:
-            dnis_input.press_sequentially(str(tlf), delay=80)
-            analytics_frame.wait_for_timeout(600)
-            dnis_input.press("Enter")
-            analytics_frame.wait_for_timeout(1200)
-        logger.info(f"{len(telefonos)} teléfono(s) ingresados como DNIS.")
-
-    def _esperar_y_contar_filas(self, analytics_frame: Frame, max_reintentos: int = 15) -> int:
-        try:
-            analytics_frame.locator(SELECTORS.get("loading_spinner", "gux-page-loading-spinner")).wait_for(state="hidden", timeout=25000)
-        except Exception:
-            pass
-
-        filas = analytics_frame.locator(SELECTORS["action_rows"])
-        for intento in range(max_reintentos):
-            try:
-                cantidad = filas.count()
-                if cantidad > 0:
-                    logger.info(f"✓ Filas encontradas: {cantidad} (intento {intento + 1}/{max_reintentos})")
-                    return cantidad
-            except Exception:
-                pass
-            analytics_frame.wait_for_timeout(2000)
-        return 0
-
-    def _convertir_duracion_segundos(self, dur_text: str) -> int:
-        partes = [int(x) for x in dur_text.strip().split(":")]
-        if len(partes) == 3:
-            return partes[0] * 3600 + partes[1] * 60 + partes[2]
-        if len(partes) == 2:
-            return partes[0] * 60 + partes[1]
-        return 0
-
-    def _extraer_bearer_token(self, page: Page, timeout_ms: int = 5000) -> Optional[str]:
-        """Escucha las peticiones de red o inspecciona la sesión web para capturar el Bearer Token activo."""
+    def _extraer_bearer_token(self, page: Page, timeout_ms: int = 8000) -> Optional[str]:
+        """Escucha las peticiones de red e inspecciona la sesión web para capturar el Bearer Token activo."""
         token_holder = {"token": None}
 
         def _capturar_req(req):
             try:
                 auth = req.headers.get("authorization", "")
                 if auth.startswith("Bearer ") and len(auth) > 20:
-                    token_holder["token"] = auth.replace("Bearer ", "").strip()
+                    cand = auth.replace("Bearer ", "").strip()
+                    token_holder["token"] = cand
             except Exception:
                 pass
 
         page.on("request", _capturar_req)
 
-        # Intentar extraer desde almacenamiento local si ya está cargado
+        # 1. Inspeccionar almacenamiento local y de sesión
         try:
             token_storage = page.evaluate("""() => {
                 try {
-                    for (let i = 0; i < localStorage.length; i++) {
-                        let k = localStorage.key(i);
-                        let v = localStorage.getItem(k);
-                        if (v && v.includes("Bearer ")) return v.split("Bearer ")[1].split('"')[0].trim();
+                    for (let storage of [sessionStorage, localStorage]) {
+                        for (let i = 0; i < storage.length; i++) {
+                            let k = storage.key(i);
+                            let v = storage.getItem(k);
+                            if (!v) continue;
+                            if (v.includes("Bearer ")) {
+                                return v.split("Bearer ")[1].split('"')[0].trim();
+                            }
+                            if (v.startsWith("{") && v.endsWith("}")) {
+                                try {
+                                    let p = JSON.parse(v);
+                                    if (p.accessToken && typeof p.accessToken === "string") return p.accessToken;
+                                    if (p.token && typeof p.token === "string" && p.token.length > 25) return p.token;
+                                    if (p.authenticated?.token) return p.authenticated.token;
+                                    if (p.authenticated?.accessToken) return p.authenticated.accessToken;
+                                } catch(e) {}
+                            }
+                        }
                     }
                 } catch(e) {}
                 return null;
             }""")
-            if token_storage and len(token_storage) > 20:
-                token_holder["token"] = token_storage
+            if token_storage and self._verificar_token(token_storage):
+                self._guardar_token_cache(token_storage)
+                return token_storage
         except Exception:
             pass
 
+        # 2. Gatillar una llamada API desde la sesión autenticada de Genesys
+        try:
+            page.evaluate("""() => {
+                fetch('/api/v2/users/me', { headers: { 'accept': 'application/json' } }).catch(() => {});
+            }""")
+            start_wait = time.time()
+            while time.time() - start_wait < 3.0:
+                if token_holder["token"] and self._verificar_token(token_holder["token"]):
+                    self._guardar_token_cache(token_holder["token"])
+                    return token_holder["token"]
+                page.wait_for_timeout(300)
+        except Exception:
+            pass
+
+        # 3. Recarga ligera si aún no se capturó tráfico
         if not token_holder["token"]:
             try:
-                # Si la página llevaba horas estática, recargar gatilla las peticiones HTTP con Authorization: Bearer
-                logger.info("Solicitando recarga ligera para forzar emisión de Bearer Token...")
-                page.reload(wait_until="domcontentloaded", timeout=10000)
-                page.wait_for_timeout(2000)
+                logger.info("Solicitando recarga ligera para capturar emisión de Bearer Token...")
+                page.reload(wait_until="domcontentloaded", timeout=12000)
+                start_wait = time.time()
+                while time.time() - start_wait < (timeout_ms / 1000):
+                    if token_holder["token"] and self._verificar_token(token_holder["token"]):
+                        self._guardar_token_cache(token_holder["token"])
+                        return token_holder["token"]
+                    page.wait_for_timeout(500)
             except Exception:
-                page.wait_for_timeout(timeout_ms)
+                pass
 
-        return token_holder["token"]
+        if token_holder["token"] and self._verificar_token(token_holder["token"]):
+            self._guardar_token_cache(token_holder["token"])
+            return token_holder["token"]
+
+        return None
+
+    def _capturar_token_desde_navegador(self, headless: bool = True, stop_checker=None) -> Optional[str]:
+        """Abre sesión de Chrome mediante CDP/Playwright para capturar el Bearer Token."""
+        with sync_playwright() as p:
+            browser = None
+            context = None
+            page = None
+
+            if self._lanzar_chrome_cdp_automatico():
+                try:
+                    browser = p.chromium.connect_over_cdp(self.cdp_url)
+                    logger.info(f"Conectado exitosamente a Chrome vía CDP ({self.cdp_url})")
+                    page = self._obtener_page_principal(browser)
+                except Exception as e:
+                    logger.warning(f"Error conectando vía CDP a Chrome: {e}")
+
+            if not page:
+                user_data_dir = str(PROFILE_DIR)
+                PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+                args = ["--start-maximized"] if not headless else []
+                try:
+                    context = p.chromium.launch_persistent_context(
+                        user_data_dir=user_data_dir,
+                        channel="chrome",
+                        headless=headless,
+                        args=args,
+                    )
+                except Exception:
+                    context = p.chromium.launch_persistent_context(
+                        user_data_dir=user_data_dir,
+                        headless=headless,
+                        args=args,
+                    )
+                page = context.pages[0] if context.pages else context.new_page()
+                page.goto(self.genesys_url)
+                time.sleep(3)
+
+            # Verificar si está en pantalla de login de Microsoft / Genesys SSO
+            if page:
+                try:
+                    def _es_url_login(url_str: str) -> bool:
+                        u = url_str.lower()
+                        return any(d in u for d in ["microsoftonline.com", "login.live.com", "accounts.google.com", "login.windows.net"]) or "/login" in u or "login?" in u
+
+                    if _es_url_login(page.url):
+                        logger.info("🔑 Sesión no iniciada o token expirado en Microsoft/Genesys.")
+                        logger.info("👉 Por favor complete el inicio de sesión en Chrome. (Tiempo de espera: 5 minutos)...")
+                        start_time = time.time()
+                        while time.time() - start_time < 300:
+                            if stop_checker and stop_checker():
+                                logger.warning("🛑 Cancelado durante espera de login.")
+                                return None
+                            if page.is_closed():
+                                logger.warning("Navegador cerrado por el usuario.")
+                                return None
+                            try:
+                                curr = page.url.lower()
+                                if not _es_url_login(curr) and ("purecloud" in curr or "genesys" in curr or "mypurecloud" in curr):
+                                    logger.info("✅ Login completado exitosamente.")
+                                    break
+                            except Exception:
+                                pass
+                            time.sleep(2)
+                except Exception as e:
+                    logger.debug(f"Error verificando redirección de login: {e}")
+
+            if not page:
+                for ctx in (browser.contexts if browser else [context] if context else []):
+                    for pg in ctx.pages:
+                        try:
+                            if "purecloud" in pg.url or "genesys" in pg.url:
+                                page = pg
+                                break
+                        except Exception:
+                            continue
+                    if page:
+                        break
+
+            if not page:
+                logger.error("No se encontró sesión activa de Genesys Cloud.")
+                return None
+
+            return self._extraer_bearer_token(page, timeout_ms=8000)
 
     def _obtener_catalogo_wrapups(self, token: str) -> dict:
         """Consulta una sola vez el catálogo de wrapUp codes para traducir UUIDs a nombres legibles."""
-        if hasattr(self, "_wrapup_catalog") and self._wrapup_catalog:
+        if self._wrapup_catalog:
             return self._wrapup_catalog
 
         catalog = {}
@@ -381,7 +346,7 @@ class GenesysBrowserAutomation:
 
     @staticmethod
     def _es_conclusion_acepta(conv: dict, catalog: dict = None) -> bool:
-        """Determina si la conversación tiene una conclusión válida de ACEPTA CAMPAÑA (descartando NO ACEPTA) mediante nombres resueltos."""
+        """Determina si la conversación tiene una conclusión válida de ACEPTA CAMPAÑA (descartando NO ACEPTA)."""
         catalog = catalog or {}
         wrapup_names = []
 
@@ -417,9 +382,8 @@ class GenesysBrowserAutomation:
             s = rec.get("startTime") or rec.get("originalRecordingStartTime")
             e = rec.get("endTime")
             if s and e:
-                from datetime import datetime
-                t_s = datetime.fromisoformat(s.replace("Z", "+00:00"))
-                t_e = datetime.fromisoformat(e.replace("Z", "+00:00"))
+                t_s = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                t_e = datetime.datetime.fromisoformat(e.replace("Z", "+00:00"))
                 return (t_e - t_s).total_seconds()
         except Exception:
             pass
@@ -431,18 +395,15 @@ class GenesysBrowserAutomation:
             return None
 
         val = str(reg_ev).strip()
-        if re.match(r'^[0-9a-fA-F-]{36}$', val):
+        if re.match(r"^[0-9a-fA-F-]{36}$", val):
             return val
-
-        if not hasattr(self, "_user_id_cache"):
-            self._user_id_cache = {}
 
         if val in self._user_id_cache:
             return self._user_id_cache[val]
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "accept": "*/*"}
 
-        # 1. Intentar búsqueda rápida vía POST /users/search (para usuarios activos)
+        # 1. POST /users/search (usuarios activos)
         try:
             search_url = "https://api.mypurecloud.com/api/v2/users/search"
             search_payload = {
@@ -462,7 +423,7 @@ class GenesysBrowserAutomation:
         except Exception as e:
             logger.debug(f"Error en /users/search para '{val}': {e}")
 
-        # 2. Si es un ejecutivo inactivo, /users/search retorna 0 resultados. Consultar GET /users?state=inactive
+        # 2. GET /users?state=inactive (ejecutivos inactivos)
         try:
             logger.info(f"Buscando ejecutivos inactivos en Genesys para '{val}'...")
             page_num = 1
@@ -482,7 +443,7 @@ class GenesysBrowserAutomation:
                         user_id = u.get("id")
                         if user_id:
                             self._user_id_cache[val] = user_id
-                            logger.info(f"✓ UserId de ejecutivo inactivo localizado para '{val}': {user_id} ({u.get('name')})")
+                            logger.info(f"✓ UserId inactivo localizado para '{val}': {user_id} ({u.get('name')})")
                             return user_id
                 if page_num >= data.get("pageCount", 1):
                     break
@@ -493,16 +454,18 @@ class GenesysBrowserAutomation:
         return None
 
     def ejecutar_descargas_api(self, solicitudes: List[SolicitudAudio], token: str, stop_checker=None, period_str: str = None) -> bool:
-        """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad."""
-        logger.info(f"⚡ Iniciando descargas ultrarrápidas vía API REST para {len(solicitudes)} registro(s)...")
-        
-        # Cargar catálogo de traducción de UUIDs a nombres de wrapup
+        """Descarga audios masivamente consumiendo la API REST directa de Genesys Cloud a alta velocidad.
+
+        Busca simultáneamente por DNIS y por ANI con variantes de código de país (+51 / tel:).
+        """
+        logger.info(f"⚡ Iniciando descargas vía API REST directa para {len(solicitudes)} registro(s)...")
+
         wrapup_catalog = self._obtener_catalogo_wrapups(token)
 
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "accept": "*/*"
+            "accept": "*/*",
         }
         api_query_url = "https://api.mypurecloud.com/api/v2/analytics/conversations/details/query"
 
@@ -524,47 +487,62 @@ class GenesysBrowserAutomation:
                 return False
 
             logger.info(f"--- [API REST {idx}/{len(solicitudes)}] Promotor: {sol.reg_ev} | DNI: {sol.dni} ---")
-            
-            # Formatear el intervalo para el mes correspondiente
+
+            # Formatear el intervalo de fecha
             intervalo = default_intervalo
-            m = re.search(r'_(\d{4})(\d{2})\d{2}', sol.nombre_archivo)
+            m = re.search(r"_(\d{4})(\d{2})\d{2}", sol.nombre_archivo)
             if m:
                 anio_n, mes_n = int(m.group(1)), int(m.group(2))
                 m_next = 1 if mes_n == 12 else mes_n + 1
                 y_next = anio_n + 1 if mes_n == 12 else anio_n
                 intervalo = f"{anio_n:04d}-{mes_n:02d}-01T05:00:00.000Z/{y_next:04d}-{m_next:02d}-01T05:00:00.000Z"
 
-            user_id = self._obtener_user_id_por_matricula(token, sol.reg_ev) if sol.reg_ev else None
+            # Construir predicados de teléfono evaluando DNIS y ANI (incluyendo variantes +51 / tel:)
+            phone_preds = []
+            for tlf in (sol.telefonos or []):
+                t = str(tlf).strip()
+                if not t:
+                    continue
+                phone_preds.extend([
+                    {"dimension": "dnis", "value": t},
+                    {"dimension": "ani", "value": t},
+                    {"dimension": "ani", "value": f"tel:{t}"},
+                ])
+                if len(t) == 9:
+                    phone_preds.extend([
+                        {"dimension": "dnis", "value": f"+51{t}"},
+                        {"dimension": "ani", "value": f"+51{t}"},
+                        {"dimension": "dnis", "value": f"tel:+51{t}"},
+                        {"dimension": "ani", "value": f"tel:+51{t}"},
+                        {"dimension": "dnis", "value": f"51{t}"},
+                        {"dimension": "ani", "value": f"51{t}"},
+                    ])
+                elif len(t) in (7, 8):
+                    phone_preds.extend([
+                        {"dimension": "dnis", "value": f"+51{t}"},
+                        {"dimension": "ani", "value": f"+51{t}"},
+                        {"dimension": "dnis", "value": f"+511{t}"},
+                        {"dimension": "ani", "value": f"+511{t}"},
+                    ])
 
             segment_filters = []
-            if user_id:
-                logger.info(f"  Filtro userId GUID aplicado: {user_id} para {sol.reg_ev}")
+            if phone_preds:
+                segment_filters.append({"type": "or", "predicates": phone_preds})
+            else:
                 segment_filters.append({
                     "type": "or",
                     "predicates": [
-                        {
-                            "type": "dimension",
-                            "dimension": "userId",
-                            "operator": "matches",
-                            "value": user_id
-                        }
-                    ]
+                        {"dimension": "direction", "value": "inbound"},
+                        {"dimension": "direction", "value": "outbound"},
+                    ],
                 })
-
-            if sol.telefonos:
-                dnis_preds = [{"dimension": "dnis", "value": str(tlf).strip()} for tlf in sol.telefonos if str(tlf).strip()]
-                if dnis_preds:
-                    segment_filters.append({"type": "or", "predicates": dnis_preds})
-            
-            if not segment_filters:
-                segment_filters.append({"type": "or", "predicates": [{"dimension": "direction", "value": "inbound"}, {"dimension": "direction", "value": "outbound"}]})
 
             payload = {
                 "order": "desc",
                 "orderBy": "conversationStart",
                 "paging": {"pageSize": 100, "pageNumber": 1},
                 "interval": intervalo,
-                "segmentFilters": segment_filters
+                "segmentFilters": segment_filters,
             }
 
             try:
@@ -576,19 +554,45 @@ class GenesysBrowserAutomation:
                 conversations = resp.json().get("conversations", [])
                 candidatas = [c for c in conversations if self._es_conclusion_acepta(c, wrapup_catalog)]
 
+                # Si hay múltiples llamadas y se especificó promotor, priorizar la que coincida con reg_ev
+                if len(candidatas) > 1 and sol.reg_ev:
+                    reg_ev_upper = str(sol.reg_ev).strip().upper()
+                    user_id = self._obtener_user_id_por_matricula(token, sol.reg_ev)
+                    candidatas_promotor = [
+                        c for c in candidatas
+                        if reg_ev_upper in str(c.get("participants", [])).upper()
+                        or (user_id and user_id in str(c.get("participants", [])))
+                    ]
+                    if candidatas_promotor:
+                        candidatas = candidatas_promotor
+
                 if not candidatas:
-                    logger.warning(f"No se hallaron interacciones 'ACEPTA CAMPAÑA' vía API para DNI {sol.dni}")
+                    logger.warning(f"No se hallaron interacciones 'ACEPTA CAMPAÑA' vía API (DNIS/ANI) para DNI {sol.dni}")
                     self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
                     self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
                     continue
 
-                nombre_base = sol.nombre_archivo
                 descargas_exitosas = 0
 
                 for sub_idx, conv in enumerate(candidatas, 1):
                     conv_id = conv.get("conversationId")
                     logger.info(f"Procesando conversación API {conv_id} ({sub_idx}/{len(candidatas)})...")
-                    
+
+                    # Extraer fecha exacta de la llamada para asegurar el nombre estándar
+                    conv_start = conv.get("conversationStart", "")
+                    fecha_exacta = ""
+                    if conv_start:
+                        try:
+                            dt_conv = datetime.datetime.fromisoformat(conv_start.replace("Z", "+00:00"))
+                            fecha_exacta = dt_conv.strftime("%Y%m%d")
+                        except Exception:
+                            pass
+
+                    nombre_base = sol.nombre_archivo
+                    if fecha_exacta and f"_{fecha_exacta}" not in nombre_base:
+                        prefijo = sol.prefijo or "AUDIO"
+                        nombre_base = f"{prefijo}_{sol.reg_ev}_DNI{sol.dni}_{fecha_exacta}"
+
                     recs = []
                     rec_list_url = f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings"
                     rec_resp = requests.get(rec_list_url, headers=headers, verify=False, timeout=15)
@@ -613,7 +617,6 @@ class GenesysBrowserAutomation:
                     rec_target = recs[0]
                     rec_id = rec_target.get("id")
 
-                    # Verificar si la grabación ya tiene una URL directa en metadatos
                     download_link = rec_target.get("mediaUri")
                     if not download_link and rec_target.get("mediaUris"):
                         for m_v in rec_target.get("mediaUris", {}).values():
@@ -621,12 +624,12 @@ class GenesysBrowserAutomation:
                                 download_link = m_v.get("mediaUri")
                                 break
 
-                    # Probar URLs con formato MP3, WAV y genérico
+                    # Transcodificación directa MP3 / WAV
                     if not download_link:
                         format_urls = [
                             f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=MP3&download=true",
                             f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?download=true",
-                            f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=WAV&download=true"
+                            f"https://api.mypurecloud.com/api/v2/conversations/{conv_id}/recordings/{rec_id}?formatId=WAV&download=true",
                         ]
 
                         for media_url in format_urls:
@@ -653,7 +656,7 @@ class GenesysBrowserAutomation:
                             if download_link:
                                 break
 
-                    # Si transcodificación directa demoró, intentar Batch Request API como respaldo
+                    # Fallback Batch Request API si la transcodificación directa demoró
                     if not download_link:
                         try:
                             batch_url = "https://api.mypurecloud.com/api/v2/recording/batchrequests"
@@ -705,343 +708,35 @@ class GenesysBrowserAutomation:
         return True
 
     def procesar_solicitudes(self, solicitudes: List[SolicitudAudio], headless: bool = True):
-        """Alias retrocompatible para ejecutar_descargas"""
+        """Alias retrocompatible para ejecutar_descargas."""
         return self.ejecutar_descargas(solicitudes, headless=headless)
 
     def ejecutar_descargas(self, solicitudes: List[SolicitudAudio], headless: bool = True, stop_checker=None, period_str: str = None) -> None:
+        """Punto de entrada principal para la descarga masiva de llamadas en Genesys Cloud.
+
+        Ejecuta 100% mediante API REST v2 sin interactuar con la interfaz gráfica.
+        """
         solicitudes = self.tracking_store.filtrar_no_procesados(solicitudes)
         if not solicitudes:
             logger.info("No hay solicitudes pendientes por procesar.")
             return
 
-        MESES_MAP = {
-            1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-            5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-            9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
-        }
-        if period_str and len(period_str) == 6 and period_str.isdigit():
-            target_year = int(period_str[:4])
-            target_month_num = int(period_str[4:])
-        else:
-            d = datetime.datetime.now()
-            target_year = d.year
-            target_month_num = d.month
+        logger.info(f"Iniciando descargas en Genesys Cloud para {len(solicitudes)} registro(s) [Período: {period_str or 'actual'}]...")
 
-        target_month_name = MESES_MAP.get(target_month_num, "agosto")
+        # 1. Intentar reutilizar token vigente desde la caché local
+        token = self._cargar_token_cache()
+        if token and self._verificar_token(token):
+            logger.info("⚡ Bearer Token activo reutilizado de la caché local.")
+            self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker, period_str=period_str)
+            return
 
-        logger.info(f"Iniciando descargas en Genesys Cloud para {len(solicitudes)} registro(s) [Período: {target_year}-{target_month_num:02d} ({target_month_name})]...")
+        # 2. Conectar a Chrome para capturar el token de la sesión activa
+        logger.info("Conectando con Chrome para capturar Bearer Token activo de Genesys Cloud...")
+        token = self._capturar_token_desde_navegador(headless=headless, stop_checker=stop_checker)
 
-        with sync_playwright() as p:
-            browser = None
-            context = None
-            page = None
+        if not token:
+            logger.error("❌ No se pudo capturar el Bearer Token de Genesys Cloud. Verifique que Chrome tenga la sesión iniciada.")
+            return
 
-            # 1. Verificar/Auto-lanzar Chrome CDP con perfil persistente (.chrome_genesys_profile)
-            if self._lanzar_chrome_cdp_automatico():
-                try:
-                    browser = p.chromium.connect_over_cdp(self.cdp_url)
-                    logger.info(f"Conectado exitosamente a Chrome vía CDP ({self.cdp_url})")
-                    page = self._obtener_page_principal(browser)
-                except Exception as e:
-                    logger.warning(f"Error conectando vía CDP a Chrome: {e}")
-
-            # 2. Si no se logró la conexión CDP, fallback a persistent context de Playwright
-            if not page:
-                user_data_dir = str(PROFILE_DIR)
-                PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-
-                def _abrir_contexto(is_headless):
-                    args = ["--start-maximized"] if not is_headless else []
-                    try:
-                        return p.chromium.launch_persistent_context(
-                            user_data_dir=user_data_dir,
-                            channel="chrome",
-                            headless=is_headless,
-                            args=args
-                        )
-                    except Exception:
-                        return p.chromium.launch_persistent_context(
-                            user_data_dir=user_data_dir,
-                            headless=is_headless,
-                            args=args
-                        )
-
-                context = _abrir_contexto(headless)
-                page = context.pages[0] if context.pages else context.new_page()
-                page.goto(self.genesys_url)
-                time.sleep(3)
-
-            # 3. Detectar si la página está en pantalla de login de Microsoft / Genesys SSO
-            if page:
-                try:
-                    def _es_url_login(url_str: str) -> bool:
-                        u = url_str.lower()
-                        return any(d in u for d in ["microsoftonline.com", "login.live.com", "accounts.google.com", "login.windows.net"]) or "/login" in u or "login?" in u
-
-                    if _es_url_login(page.url):
-                        logger.info("🔑 Sesión no iniciada o token expirado en Microsoft/Genesys.")
-                        logger.info("👉 Por favor complete el inicio de sesión en Chrome. (Tiempo de espera: 5 minutos)...")
-                        start_time = time.time()
-                        while time.time() - start_time < 300:
-                            if stop_checker and stop_checker():
-                                logger.warning("🛑 Cancelado durante espera de login.")
-                                return
-                            if page.is_closed():
-                                logger.warning("Navegador cerrado por el usuario.")
-                                return
-                            try:
-                                curr = page.url.lower()
-                                if not _es_url_login(curr) and ("purecloud" in curr or "genesys" in curr or "mypurecloud" in curr):
-                                    logger.info("✅ Login completado exitosamente. Sesión persistida.")
-                                    break
-                            except Exception:
-                                pass
-                            time.sleep(2)
-
-                    if "analytics/interactions" not in page.url and ("purecloud" in page.url or "genesys" in page.url):
-                        try:
-                            origin = page.url.split("/directory")[0] if "/directory" in page.url else self.genesys_url.split("/directory")[0]
-                            target_url = self.construir_url_interacciones_fecha(origin, anio=target_year, mes=target_month_num)
-                            logger.info(f"Navegando a la vista de Interacciones con fecha pre-filtrada ({target_url})...")
-                            page.goto(target_url)
-                            time.sleep(2)
-                        except Exception:
-                            pass
-                except Exception as e:
-                    logger.debug(f"Error verificando redirección de login: {e}")
-
-            if not page:
-                for ctx in (browser.contexts if browser else [context] if context else []):
-                    for pg in ctx.pages:
-                        try:
-                            if "purecloud" in pg.url or "genesys" in pg.url:
-                                page = pg
-                                break
-                        except Exception:
-                            continue
-                    if page:
-                        break
-
-            if not page:
-                logger.error("No se encontró sesión activa de Genesys Cloud.")
-                return
-
-            # Intentar extracción automática del Bearer Token y ejecutar vía API REST
-            token = self._extraer_bearer_token(page, timeout_ms=3000)
-            if token:
-                logger.info("🔑 Bearer Token capturado automáticamente de la sesión activa.")
-                if self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker, period_str=period_str):
-                    logger.info("⚡ Proceso completado exitosamente a alta velocidad vía API REST.")
-                    return
-
-            base_url = None
-            if "/directory/#/" in page.url:
-                base_url = page.url.split("/directory/#/")[0]
-
-            for idx, sol in enumerate(solicitudes, 1):
-                if stop_checker and stop_checker():
-                    logger.warning("🛑 Proceso detenido por el usuario.")
-                    break
-                logger.info(f"--- Registro {idx}/{len(solicitudes)}: Promotor {sol.reg_ev} | DNI {sol.dni} ---")
-                detalle_page = None
-                try:
-                    if idx > 1:
-                        page = self._obtener_page_principal(browser)
-                        if page:
-                            try:
-                                page.bring_to_front()
-                                page.wait_for_timeout(500)
-                            except Exception:
-                                pass
-
-                    page = self._obtener_page_principal(browser)
-                    if not page:
-                        logger.error("Pestaña de Interacciones no disponible. Abortando.")
-                        break
-
-                    self._cerrar_pestanas_admin_rezagadas(page)
-                    page.wait_for_timeout(1000)
-
-                    analytics_frame = self._localizar_iframe(page, SELECTORS["analytics_iframe_url"], max_intentos=15)
-                    if not analytics_frame:
-                        logger.warning("No se localizó iframe 'analytics-ui'. Saltando registro.")
-                        continue
-
-                    self._asegurar_panel_filtros_abierto(analytics_frame)
-                    self._limpiar_filtros_si_hay(analytics_frame)
-                    self._asegurar_filtro_fecha(analytics_frame, mes_deseado=target_month_name, anio_deseado=str(target_year))
-
-                    self._rellenar_filtro_usuario(analytics_frame, sol.reg_ev)
-                    self._rellenar_filtro_dnis(analytics_frame, sol.telefonos)
-
-                    analytics_frame.wait_for_timeout(3000)
-                    cantidad = self._esperar_y_contar_filas(analytics_frame)
-
-                    if cantidad == 0:
-                        logger.warning(f"No encontrado en Genesys: {sol.reg_ev} - DNI {sol.dni}")
-                        self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
-                        continue
-
-                    try:
-                        analytics_frame.locator(SELECTORS["loading_spinner"]).wait_for(state="hidden", timeout=15000)
-                    except Exception:
-                        pass
-
-                    filas = analytics_frame.locator(SELECTORS["action_rows"])
-                    total = filas.count()
-                    candidatos = []
-                    meses = {"ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12}
-                    fecha_fila = ""
-
-                    for i in range(total):
-                        try:
-                            texto = filas.nth(i).inner_text()
-                            if "ACEPTA CAMPANA" not in texto.upper() and "ACEPTA CAMPAÑA" not in texto.upper():
-                                continue
-                            candidatos.append(texto)
-                            if len(candidatos) == 1:
-                                m = re.search(r'(\d{1,2})\s+DE\s+([A-Z]+)\.?\s+DE\s+(\d{4})', texto.upper())
-                                if m:
-                                    dia, mes_txt, anio = m.group(1), m.group(2), m.group(3)
-                                    mes_num = meses.get(mes_txt[:3], 1)
-                                    fecha_fila = f"{anio}{mes_num:02d}{int(dia):02d}"
-                        except Exception:
-                            continue
-
-                    if not candidatos:
-                        logger.warning(f"No se hallaron filas con 'ACEPTA CAMPAÑA' para DNI {sol.dni}")
-                        self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
-                        continue
-
-                    nombre_archivo_base = sol.nombre_archivo
-                    if fecha_fila and f"_{fecha_fila}" not in nombre_archivo_base:
-                        nombre_archivo_base = f"{sol.prefijo}_{sol.reg_ev}_DNI{sol.dni}_{fecha_fila}"
-
-                    for numero, texto_objetivo in enumerate(candidatos, start=1):
-                        logger.info(f"Procesando interacción ACEPTA {numero}/{len(candidatos)}...")
-                        detalle_page = None
-                        try:
-                            analytics_frame = self._localizar_iframe(page, SELECTORS["analytics_iframe_url"], max_intentos=5)
-                            filas = analytics_frame.locator(SELECTORS["action_rows"])
-                            fila_real = None
-                            for i in range(filas.count()):
-                                if filas.nth(i).inner_text() == texto_objetivo:
-                                    fila_real = i
-                                    break
-                            if fila_real is None:
-                                continue
-
-                            filas.nth(fila_real).click(force=True, timeout=15000)
-
-                            for _ in range(15):
-                                admin_pages = [pg for pg in page.context.pages if "/admin" in pg.url]
-                                if admin_pages:
-                                    detalle_page = admin_pages[-1]
-                                    break
-                                page.wait_for_timeout(1000)
-
-                            if not detalle_page:
-                                logger.error("No se abrió pestaña de detalles.")
-                                continue
-
-                            frame_detalle = self._localizar_iframe(detalle_page, SELECTORS["details_iframe_url"])
-                            if not frame_detalle:
-                                logger.error("No se cargó iframe de detalles.")
-                                continue
-
-                            frame_detalle.locator(SELECTORS["duration_container"]).wait_for(state="visible", timeout=TIMEOUT_DETAILS_LOAD)
-
-                            total_audios = 1
-                            pager = frame_detalle.locator(SELECTORS["pager_count"])
-                            if pager.count() > 0:
-                                match = re.search(r'(\d+)\s+de\s+(\d+)', pager.inner_text())
-                                if match:
-                                    total_audios = int(match.group(2))
-
-                            mejor_idx = 0
-                            mejor_dur = -1
-
-                            if total_audios > 1:
-                                for _ in range(15):
-                                    try:
-                                        if frame_detalle.locator(SELECTORS["pager_count"]).inner_text().startswith("1 de"):
-                                            break
-                                        frame_detalle.locator(SELECTORS["prev_recording_btn"]).click(force=True)
-                                        frame_detalle.wait_for_timeout(800)
-                                    except Exception:
-                                        break
-
-                                for idx_a in range(total_audios):
-                                    if idx_a > 0:
-                                        frame_detalle.locator(SELECTORS["next_recording_btn"]).click(force=True)
-                                        frame_detalle.wait_for_timeout(1500)
-                                    try:
-                                        d = frame_detalle.locator(SELECTORS["duration_container"]).inner_text()
-                                        s = self._convertir_duracion_segundos(d)
-                                        if s > mejor_dur:
-                                            mejor_dur = s
-                                            mejor_idx = idx_a
-                                    except Exception:
-                                        pass
-
-                                for _ in range(15):
-                                    try:
-                                        if frame_detalle.locator(SELECTORS["pager_count"]).inner_text().startswith("1 de"):
-                                            break
-                                        frame_detalle.locator(SELECTORS["prev_recording_btn"]).click(force=True)
-                                        frame_detalle.wait_for_timeout(800)
-                                    except Exception:
-                                        break
-
-                                for _ in range(mejor_idx):
-                                    frame_detalle.locator(SELECTORS["next_recording_btn"]).click(force=True)
-                                    frame_detalle.wait_for_timeout(1500)
-
-                            nombre_audio = f"{nombre_archivo_base}_P{numero:02d}" if len(candidatos) > 1 else nombre_archivo_base
-
-                            frame_detalle.locator(SELECTORS["download_trigger_btn"]).click(force=True)
-                            frame_detalle.wait_for_timeout(2000)
-                            frame_detalle.locator(SELECTORS["filename_input"]).wait_for(state="visible", timeout=5000)
-                            frame_detalle.locator(SELECTORS["filename_input"]).clear()
-                            frame_detalle.locator(SELECTORS["filename_input"]).fill(nombre_audio)
-                            frame_detalle.wait_for_timeout(1000)
-
-                            op_desplegable = frame_detalle.locator(SELECTORS["format_dropdown"])
-                            if op_desplegable.count() > 0 and op_desplegable.is_visible():
-                                op_desplegable.click(force=True)
-                                frame_detalle.wait_for_timeout(1000)
-                                frame_detalle.locator(SELECTORS["format_mp3_option"]).evaluate("el => el.click()")
-                                frame_detalle.wait_for_timeout(1000)
-
-                            archivo_mp3 = DOWNLOADS_DIR / f"{nombre_audio}.mp3"
-                            if archivo_mp3.exists():
-                                archivo_mp3.unlink()
-
-                            try:
-                                with detalle_page.expect_download(timeout=60000) as dl_info:
-                                    frame_detalle.locator(SELECTORS["confirm_download_btn"]).click(force=True)
-                                    logger.info(f"Descargando audio {mejor_idx+1}/{total_audios}...")
-                                download = dl_info.value
-                                download.save_as(str(archivo_mp3))
-                                logger.info(f"✓ MP3 guardado exitosamente: {archivo_mp3}")
-                            except Exception as e:
-                                logger.error(f"Error guardando descarga de audio: {e}")
-
-                        except Exception as e:
-                            logger.error(f"Error procesando fila ACEPTA {numero}: {e}")
-                        finally:
-                            if detalle_page and detalle_page != page:
-                                try:
-                                    detalle_page.close()
-                                except Exception:
-                                    pass
-
-                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO, telefonos=sol.telefonos)
-                    logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada.")
-
-                except Exception as rec_err:
-                    logger.error(f"❌ Error procesando registro {sol.reg_ev} | DNI {sol.dni}: {rec_err}")
-
-            logger.info("Proceso de descargas finalizado correctamente.")
+        logger.info("🔑 Bearer Token capturado exitosamente. Ejecutando descargas masivas vía API REST...")
+        self.ejecutar_descargas_api(solicitudes, token, stop_checker=stop_checker, period_str=period_str)

@@ -21,6 +21,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 TRACKING_FILE = CACHE_DIR / "genesys_tracking.json"
 TELEFONOS_CACHE_FILE = CACHE_DIR / "telefonos_cache.json"
 NO_ENCONTRADOS_FILE = CACHE_DIR / "no_encontrados.csv"
+TOKEN_CACHE_FILE = CACHE_DIR / "genesys_token.json"
 
 # Cargar .env de la raíz si existe
 env_root = PROJECT_ROOT / ".env"
