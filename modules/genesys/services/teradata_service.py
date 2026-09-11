@@ -36,56 +36,45 @@ class TeradataService:
             else:
                 try:
                     import teradatasql
-                    logger.info(f"Consultando Teradata en lote para {len(dnis_faltantes)} DNI(s) faltantes...")
+                    logger.info(f"Consultando Teradata para {len(dnis_faltantes)} DNI(s) faltantes...")
 
-                    dni_variants = set()
-                    dni_map = {}
-                    for d in dnis_faltantes:
-                        raw = str(d).strip()
-                        zfill = raw.zfill(8)
-                        dni_variants.add(raw)
-                        dni_variants.add(zfill)
-                        dni_map[raw] = raw
-                        dni_map[zfill] = raw
+                    for dni in dnis_faltantes:
+                        dni_zero = str(dni).strip().zfill(8)
 
-                    in_clause = ", ".join(f"'{x}'" for x in sorted(dni_variants))
-                    query = f"""
-                        SELECT DISTINCT TRIM(CODDOC), NUMTELEFONO
-                        FROM E_DW_VIEWS.V_CONT_TELEFONO_APICLIENTE
-                        WHERE TRIM(CODDOC) IN ({in_clause})
-                          AND NUMTELEFONO IS NOT NULL
-                    """
+                        query = f"""
+                            SELECT DISTINCT NUMTELEFONO
+                            FROM E_DW_VIEWS.V_CONT_TELEFONO_APICLIENTE
+                            WHERE CODDOC = '{dni_zero}'
+                              AND NUMTELEFONO IS NOT NULL
+                        """
 
-                    try:
-                        with teradatasql.connect(
-                            host=TERADATA_HOST,
-                            user=TERADATA_USER,
-                            password=TERADATA_PASSWORD,
-                            logmech=TERADATA_LOGMECH,
-                        ) as con:
-                            cur = con.cursor()
-                            cur.execute(query)
-                            raw_rows = cur.fetchall()
+                        try:
+                            with teradatasql.connect(
+                                host=TERADATA_HOST,
+                                user=TERADATA_USER,
+                                password=TERADATA_PASSWORD,
+                                logmech=TERADATA_LOGMECH,
+                            ) as con:
+                                cur = con.cursor()
+                                cur.execute(query)
+                                raw_rows = cur.fetchall()
 
-                        temp_phones = {}
-                        for row in raw_rows:
-                            if row and row[0] and row[1]:
-                                doc = str(row[0]).strip()
-                                clean_num = re.sub(r"\D", "", str(row[1]))
-                                if len(clean_num) >= 7:
-                                    orig_key = dni_map.get(doc)
-                                    if orig_key:
-                                        temp_phones.setdefault(orig_key, []).append(clean_num)
+                                telefonos = []
+                                for r in raw_rows:
+                                    if r[0]:
+                                        clean_num = re.sub(r"\D", "", str(r[0]))
+                                        if len(clean_num) >= 7:
+                                            telefonos.append(clean_num)
 
-                        for orig_key, t_list in temp_phones.items():
-                            unique_phones = list(dict.fromkeys(t_list))
-                            cache[orig_key] = unique_phones
-                            cache[orig_key.zfill(8)] = unique_phones
+                                if telefonos:
+                                    telefonos = list(dict.fromkeys(telefonos))
+                                    cache[str(dni).strip()] = telefonos
+                                    cache[dni_zero] = telefonos
+                        except Exception as e:
+                            logger.error(f"Error consultando Teradata para DNI {dni}: {e}")
 
-                        self.cache_store.guardar(cache)
-                        logger.info("Caché de teléfonos actualizado atómicamente con resultados del lote.")
-                    except Exception as e:
-                        logger.error(f"Error consultando lote de teléfonos en Teradata: {e}")
+                    self.cache_store.guardar(cache)
+                    logger.info(f"Caché de teléfonos actualizado atómicamente.")
                 except ImportError:
                     logger.error("La librería 'teradatasql' no está instalada. No se pudo consultar Teradata.")
 

@@ -69,9 +69,10 @@ class TrackingStore:
         for sol in solicitudes:
             if sol.clave_unica in tracking:
                 prev = tracking[sol.clave_unica]
-                logger.info(f"[SKIP] {sol.reg_ev} | DNI {sol.dni} ya procesado ({prev.estado.value})")
-            else:
-                filtrados.append(sol)
+                if prev.estado == EstadoRegistro.DESCARGADO:
+                    logger.info(f"[SKIP] {sol.reg_ev} | DNI {sol.dni} ya descargado previamente.")
+                    continue
+            filtrados.append(sol)
         return filtrados
 
     def registrar_no_encontrado(self, reg_ev: str, dni: str) -> None:
