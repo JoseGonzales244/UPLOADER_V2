@@ -46,11 +46,11 @@ El acceso a Teradata (`IBKTD`), al repositorio de transcripciones en SQL Server 
 ### 2.6 Diagnóstico Rápido de Conectividad y Validación de Accesos Verint
 Antes de iniciar los pipelines o procesar auditorías, el operador puede verificar la salud de sus credenciales y accesos mediante dos scripts utilitarios:
 * **Diagnóstico integral (Teradata, Insight, Verint y SQL Server):**
-  ```powershell
+  ```
   .\.venv\Scripts\python test_all_connections.py
   ```
 * **Validación puntual de acceso y extracción en Verint Speech Analytics:**
-  ```powershell
+  ```
   .\.venv\Scripts\python test_verint_single_id.py <ID_DE_LLAMADA>
   ```
   Permite validar en segundos si la sesión de Verint responde y descarga el diálogo completo en formato Word (`.docx`).

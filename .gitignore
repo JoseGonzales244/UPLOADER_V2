@@ -49,6 +49,9 @@ logs/
 !data/input/base_consumo/CD40K_NEW.xlsx
 !data/input/base_consumo/CD40K.xlsx
 !data/input/proceso_calidad/ACCION_TOMADA.xlsx
+!*MAESTRA_NIVEL_NTD*.xlsx
+!data/**/MAESTRA_NIVEL_NTD*.xlsx
+!data/input/INSERT_MAESTRA_NIVEL_NTD.sql
 *.csv
 !data/input/proceso_calidad/*.csv
 
