@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph BI ["Consumo de Negocio"]
-        PBI["Power BI Service\nTablero CALIDAD de servicios"]
+        PBI["Power BI Service\\nWorkspace: CANALES Y SRVICIO AL CLIENTE\\n(Tablero CALIDAD de servicios)"]
     end
 
     UI <-->|HTTP / WS| API
@@ -145,13 +145,64 @@ flowchart LR
 
 ## 4. Pipeline de Dotación (Staffing)
 
-**Orquestador:** [dotacion_orchestrator.py](../../modules/dotacion/use_cases/dotacion_orchestrator.py)
+**Orquestador:** [dotacion_orchestrator.py](../../modules/dotacion/use_cases/dotacion_orchestrator.py)  
+**Configuración de Rutas:** [dotacion_config.py](../../modules/dotacion/dotacion_config.py)
 
-1. **Fase 1 (Padrón Consolidado):** Consolida ausentismos, vacaciones y dotación activa desde los libros de `EQUIPO DE VENTAS`.
-2. **Fase 2 (Validaciones):** Revisa consistencia de registros de ejecutivos contra la base corporativa.
-3. **Fase 3 (Licenciamiento SA):** Cruza asesores activos con las licencias disponibles de Verint Speech Analytics (`LICENCIAS_SA_2026.xlsx`).
-4. **Fase 4 (Padrón Preliminar):** Genera `<MES>_TELEVENTAS_EJECUTIVOS_PRELIMINAR.xlsx` para subirlo a la herramienta corporativa web **P021**.
-5. **Hook Automático:** Al cargarse a Teradata, se puebla `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS` y se deriva a `M_EXP_TELEVENTAS_EJECUTIVOS_GROUPED` particionado por `{PERIODO}`.
+```mermaid
+flowchart LR
+    subgraph D_In ["Insumos Dinámicos (OneDrive)"]
+        IN1["EQUIPO DE VENTAS\n(Mes Anterior)"]
+        IN2["Planilla Ausentismo\n(Consolidado Mensual)"]
+        IN3["Dotación Ausencias Select\n(Equipo Select)"]
+        IN4["Gestión de Vacaciones\n(Analistas de Calidad)"]
+        IN5["TELEVENTAS_EJECUTIVOS\n(Mes Anterior)"]
+    end
+
+    subgraph D_Core ["Pipeline de Dotación (Fases 1 a 4)"]
+        DF1["Fase 1: Saneamiento\n(Limpieza y Carga Ausentismos)"]
+        DF2["Fase 2: Sincronización Roster\n(Altas, Bajas y Cohortes R0 a R3)"]
+        DF3["Fase 3: Distribución Muestras\n(Cuotas balanceadas entre 4 analistas)"]
+        DF4["Fase 4: Televentas Ejecutivos\n(Reconciliación y Maestro Preliminar)"]
+        D_COM["Recálculo COM & Purga #REF!\n(Win32COM Excel Application)"]
+    end
+
+    subgraph D_Out ["Entregables y Persistencia"]
+        OUT1["EQUIPO DE VENTAS\n(Preliminar Consolidado .xlsx)"]
+        OUT2["TELEVENTAS_EJECUTIVOS_PRELIMINAR\n(Insumo para aplicativo P021)"]
+        OUT3[("Teradata: DLAB_GEC\nM_EXP_TELEVENTAS_EJECUTIVOS")]
+    end
+
+    IN1 & IN2 & IN3 --> DF1
+    DF1 --> DF2
+    IN4 --> DF3
+    DF2 --> DF3
+    DF3 --> D_COM
+    D_COM --> DF4
+    IN5 --> DF4
+    D_COM --> OUT1
+    DF4 --> OUT2
+    OUT2 -.->|Carga Manual P021 / Ingesta| OUT3
+```
+
+### 4.1 Matriz de Insumos Dinámicos (Rutas Variables por Período)
+El módulo de Dotación depende de archivos compartidos en OneDrive cuyos nombres y carpetas cambian dinámicamente según el año (`{YYYY}`), mes (`{MM}` / `{MES}`) y período anterior:
+
+| Insumo | Patrón de Nombre de Archivo | Carpeta Relativa en OneDrive | Responsable / Origen | Propósito en el Pipeline |
+| :--- | :--- | :--- | :--- | :--- |
+| **Plantilla Base** | `{prev_month} EQUIPO DE VENTAS {MES_ANT} {prev_year}.xlsx` | `1. EXPERIENCIA DE COMPRA/EQUIPO DE VENTAS {YYYY}/` | Operaciones TLV | Base comisional y estructura previa de ejecutivos y supervisores. |
+| **Ausentismos General** | `Consolidado Planilla ausentismo {YYYY}{MM}.xlsx` | `Dotación {YYYY}/Dotación {YYYYMM}/` | Carolina Angulo | Registro de licencias, descansos médicos y ausencias no remuneradas. |
+| **Ausentismos Select** | `Dotacion_Ausencias_Select_{MesCap}{YY}.xlsx` | `Dotación {YYYY}/Dotación {YYYYMM}/Equipo Select/` | Carolina Angulo | Padrón de bajas y ausentismos específicos de la sala SELECT (coordinar con Carolina). |
+| **Vacaciones Analistas** | `Gestión de Vacaciones y Horarios {YYYY}.xlsx` | `1. EXPERIENCIA DE COMPRA/GESTIÓN {YYYY}/VACACIONES/` | Calidad y Experiencia | Días laborables reales por analista para calibrar sus metas de auditoría. |
+| **Ejecutivos Anterior** | `{prev_month} {MES_ANT}_TELEVENTAS_EJECUTIVOS.xlsx` | `1. EXPERIENCIA DE COMPRA/GESTIÓN {YYYY}/DOTACION/TERADATA/` | Histórico local | Matriz de correspondencia de registros para validar altas/bajas comisionales. |
+| **Licenciamiento SA** | `LICENCIAS_SA_{YYYY}.xlsx` | `1. EXPERIENCIA DE COMPRA/GESTIÓN {YYYY}/DOTACION/` | Equipo Calidad ➔ Carlos Jurado | Generado por Calidad y remitido a Carlos Jurado para que organice las licencias de Speech Analytics en Verint. |
+
+### 4.2 Detalle de Fases de Dotación:
+1. **Pre-flight Checks:** Valida la presencia física de los 5 archivos obligatorios antes de iniciar la ejecución para evitar fallos a mitad de proceso.
+2. **Fase 1 (Saneamiento de Plantilla):** Duplica la plantilla base como borrador preliminar, limpia rangos obsoletos y vacía el consolidado de ausentismos del mes.
+3. **Fase 2 (Sincronización de Roster):** Reconcilia el maestro de asesores aplicando altas, bajas y progresión de cohortes formativas (`R0 ➔ R1 ➔ R2 ➔ R3`) y personal titular.
+4. **Fase 3 (Distribución Cuotas de Auditoría):** Calcula la cuota de llamadas a auditar por analista (`CAROLINA`: 8/día, `CARMEN`: 8/día, `JANE`: 5/día, `KARIN`: +12% sobre Carolina y Carmen), descontando automáticamente sus días de vacaciones programados.
+5. **Recálculo Nativo y Purga #REF!:** Automatización Windows COM (`win32com.client`) para forzar el recálculo interno del libro Excel y eliminar fórmulas corruptas.
+6. **Fase 4 (Generación Maestro P021):** Produce `{MES}_TELEVENTAS_EJECUTIVOS_PRELIMINAR.xlsx`, insumo indispensable para alimentar el aplicativo web **P021** y poblar la tabla maestra `DLAB_GEC.M_EXP_TELEVENTAS_EJECUTIVOS` en Teradata.
 
 ---
 
@@ -201,7 +252,7 @@ Se ejecuta una sola vez al mes cuando las notas de Calidad han sido validadas po
 
 | Vista | Finalidad |
 | :--- | :--- |
-| `V_EXP_CALIDAD_NOTA_FINAL` | Vista optimizada que alimenta directamente el tablero Power BI **"CALIDAD de servicios"**. |
+| `V_EXP_CALIDAD_NOTA_FINAL` | Vista optimizada que alimenta directamente el tablero Power BI **"CALIDAD de servicios"** (Workspace: **CANALES Y SRVICIO AL CLIENTE**). |
 | `V_CHECK_FECHAS_NTD` | Monitoreo de última fecha de actualización de insumos staging de Calidad. |
 
 ### 6.4 Vistas Externas del Data Warehouse (`E_DW_VIEWS`)

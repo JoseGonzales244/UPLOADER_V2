@@ -56,6 +56,8 @@ El acceso a Teradata (`IBKTD`), al repositorio de transcripciones en SQL Server 
 | **Mensual** *(Días 1 a 3)* | **Dotación** | Interfaz Web > Dotación | Plantillas de dotación comercial en OneDrive | Archivo preliminar para carga en aplicativo P021 |
 | **Mensual** *(1er día útil)* | **Cierre Preliminar Calidad** | Interfaz Web > Calidad | Pipeline de Calidad consolidado del mes cerrado | Tablero preliminar y envío oficial por buzón |
 | **Mensual** *(Día 2 hábil)* | **Consolidado Notas Cierre** | Interfaz Web > Calidad (Solo Cierre) | Calificaciones con levantamientos procesados | `DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE` (insumo oficial para otras áreas) |
+| **Diario / Semanal** | **Transcripciones sofIA** | CLI (`run_sync_speech.py`) | Evaluaciones TC en Teradata, API Verint SA e Insight | Transcripciones enriquecidas en `DB_SPEECH.TRANSCRIPCION` para auditoría sofIA |
+| **Mensual / Periódico** | **Piloto Tarjetas Adicionales (TCAD)** | CLI (`tcad_orchestrator.py`) | Matriz de tarjetas en `DLAB_DESNEGRET`, plantilla P026 y Speech Teradata | Base `DLAB_GEC.M_EXP_CROSS_TCAD` y consolidado `M_EXP_TCAD_BASE_MES` |
 | **A demanda** | **Auditoría WhatsApp** | CLI (`run_transcript_audit.py`) | Archivos `.docx` de conversaciones y matriz de plantillas | Informe en Excel con evaluación de cumplimiento |
 | **A demanda** | **Cumplimiento PA-TC** | CLI (`audit_cumplimiento_pa_tc.py`) | `Solicitud Cumplimiento TC 2026.xlsx` | Reporte de objeciones y validación de consentimientos |
 | **A demanda** | **Descarga de Audios** | Interfaz Web > Genesys Audios | Correo de solicitud en formato Outlook | Archivos de audio almacenados localmente |
@@ -72,6 +74,30 @@ El proceso de cierre comisional se rige por un cronograma predefinido y de conoc
 2. **Ventana de 2 días hábiles (Levantamientos de NTD):** A partir del envío oficial del preliminar, las salas disponen de un plazo improrrogable de dos (2) días hábiles para presentar solicitudes de levantamiento de Not To Do (NTD) o sustentos ante discrepancias en la data.
 3. **Cierre de ventana y bloqueo de cambios:** Concluidos los 2 días hábiles, finaliza la recepción de solicitudes. Ningún cambio posterior es admitido, garantizando la equidad y consistencia del período comisional.
 4. **Segundo día hábil (Publicación del Consolidado Oficial):** Se procesan los ajustes aprobados en `ACCION_TOMADA.xlsx`, se reejecutan las Fases 4 y 5 del mes cerrado y se corre la opción **Solo Cierre Mensual** en la plataforma. Este proceso genera la tabla principal **`DLAB_GEC.M_EXP_CALIDAD_CONSOLIDADO_NOTAS_CIERRE`** (script `03_consolidado_notas_cierre.sql`), la cual es el insumo central consumido por las demás áreas del banco para comisiones y reportería gerencial, debiendo quedar disponible e inmutable al cierre del segundo día hábil.
+
+### 3.4 Sincronización de Transcripciones para el Motor sofIA
+El motor **sofIA** automatiza la auditoría de calidad sobre llamadas de Tarjetas de Crédito evaluando el texto de las conversaciones:
+* **Cadena de dependencias:**
+  1. **Teradata:** Extrae los identificadores de llamadas (`CONID`/`ID_LLAMADA`) evaluadas bajo la plantilla `Exp. Compra - TC`.
+  2. **Verint Speech Analytics:** Descarga las transcripciones completas mediante llamadas directas a la API REST de Verint ([verint_api_client.py](../../modules/verint/services/verint_api_client.py)).
+  3. **Servidor Insight (`s425vp01`):** Resuelve y asocia el atributo comercial `TIPO_LEAD` a cada interacción.
+  4. **SQL Server (`DB_SPEECH`):** Inserta por lotes (`batch_size=200`) el texto consolidado en la tabla `TRANSCRIPCION`.
+* **Comando de ejecución:**
+  ```
+  .\.venv\Scripts\python -m modules.speech.tools.run_sync_speech --plantilla "Exp. Compra - TC"
+  ```
+  *(Para pruebas o extracciones parciales: use `--limit 10` o el flag `--skip-sql` si solo requiere guardar los archivos `.txt` en `data/transcripciones/`).*
+
+### 3.5 Consolidación del Piloto de Tarjetas Adicionales (TCAD)
+Procesa y concilia las colocaciones de tarjetas de crédito adicionales cruzando la venta contra Speech Analytics para verificar el cumplimiento del argumento comercial:
+* **Cadena de dependencias y flujo de 2 pasos:**
+  1. **Sincronización CROSS TCAD:** Extrae las colocaciones desde `DLAB_DESNEGRET.TLV_TARJETAS_MATRIZ` utilizando credenciales de `DESNEGRET`, aplica la plantilla de homologación `P026-CROSS_TCAD` y carga la data limpia en `DLAB_GEC.M_EXP_CROSS_TCAD`.
+  2. **Consolidación Mensual SQL:** Ejecuta el script `01_dml_tcad_monthly_ingest.sql` en Teradata para el período `YYYYMM`, cruzando las colocaciones contra las auditorías de Speech Analytics (`FLG_NEW_SPEECH_TCAD`) para consolidar `DLAB_GEC.M_EXP_TCAD_BASE_MES`.
+* **Comando de ejecución:**
+  ```
+  .\.venv\Scripts\python -m modules.Piloto_TCAD.use_cases.tcad_orchestrator --periodo 202608
+  ```
+  *(Si se despliega por primera vez en el entorno, ejecute previamente con `--setup` para crear las tablas y vistas DDL necesarias en Teradata).*
 
 ---
 
@@ -210,12 +236,29 @@ Extrae y cataloga llamadas sin cierre comercial para análisis de motivos de rec
 * **Ubicación:** `modules/piloto_no_venta/sql/`
 * **Procedimiento:** Ejecución de las consultas en Teradata (`DLAB_GEC`) filtrando por el rango de fechas requerido.
 
-### 5.7 Carga de Transcripciones a SQL Server (Motor sofIA)
-Envía las transcripciones generadas localmente hacia la base de datos central de Speech Analytics.
-* **Comando de ejecución:**
+### 5.7 Extracción y Sincronización de Transcripciones a SQL Server (Motor sofIA)
+Pipeline automatizado end-to-end que extrae diálogos, los enriquece con metadatos comerciales y los persiste en la base central consumida por el modelo de IA **sofIA** para la auditoría y precalificación automática de llamadas de Tarjetas de Crédito (TC).
+
+* **Arquitectura del flujo (4 etapas secuenciales):**
+  1. **Extracción desde Teradata:** Consulta las llamadas evaluadas de la plantilla comercial (por defecto `Exp. Compra - TC`), obteniendo `ID_LLAMADA`, `PRODUCTO`, `FECHA_LLAMADA`, `DNI` y matrícula (`REGISTRO`) del ejecutivo.
+  2. **Descarga de transcripciones desde Verint:** Comprueba si el diálogo ya reside localmente en `data/transcripciones/`. Si no existe, invoca al cliente HTTP API REST de Verint ([verint_api_client.py](../../modules/verint/services/verint_api_client.py)) para descargar el texto íntegro en milisegundos sin requerir navegador.
+  3. **Enriquecimiento comercial en Insight:** Consulta la base de datos de Insight (`s425vp01`) mediante [insight_lead_service.py](../../modules/speech/services/insight_lead_service.py) para catalogar la procedencia de la gestión comercial (`TIPO_LEAD`).
+  4. **Persistencia por lotes en SQL Server (`DB_SPEECH`):** Garantiza la existencia de la tabla `TRANSCRIPCION` y ejecuta un upsert masivo por lotes de 200 registros (`ID_LLAMADA`, `PRODUCTO`, `FECHA_LLAMADA`, `DNI`, `REGISTRO`, `TIPO_LEAD`, `TRANSCRIPCION`).
+* **Comandos CLI de ejecución:**
+  ```powershell
+  # Ejecución completa para la plantilla oficial de TC
+  .\.venv\Scripts\python -m modules.speech.tools.run_sync_speech --plantilla "Exp. Compra - TC"
+
+  # Muestra de validación rápida (ejemplo: primeras 10 interacciones)
+  .\.venv\Scripts\python -m modules.speech.tools.run_sync_speech --limit 10
+
+  # Modo solo descarga (almacena los .txt localmente sin impactar SQL Server)
+  .\.venv\Scripts\python -m modules.speech.tools.run_sync_speech --skip-sql
+
+  # Modo solo carga a SQL Server (reutiliza transcripciones .txt ya descargadas)
+  .\.venv\Scripts\python -m modules.speech.tools.run_sync_speech --skip-download
   ```
-  .\.venv\Scripts\python -m modules.speech.use_cases.speech_orchestrator
-  ```
+* **Propósito e impacto de negocio:** Permite que el motor de machine learning sofIA evalúe automáticamente las llamadas de televentas, liberando horas hombre a las analistas de calidad para enfocarse en análisis de objeciones y salas complejas como SELECT.
 
 ### 5.8 Mapeo de Nuevas Preguntas de Calidad en Teradata
 Si durante la Fase 4 de Calidad se emite una advertencia por preguntas no reconocidas:
@@ -250,9 +293,9 @@ La actualización de vínculos en libros compartidos de SharePoint (`ACCION_TOMA
 | :--- | :--- | :--- | :--- |
 | **Aprobación de Accesos Teradata (`DLAB_DESNEGRET`)** | Jose Salcedo (Aprobador) | Inteligencia Comercial | Aprobación formal de tickets de acceso e instalación vía **Smart Desk**. |
 | **Soporte de Conexión ODBC Teradata (`CNX_TERA_USER`)** | Juan Carlos Mondalgo | Inteligencia Comercial | Orientación técnica para la configuración del DSN y modelos de datos. |
-| **Acceso a SharePoint de Calidad y Reportes** | Vanessa Ortega / Juan Carlos Mondalgo | Calidad y Experiencia | Habilitación de permisos en el sitio SharePoint `InteligenciayExperienciaCanal` y acceso al área de trabajo (workspace) en Power BI Service (**CALIDAD de servicios**). |
-| **Dotación Comercial y Ausentismos** | Carolina Angulo | Operaciones Televentas | Coordinación y entrega de plantillas de dotación y vacaciones. |
-| **Infraestructura Speech Analytics Verint** | Carlos Jurado | Canales Digitales | Gestión de licencias SA y soporte de la consola Verint WFO. |
+| **Acceso a SharePoint de Calidad y Reportes** | Vanessa Ortega / Juan Carlos Mondalgo | Calidad y Experiencia | Habilitación de permisos en el sitio SharePoint `InteligenciayExperienciaCanal` y acceso al área de trabajo (workspace) en Power BI Service (**CANALES Y SRVICIO AL CLIENTE**, reporte **CALIDAD de servicios**). |
+| **Dotación Comercial y Ausentismos** | Carolina Angulo | Operaciones Televentas | Coordinación y entrega de plantillas de dotación y ausentismos (tanto General como sala Select). |
+| **Infraestructura Speech Analytics Verint** | Carlos Jurado | Canales Digitales | Soporte de la consola Verint WFO y recepción del consolidado mensual de licencias SA para su asignación. |
 | **Acceso a Portal Insight (`s425vp01`)** | Portal de Accesos (**Smart Desk**) | Canales Digitales | Solicitud formal mediante Portal de Accesos (orientación con **Juan Carlos Mondalgo**). Indicar acceso obligatorio a las 2 bases/áreas: **`GCI_PRD_Insight_TLVentas`** y **`GCI_PRD_Insight_ACOE`**. |
 | **Acceso a Insight Digital (WhatsApp)** | Gary Tamara | Canales Digitales | Orientación y gestión de acceso al entorno de Insight Digital para la extracción de métricas y gestiones estructuradas de WhatsApp. |
 | **Genesys Cloud** | Acceso estándar corporativo | Canales Digitales | Habilitado por defecto para el equipo mediante inicio de sesión único (SSO Microsoft). |

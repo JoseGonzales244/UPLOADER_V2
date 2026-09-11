@@ -28,6 +28,7 @@ class RegistroTracking:
     dni: str
     estado: EstadoRegistro
     timestamp: str
+    telefonos: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -35,6 +36,7 @@ class RegistroTracking:
             "dni": self.dni,
             "estado": self.estado.value if isinstance(self.estado, EstadoRegistro) else str(self.estado),
             "timestamp": self.timestamp,
+            "telefonos": self.telefonos,
         }
 
     @classmethod
@@ -44,4 +46,5 @@ class RegistroTracking:
             dni=data.get("dni", ""),
             estado=EstadoRegistro(data.get("estado", EstadoRegistro.PENDIENTE.value)),
             timestamp=data.get("timestamp", ""),
+            telefonos=data.get("telefonos", []),
         )

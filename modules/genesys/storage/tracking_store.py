@@ -3,7 +3,7 @@ import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from modules.genesys.config import NO_ENCONTRADOS_FILE, TRACKING_FILE
 from modules.genesys.logger import get_logger
@@ -45,7 +45,13 @@ class TrackingStore:
             if 'temp_path' in locals() and os.path.exists(temp_path):
                 os.remove(temp_path)
 
-    def marcar_como_procesado(self, reg_ev: str, dni: str, estado: EstadoRegistro) -> None:
+    def marcar_como_procesado(
+        self,
+        reg_ev: str,
+        dni: str,
+        estado: EstadoRegistro,
+        telefonos: Optional[List[str]] = None
+    ) -> None:
         tracking = self.cargar()
         clave = f"{reg_ev}|{dni}"
         tracking[clave] = RegistroTracking(
@@ -53,6 +59,7 @@ class TrackingStore:
             dni=dni,
             estado=estado,
             timestamp=datetime.now().isoformat(),
+            telefonos=telefonos or [],
         )
         self.guardar(tracking)
 

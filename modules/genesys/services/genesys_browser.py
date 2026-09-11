@@ -579,7 +579,7 @@ class GenesysBrowserAutomation:
                 if not candidatas:
                     logger.warning(f"No se hallaron interacciones 'ACEPTA CAMPAÑA' vía API para DNI {sol.dni}")
                     self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
                     continue
 
                 nombre_base = sol.nombre_archivo
@@ -692,11 +692,11 @@ class GenesysBrowserAutomation:
                         logger.error(f"Error descargando stream MP3: Status {audio_resp.status_code}")
 
                 if descargas_exitosas > 0:
-                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO, telefonos=sol.telefonos)
                     logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada ({descargas_exitosas} MP3 descargado(s)).")
                 else:
                     self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
                     logger.warning(f"No se lograron descargar archivos MP3 físicos para DNI {sol.dni}")
 
             except Exception as e:
@@ -880,7 +880,7 @@ class GenesysBrowserAutomation:
                     if cantidad == 0:
                         logger.warning(f"No encontrado en Genesys: {sol.reg_ev} - DNI {sol.dni}")
                         self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
                         continue
 
                     try:
@@ -912,7 +912,7 @@ class GenesysBrowserAutomation:
                     if not candidatos:
                         logger.warning(f"No se hallaron filas con 'ACEPTA CAMPAÑA' para DNI {sol.dni}")
                         self.tracking_store.registrar_no_encontrado(sol.reg_ev, sol.dni)
-                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO)
+                        self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.NO_ENCONTRADO, telefonos=sol.telefonos)
                         continue
 
                     nombre_archivo_base = sol.nombre_archivo
@@ -1038,7 +1038,7 @@ class GenesysBrowserAutomation:
                                 except Exception:
                                     pass
 
-                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO)
+                    self.tracking_store.marcar_como_procesado(sol.reg_ev, sol.dni, EstadoRegistro.DESCARGADO, telefonos=sol.telefonos)
                     logger.info(f"✓ Solicitud Promotor {sol.reg_ev} | DNI {sol.dni} completada.")
 
                 except Exception as rec_err:
